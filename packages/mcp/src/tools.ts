@@ -15,14 +15,18 @@ import {
   PROJECT_HEALTHS,
   PROJECT_PRIORITIES,
   PROJECT_STATUSES,
+  raiseWarning,
+  resolveWarning,
   saveReport,
   syncProject,
   TASK_STATUSES,
   updateProject,
   updateTask,
   upsertSummary,
+  WARNING_SEVERITIES,
   type Db,
   type Project,
+  type Warning,
 } from "@workboard/core";
 
 const statusEnum = z.enum(PROJECT_STATUSES);
@@ -42,6 +46,17 @@ function resolveProject(db: Db, ref: number | string): Project {
   const project = getProject(db, typeof ref === "string" && /^\d+$/.test(ref) ? Number(ref) : ref);
   if (!project) throw new Error(`No project found for "${ref}". Use list_projects to see available projects.`);
   return project;
+}
+
+function warningCard(w: Warning) {
+  return {
+    id: w.id,
+    severity: w.severity,
+    message: w.message,
+    suggestedAction: w.suggestedAction,
+    raisedBy: w.raisedBy,
+    at: new Date(w.createdAt).toISOString(),
+  };
 }
 
 function projectCard(p: Project) {
@@ -91,6 +106,7 @@ export function registerTools(server: McpServer, db: Db): void {
       if (!detail) throw new Error(`No project found for "${project}". Use list_projects to see available projects.`);
       return json({
         ...projectCard(detail.project),
+        openWarnings: detail.openWarnings.map(warningCard),
         latestSummary: detail.latestSummary
           ? { body: detail.latestSummary.body, generatedAt: new Date(detail.latestSummary.createdAt).toISOString() }
           : null,
@@ -298,6 +314,53 @@ export function registerTools(server: McpServer, db: Db): void {
   );
 
   server.registerTool(
+    "raise_warning",
+    {
+      title: "Raise a warning on a project",
+      description:
+        "Flag something on a project that needs the user's attention — it appears prominently on the dashboard until resolved. Use for things you cannot fix yourself: a blocked dependency, failing CI you can't repair, a decision needed, a deadline at risk. Include a concrete suggested_action the user can take. Severities: info < warning < critical (critical = needs intervention now).",
+      inputSchema: {
+        project: projectRef,
+        message: z.string().describe("One or two sentences: what is wrong and why it matters"),
+        severity: z.enum(WARNING_SEVERITIES).optional().describe("Defaults to 'warning'"),
+        suggested_action: z.string().optional().describe("The concrete action that would resolve this"),
+        agent_name: z.string().optional().describe("Your agent name, for attribution"),
+      },
+    },
+    async ({ project, message, severity, suggested_action, agent_name }) => {
+      const target = resolveProject(db, project);
+      const warning = raiseWarning(db, target.id, {
+        message,
+        severity,
+        suggestedAction: suggested_action,
+        raisedBy: agent_name ? `agent:${agent_name}` : "agent",
+      });
+      return json({ raised: { ...warningCard(warning), project: target.slug } });
+    },
+  );
+
+  server.registerTool(
+    "resolve_warning",
+    {
+      title: "Resolve a warning",
+      description:
+        "Mark a warning as resolved (it disappears from the dashboard; a resolution note is logged to the project's activity). Use when the condition that triggered it no longer holds. Warning ids come from get_project / get_activity.",
+      inputSchema: {
+        warning_id: z.number(),
+        note: z.string().optional().describe("How it was resolved"),
+        agent_name: z.string().optional(),
+      },
+    },
+    async ({ warning_id, note, agent_name }) => {
+      const resolved = resolveWarning(db, warning_id, {
+        note,
+        resolvedBy: agent_name ? `agent:${agent_name}` : "agent",
+      });
+      return json({ resolved: { id: resolved.id, status: resolved.status } });
+    },
+  );
+
+  server.registerTool(
     "get_activity",
     {
       title: "Cross-project activity feed",
@@ -317,6 +380,7 @@ export function registerTools(server: McpServer, db: Db): void {
         projects: feed.projects.map((p) => ({
           ...projectCard(p.project),
           latestSummary: p.latestSummary,
+          openWarnings: p.openWarnings.map(warningCard),
           updates: p.updates.map((u) => ({ type: u.type, author: u.author, body: u.body, at: new Date(u.createdAt).toISOString() })),
           openTasks: p.openTasks.map((t) => ({ title: t.title, status: t.status, dueDate: t.dueDate })),
           links: p.links,

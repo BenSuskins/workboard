@@ -5,9 +5,10 @@ import { prPipeline } from "@/lib/pipeline";
 import { CategoryBadge, HealthBadge, PriorityBadge, StatusBadge } from "./badges";
 import { DocChips, JiraChips, PipelineChip } from "./chips";
 import { Markdown } from "./markdown";
+import { WarningStrip } from "./warnings";
 
 export function ProjectCard({ detail }: { detail: ProjectDetail }) {
-  const { project, latestSummary, links, tasks } = detail;
+  const { project, latestSummary, links, tasks, openWarnings } = detail;
   const pipeline = prPipeline(links);
   const openTasks = tasks.filter((t) => t.status !== "done").length;
   return (
@@ -24,6 +25,7 @@ export function ProjectCard({ detail }: { detail: ProjectDetail }) {
         <PriorityBadge priority={project.priority} />
         <HealthBadge health={project.health} />
       </div>
+      <WarningStrip warnings={openWarnings} />
       {latestSummary ? (
         <div className="line-clamp-3">
           <Markdown>{latestSummary.body}</Markdown>

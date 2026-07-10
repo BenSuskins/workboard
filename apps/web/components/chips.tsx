@@ -2,7 +2,7 @@ import type { GdocSnapshot, JiraIssueSnapshot, JiraProjectSnapshot, Link, Snapsh
 import { relativeTime } from "@/lib/format";
 import { hasPipeline, type Pipeline } from "@/lib/pipeline";
 
-/** PR pipeline: n draft · n in review · n approved · n merged (7d) */
+/** PR pipeline: n draft · n in review · n approved · n merged (7d), plus CI failures on in-flight PRs. */
 export function PipelineChip({ pipeline }: { pipeline: Pipeline }) {
   if (!hasPipeline(pipeline)) return null;
   const parts: string[] = [];
@@ -14,8 +14,18 @@ export function PipelineChip({ pipeline }: { pipeline: Pipeline }) {
     <span className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-surface-2 px-2 py-0.5 text-[11px] text-ink-2">
       <GitHubMark />
       {parts.join(" · ")}
+      {pipeline.ciFailing > 0 && (
+        <span className="font-semibold text-critical">✗ {pipeline.ciFailing} CI failing</span>
+      )}
     </span>
   );
+}
+
+export function ciLabel(ciStatus: "passing" | "failing" | "pending" | null | undefined): string | null {
+  if (ciStatus === "passing") return "CI ✓";
+  if (ciStatus === "failing") return "CI ✗";
+  if (ciStatus === "pending") return "CI …";
+  return null;
 }
 
 export function JiraChips({ links }: { links: (Link & { snapshot: Snapshot | null })[] }) {

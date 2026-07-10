@@ -1,4 +1,4 @@
-import type { Link, PrSnapshot, RepoScopeSnapshot, Snapshot } from "@workboard/core";
+import type { CiStatus, Link, PrSnapshot, RepoScopeSnapshot, Snapshot } from "@workboard/core";
 
 export interface PrLite {
   number: number;
@@ -9,6 +9,7 @@ export interface PrLite {
   draft: boolean;
   merged: boolean;
   reviewDecision?: PrSnapshot["reviewDecision"];
+  ciStatus?: CiStatus;
   updatedAt: string;
 }
 
@@ -17,6 +18,7 @@ export interface Pipeline {
   inReview: number;
   approved: number;
   mergedRecently: number;
+  ciFailing: number;
   prs: PrLite[];
 }
 
@@ -43,16 +45,19 @@ export function prPipeline(links: (Link & { snapshot: Snapshot | null })[]): Pip
   let inReview = 0;
   let approved = 0;
   let mergedRecently = 0;
+  let ciFailing = 0;
   for (const pr of prs) {
     if (pr.state === "open") {
       if (pr.draft) draft++;
       else if (pr.reviewDecision === "approved") approved++;
       else inReview++;
+      // CI only counts for in-flight PRs; closed/merged never carry ciStatus
+      if (pr.ciStatus === "failing") ciFailing++;
     } else if (pr.merged && Date.parse(pr.updatedAt) > recentCutoff) {
       mergedRecently++;
     }
   }
-  return { draft, inReview, approved, mergedRecently, prs };
+  return { draft, inReview, approved, mergedRecently, ciFailing, prs };
 }
 
 export function hasPipeline(p: Pipeline): boolean {

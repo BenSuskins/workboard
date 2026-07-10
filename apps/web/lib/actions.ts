@@ -8,6 +8,7 @@ import {
   deleteLink,
   deleteTask,
   getProject,
+  resolveWarning,
   syncProject,
   updateProject,
   updateTask,
@@ -104,6 +105,12 @@ export async function addLinkAction(formData: FormData) {
 export async function deleteLinkAction(formData: FormData) {
   deleteLink(db(), Number(formData.get("linkId")));
   revalidatePath(`/projects/${String(formData.get("slug"))}`);
+}
+
+export async function resolveWarningAction(formData: FormData) {
+  resolveWarning(db(), Number(formData.get("warningId")), { resolvedBy: "user" });
+  revalidatePath(`/projects/${String(formData.get("slug"))}`);
+  revalidatePath("/");
 }
 
 export async function refreshProjectAction(formData: FormData) {

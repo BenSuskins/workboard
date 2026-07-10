@@ -55,3 +55,8 @@ project stands against its goal, then in-flight work, then risks/blockers.
 - Work revealed a follow-up? `add_task`.
 - Project is now genuinely blocked / unblocked / done? `update_project` with the
   new `status` (and `health` if it changed). Don't churn status speculatively.
+- Something needs the **user's** intervention and you can't fix it (failing CI
+  you can't repair, a decision needed, a blocked dependency)? `raise_warning`
+  with a concrete `suggested_action` — it appears prominently on the dashboard
+  until resolved. If a warning you raised earlier no longer applies (check
+  `get_project`'s `openWarnings`), `resolve_warning` it.

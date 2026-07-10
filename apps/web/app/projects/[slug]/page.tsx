@@ -13,8 +13,9 @@ import {
   type Snapshot,
 } from "@workboard/core";
 import { CategoryBadge, HealthBadge, PriorityBadge, StatusBadge } from "@/components/badges";
-import { GitHubMark, JiraMark, DocMark } from "@/components/chips";
+import { ciLabel, GitHubMark, JiraMark, DocMark } from "@/components/chips";
 import { Markdown } from "@/components/markdown";
+import { WarningsPanel } from "@/components/warnings";
 import { db } from "@/lib/db";
 import { authorLabel, relativeTime } from "@/lib/format";
 import {
@@ -49,18 +50,27 @@ function LinkSnapshot({ link }: { link: WbLink & { snapshot: Snapshot | null } }
   if (data.type === "pr") {
     const pr = data as PrSnapshot;
     const state = pr.merged ? "merged" : pr.state === "closed" ? "closed" : pr.draft ? "draft" : (pr.reviewDecision ?? "open").replace("_", " ");
+    // CI is only shown for in-flight PRs — closed/merged never carry it
     return (
       <span className="text-[11px] text-muted">
-        #{pr.number} · {state} · updated {relativeTime(pr.updatedAt)}
+        #{pr.number} · {state}
+        {pr.state === "open" && ciLabel(pr.ciStatus) && (
+          <span className={pr.ciStatus === "failing" ? "font-semibold text-critical" : pr.ciStatus === "passing" ? "text-good" : ""}>
+            {" "}· {ciLabel(pr.ciStatus)}
+          </span>
+        )}{" "}
+        · updated {relativeTime(pr.updatedAt)}
       </span>
     );
   }
   if (data.type === "repo") {
     const repo = data as RepoScopeSnapshot;
-    const open = repo.prs.filter((p) => p.state === "open").length;
+    const open = repo.prs.filter((p) => p.state === "open");
+    const failing = open.filter((p) => p.ciStatus === "failing").length;
     return (
       <span className="text-[11px] text-muted">
-        {open} open PR{open === 1 ? "" : "s"} in scope · {repo.prs.length} tracked
+        {open.length} open PR{open.length === 1 ? "" : "s"} in scope · {repo.prs.length} tracked
+        {failing > 0 && <span className="font-semibold text-critical"> · {failing} CI failing</span>}
       </span>
     );
   }
@@ -101,7 +111,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
   const { slug } = await params;
   const detail = getProjectDetail(db(), slug);
   if (!detail) notFound();
-  const { project, tasks, updates, links, latestSummary } = detail;
+  const { project, tasks, updates, links, latestSummary, openWarnings } = detail;
   const integrations = integrationStatus();
   const anyConfigured = integrations.github || integrations.jira || integrations.google;
 
@@ -137,6 +147,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
         </div>
         {project.description && <Markdown className="max-w-3xl">{project.description}</Markdown>}
       </div>
+
+      <WarningsPanel warnings={openWarnings} slug={project.slug} />
 
       <details className="rounded-xl border border-hairline bg-surface">
         <summary className="cursor-pointer select-none px-4 py-2.5 text-sm text-ink-2 hover:text-ink">Edit project</summary>

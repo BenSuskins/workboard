@@ -9,6 +9,8 @@ export const UPDATE_TYPES = ["note", "status_change", "agent_update"] as const;
 export const SUMMARY_KINDS = ["project_summary", "digest", "triage"] as const;
 export const LINK_PROVIDERS = ["github", "jira", "gdoc", "url"] as const;
 export const LINK_KINDS = ["repo", "pr", "issue", "jira_project", "jira_issue", "doc", "url"] as const;
+export const WARNING_SEVERITIES = ["info", "warning", "critical"] as const;
+export const WARNING_STATUSES = ["open", "resolved"] as const;
 
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 export type ProjectHealth = (typeof PROJECT_HEALTHS)[number];
@@ -18,6 +20,8 @@ export type UpdateType = (typeof UPDATE_TYPES)[number];
 export type SummaryKind = (typeof SUMMARY_KINDS)[number];
 export type LinkProvider = (typeof LINK_PROVIDERS)[number];
 export type LinkKind = (typeof LINK_KINDS)[number];
+export type WarningSeverity = (typeof WARNING_SEVERITIES)[number];
+export type WarningStatus = (typeof WARNING_STATUSES)[number];
 
 /** Narrows a monorepo link to one project's slice of it. */
 export interface RepoScope {
@@ -109,6 +113,24 @@ export const links = sqliteTable(
   (t) => [index("links_project_idx").on(t.projectId)],
 );
 
+export const warnings = sqliteTable(
+  "warnings",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    projectId: integer("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    severity: text("severity").$type<WarningSeverity>().notNull().default("warning"),
+    message: text("message").notNull(),
+    suggestedAction: text("suggested_action"),
+    status: text("status").$type<WarningStatus>().notNull().default("open"),
+    raisedBy: text("raised_by").notNull().default("agent"),
+    createdAt: integer("created_at").notNull(),
+    resolvedAt: integer("resolved_at"),
+  },
+  (t) => [index("warnings_project_idx").on(t.projectId), index("warnings_status_idx").on(t.status)],
+);
+
 export const snapshots = sqliteTable(
   "snapshots",
   {
@@ -129,3 +151,4 @@ export type Update = typeof updates.$inferSelect;
 export type Summary = typeof summaries.$inferSelect;
 export type Link = typeof links.$inferSelect;
 export type Snapshot = typeof snapshots.$inferSelect;
+export type Warning = typeof warnings.$inferSelect;

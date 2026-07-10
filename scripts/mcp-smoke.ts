@@ -55,6 +55,7 @@ async function call(name: string, args: Record<string, unknown>) {
 const expected = [
   "list_projects", "get_project", "find_project", "create_project", "update_project",
   "add_update", "add_task", "update_task", "add_link", "upsert_summary",
+  "raise_warning", "resolve_warning",
   "get_activity", "save_report", "list_reports", "refresh_project",
 ];
 
@@ -112,6 +113,25 @@ await step("get_project reflects everything", async () => {
   if (res.latestSummary?.body !== "All smoke, no fire.") throw new Error("missing summary");
   if (!res.updates.some((u: any) => u.type === "status_change")) throw new Error("missing status_change update");
   if (res.links.length !== 2) throw new Error(`expected 2 links, got ${res.links.length}`);
+});
+
+await step("raise_warning appears in get_project, resolve clears it", async () => {
+  const raised = await call("raise_warning", {
+    project: "smoke-project",
+    message: "CI deploy is red and I can't fix the credentials",
+    severity: "critical",
+    suggested_action: "Rotate the deploy token",
+    agent_name: "smoke-agent",
+  });
+  if (raised.raised.severity !== "critical") throw new Error(JSON.stringify(raised));
+  let proj = await call("get_project", { project: "smoke-project" });
+  if (proj.openWarnings?.length !== 1) throw new Error("warning missing from get_project");
+  const feed = await call("get_activity", {});
+  if (feed.projects[0].openWarnings?.length !== 1) throw new Error("warning missing from get_activity");
+  await call("resolve_warning", { warning_id: raised.raised.id, note: "token rotated", agent_name: "smoke-agent" });
+  proj = await call("get_project", { project: "smoke-project" });
+  if (proj.openWarnings?.length !== 0) throw new Error("warning not cleared after resolve");
+  if (!proj.updates.some((u: any) => u.body.includes("Resolved warning"))) throw new Error("resolution not logged");
 });
 
 await step("get_activity + save_report + list_reports", async () => {

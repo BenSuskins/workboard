@@ -8,6 +8,7 @@ import {
   defaultDbPath,
   listProjects,
   openDb,
+  raiseWarning,
   saveReport,
   updateTask,
   upsertSummary,
@@ -58,6 +59,12 @@ upsertSummary(
   "Dual-write is live and reconciliation has been clean for two days. Read-path cutover is in progress behind a flag (#4821 in review). Remaining risk is refund rounding, fixed in #4876 and awaiting merge. On track for Q3.",
   "agent:claude-code",
 );
+raiseWarning(db, payments.id, {
+  severity: "critical",
+  message: "CI on #4821 has been failing for 2 days (flaky ledger integration test) — the cutover can't merge until it's green.",
+  suggestedAction: "Quarantine `ledger_replay_test` or bump its timeout, then re-run CI on #4821.",
+  raisedBy: "agent:claude-code",
+});
 
 // --- Search relevance (coding, same monorepo, different slice) ---
 const search = createProject(db, {

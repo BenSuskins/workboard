@@ -33,7 +33,7 @@ optional and the UI degrades to plain links without credentials:
 
 | Integration | Env vars | What you get |
 |---|---|---|
-| GitHub | `GITHUB_TOKEN` | Live PR state, review status, monorepo-scoped PR discovery |
+| GitHub | `GITHUB_TOKEN` | Live PR state, review status, CI checks on in-flight PRs (closed/merged PRs are ignored for status), monorepo-scoped PR discovery |
 | Jira Cloud | `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` | Issue status, per-epic/project counts |
 | Google Docs | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` + `npm run google:auth` (once) | Doc titles + last-edited times |
 
@@ -77,12 +77,21 @@ identifies a project. Instead:
   changed paths; it ranks candidates (exact PR link → scope match → bare repo
   link) and asks for confirmation when ambiguous.
 
+## Warnings: agents flagging things for you
+
+When an agent hits something it can't fix — failing CI it can't repair, a
+decision needed, a blocked dependency — it calls `raise_warning` with a severity
+(`info`/`warning`/`critical`) and a concrete suggested action. Warnings appear
+on the project's dashboard card and page until you (or an agent, once the
+condition clears) resolve them; resolutions are logged to the project's
+activity timeline.
+
 ## MCP tool surface
 
 `list_projects` · `get_project` · `find_project` · `create_project` ·
 `update_project` · `add_update` · `add_task` · `update_task` · `add_link` ·
-`upsert_summary` · `get_activity` · `save_report` · `list_reports` ·
-`refresh_project`
+`upsert_summary` · `raise_warning` · `resolve_warning` · `get_activity` ·
+`save_report` · `list_reports` · `refresh_project`
 
 ## Layout
 

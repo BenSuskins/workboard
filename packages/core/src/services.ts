@@ -22,6 +22,9 @@ import {
   type TaskStatus,
   type Update,
   type UpdateType,
+  type Warning,
+  type WarningSeverity,
+  warnings,
 } from "./db/schema.js";
 
 const now = () => Date.now();
@@ -144,6 +147,7 @@ export interface ProjectDetail {
   updates: Update[];
   links: (Link & { snapshot: Snapshot | null })[];
   latestSummary: Summary | null;
+  openWarnings: Warning[];
 }
 
 export function getProjectDetail(db: Db, ref: number | string, opts: { updatesLimit?: number } = {}): ProjectDetail | undefined {
@@ -177,7 +181,8 @@ export function getProjectDetail(db: Db, ref: number | string, opts: { updatesLi
       .orderBy(desc(summaries.createdAt))
       .limit(1)
       .get() ?? null;
-  return { project, tasks: projectTasks, updates: projectUpdates, links: projectLinks, latestSummary };
+  const openWarnings = listWarnings(db, { projectId: project.id });
+  return { project, tasks: projectTasks, updates: projectUpdates, links: projectLinks, latestSummary, openWarnings };
 }
 
 function touchProject(db: Db, projectId: number) {
@@ -330,6 +335,69 @@ export function saveSnapshot(db: Db, linkId: number, data: unknown): void {
     .run();
 }
 
+// ---------- warnings ----------
+
+export interface RaiseWarningInput {
+  severity?: WarningSeverity;
+  message: string;
+  suggestedAction?: string;
+  raisedBy?: string;
+}
+
+export function raiseWarning(db: Db, projectId: number, input: RaiseWarningInput): Warning {
+  const warning = db
+    .insert(warnings)
+    .values({
+      projectId,
+      severity: input.severity ?? "warning",
+      message: input.message,
+      suggestedAction: input.suggestedAction ?? null,
+      raisedBy: input.raisedBy ?? "agent",
+      status: "open",
+      createdAt: now(),
+    })
+    .returning()
+    .get();
+  touchProject(db, projectId);
+  return warning;
+}
+
+export function resolveWarning(db: Db, id: number, opts: { resolvedBy?: string; note?: string } = {}): Warning {
+  const existing = db.select().from(warnings).where(eq(warnings.id, id)).get();
+  if (!existing) throw new Error(`Warning ${id} not found`);
+  const resolved = db
+    .update(warnings)
+    .set({ status: "resolved", resolvedAt: now() })
+    .where(eq(warnings.id, id))
+    .returning()
+    .get();
+  db.insert(updates)
+    .values({
+      projectId: existing.projectId,
+      type: "note",
+      body: `Resolved warning: ${existing.message}${opts.note ? ` — ${opts.note}` : ""}`,
+      author: opts.resolvedBy ?? "user",
+      createdAt: now(),
+    })
+    .run();
+  return resolved;
+}
+
+/** Open warnings, most severe first. Pass projectId to scope to one project. */
+export function listWarnings(db: Db, opts: { projectId?: number } = {}): Warning[] {
+  const conds = [eq(warnings.status, "open")];
+  if (opts.projectId !== undefined) conds.push(eq(warnings.projectId, opts.projectId));
+  return db
+    .select()
+    .from(warnings)
+    .where(and(...conds))
+    .orderBy(
+      sql`CASE ${warnings.severity} WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END`,
+      desc(warnings.createdAt),
+    )
+    .all();
+}
+
 // ---------- find_project: resolve monorepo work to a project ----------
 
 export interface FindProjectQuery {
@@ -428,6 +496,7 @@ export interface ActivityFeed {
     latestSummary: string | null;
     updates: Update[];
     openTasks: Task[];
+    openWarnings: Warning[];
     links: { url: string; kind: LinkKind; title: string; externalId: string | null; snapshot: unknown; fetchedAt: number | null }[];
   }[];
 }
@@ -469,7 +538,14 @@ export function getActivity(db: Db, since: number): ActivityFeed {
           snapshot: row.snapshots?.data ?? null,
           fetchedAt: row.snapshots?.fetchedAt ?? null,
         }));
-      return { project, latestSummary: latest?.body ?? null, updates: recentUpdates, openTasks, links: projectLinks };
+      return {
+        project,
+        latestSummary: latest?.body ?? null,
+        updates: recentUpdates,
+        openTasks,
+        openWarnings: listWarnings(db, { projectId: project.id }),
+        links: projectLinks,
+      };
     }),
   };
 }

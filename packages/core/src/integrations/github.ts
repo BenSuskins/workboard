@@ -1,5 +1,8 @@
 import type { RepoScope } from "../db/schema.js";
 
+/** CI aggregate for a PR's head commit. Only computed for open PRs — closed/merged carry null. */
+export type CiStatus = "passing" | "failing" | "pending" | null;
+
 export interface PrSnapshot {
   type: "pr";
   number: number;
@@ -10,6 +13,7 @@ export interface PrSnapshot {
   draft: boolean;
   merged: boolean;
   reviewDecision: "approved" | "changes_requested" | "review_pending" | null;
+  ciStatus: CiStatus;
   labels: string[];
   headRef: string;
   author: string | null;
@@ -19,7 +23,7 @@ export interface PrSnapshot {
 export interface RepoScopeSnapshot {
   type: "repo";
   repo: string;
-  prs: Omit<PrSnapshot, "type" | "reviewDecision">[];
+  prs: (Omit<PrSnapshot, "type" | "reviewDecision" | "ciStatus"> & { ciStatus?: CiStatus })[];
   scope: RepoScope | null;
 }
 
@@ -60,12 +64,34 @@ interface RawPr {
   draft: boolean;
   merged_at: string | null;
   labels: { name: string }[];
-  head: { ref: string };
+  head: { ref: string; sha: string };
   user: { login: string } | null;
   updated_at: string;
 }
 
-function toPr(repo: string, pr: RawPr): Omit<PrSnapshot, "type" | "reviewDecision"> {
+export interface CheckRun {
+  status: "queued" | "in_progress" | "completed" | string;
+  conclusion: string | null;
+}
+
+/** failure-ish conclusion anywhere → failing; anything still running → pending; else passing (or null if no checks). */
+export function aggregateCheckRuns(runs: CheckRun[]): CiStatus {
+  if (runs.length === 0) return null;
+  const FAILING = new Set(["failure", "timed_out", "cancelled", "action_required", "startup_failure"]);
+  let pending = false;
+  for (const run of runs) {
+    if (run.status !== "completed") pending = true;
+    else if (run.conclusion && FAILING.has(run.conclusion)) return "failing";
+  }
+  return pending ? "pending" : "passing";
+}
+
+async function fetchCiStatus(repo: string, sha: string): Promise<CiStatus> {
+  const result = await gh<{ check_runs: CheckRun[] }>(`/repos/${repo}/commits/${sha}/check-runs?per_page=100`);
+  return aggregateCheckRuns(result.check_runs);
+}
+
+function toPr(repo: string, pr: RawPr): Omit<PrSnapshot, "type" | "reviewDecision" | "ciStatus"> {
   return {
     number: pr.number,
     repo,
@@ -81,29 +107,37 @@ function toPr(repo: string, pr: RawPr): Omit<PrSnapshot, "type" | "reviewDecisio
   };
 }
 
-/** externalId format: "owner/repo#123" */
+/**
+ * externalId format: "owner/repo#123".
+ * Review + CI status are only checked for open PRs — closed/merged PRs are
+ * historical record and their checks are ignored.
+ */
 export async function fetchPr(externalId: string): Promise<PrSnapshot> {
   const [repo, num] = externalId.split("#");
   const pr = await gh<RawPr>(`/repos/${repo}/pulls/${num}`);
   let reviewDecision: PrSnapshot["reviewDecision"] = null;
-  if (pr.state === "open" && !pr.draft) {
-    const reviews = await gh<{ user: { login: string } | null; state: string }[]>(
-      `/repos/${repo}/pulls/${num}/reviews?per_page=100`,
-    );
-    // latest review per reviewer wins
-    const latest = new Map<string, string>();
-    for (const r of reviews) {
-      if (!r.user || (r.state !== "APPROVED" && r.state !== "CHANGES_REQUESTED")) continue;
-      latest.set(r.user.login, r.state);
+  let ciStatus: CiStatus = null;
+  if (pr.state === "open") {
+    ciStatus = await fetchCiStatus(repo, pr.head.sha);
+    if (!pr.draft) {
+      const reviews = await gh<{ user: { login: string } | null; state: string }[]>(
+        `/repos/${repo}/pulls/${num}/reviews?per_page=100`,
+      );
+      // latest review per reviewer wins
+      const latest = new Map<string, string>();
+      for (const r of reviews) {
+        if (!r.user || (r.state !== "APPROVED" && r.state !== "CHANGES_REQUESTED")) continue;
+        latest.set(r.user.login, r.state);
+      }
+      const states = [...latest.values()];
+      reviewDecision = states.includes("CHANGES_REQUESTED")
+        ? "changes_requested"
+        : states.includes("APPROVED")
+          ? "approved"
+          : "review_pending";
     }
-    const states = [...latest.values()];
-    reviewDecision = states.includes("CHANGES_REQUESTED")
-      ? "changes_requested"
-      : states.includes("APPROVED")
-        ? "approved"
-        : "review_pending";
   }
-  return { type: "pr", reviewDecision, ...toPr(repo, pr) };
+  return { type: "pr", reviewDecision, ciStatus, ...toPr(repo, pr) };
 }
 
 export async function fetchIssue(externalId: string): Promise<IssueSnapshot> {
@@ -131,11 +165,13 @@ export async function fetchIssue(externalId: string): Promise<IssueSnapshot> {
 /**
  * Monorepo-aware discovery: recent PRs in the repo narrowed to one project's
  * scope (labels / branch prefix / path prefixes). Path filtering requires a
- * files call per PR, so it is capped to the 20 most recent.
+ * files call per PR, so it is capped to the 20 most recent. Open PRs (up to 15)
+ * are enriched with CI status; closed/merged PRs are ignored for status checks.
  */
 export async function fetchScopedRepo(repo: string, scope: RepoScope | null): Promise<RepoScopeSnapshot> {
   const raw = await gh<RawPr[]>(`/repos/${repo}/pulls?state=all&sort=updated&direction=desc&per_page=50`);
-  let prs = raw.map((pr) => toPr(repo, pr));
+  const shaByNumber = new Map(raw.map((pr) => [pr.number, pr.head.sha]));
+  let prs: RepoScopeSnapshot["prs"] = raw.map((pr) => toPr(repo, pr));
   if (scope?.labels?.length) {
     prs = prs.filter((pr) => pr.labels.some((l) => scope.labels!.includes(l)));
   }
@@ -150,6 +186,14 @@ export async function fetchScopedRepo(repo: string, scope: RepoScope | null): Pr
       if (files.some((f) => scope.pathPrefixes!.some((p) => f.filename.startsWith(p)))) kept.push(pr);
     }
     prs = kept;
+  }
+  let ciCalls = 0;
+  for (const pr of prs) {
+    if (pr.state !== "open" || ciCalls >= 15) continue;
+    const sha = shaByNumber.get(pr.number);
+    if (!sha) continue;
+    ciCalls++;
+    pr.ciStatus = await fetchCiStatus(repo, sha);
   }
   return { type: "repo", repo, prs, scope };
 }

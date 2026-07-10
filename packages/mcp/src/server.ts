@@ -12,6 +12,8 @@ export function createServer(db: Db = getDb()): McpServer {
         "use find_project with the PR number / branch / changed paths to resolve where your work belongs.",
         "When you finish a work session: post what you did with add_update, link new PRs with add_link,",
         "and refresh the project's summary with upsert_summary.",
+        "If something needs the user's attention and you cannot fix it yourself, raise_warning with a",
+        "concrete suggested_action; resolve_warning when the condition clears.",
       ].join(" "),
     },
   );

@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { openDb, type Db } from "./db/client.js";
+import { aggregateCheckRuns } from "./integrations/github.js";
+import {
+  listWarnings,
+  raiseWarning,
+  resolveWarning,
+} from "./services.js";
 import {
   addLink,
   addTask,
@@ -155,6 +161,70 @@ describe("activity + reports", () => {
     const p = createProject(db, { name: "Alpha" });
     upsertSummary(db, p.id, "summary");
     expect(listReports(db)).toHaveLength(2);
+  });
+});
+
+describe("warnings", () => {
+  it("raises, orders by severity, and includes in project detail", () => {
+    const p = createProject(db, { name: "Alpha" });
+    raiseWarning(db, p.id, { message: "minor thing", severity: "info" });
+    raiseWarning(db, p.id, { message: "CI is red", severity: "critical", suggestedAction: "rerun the deploy", raisedBy: "agent:ci-bot" });
+    const open = listWarnings(db, { projectId: p.id });
+    expect(open.map((w) => w.severity)).toEqual(["critical", "info"]);
+    expect(open[0].suggestedAction).toBe("rerun the deploy");
+    expect(getProjectDetail(db, p.id)!.openWarnings).toHaveLength(2);
+  });
+
+  it("resolving removes from open list and logs to the timeline", () => {
+    const p = createProject(db, { name: "Alpha" });
+    const w = raiseWarning(db, p.id, { message: "needs a decision" });
+    resolveWarning(db, w.id, { resolvedBy: "user", note: "decided option B" });
+    expect(listWarnings(db, { projectId: p.id })).toHaveLength(0);
+    const detail = getProjectDetail(db, p.id)!;
+    expect(detail.updates[0].body).toContain("Resolved warning");
+    expect(detail.updates[0].body).toContain("decided option B");
+  });
+
+  it("appears in the activity feed for digests/triage", () => {
+    const p = createProject(db, { name: "Alpha" });
+    raiseWarning(db, p.id, { message: "stuck" });
+    const feed = getActivity(db, Date.now() - 1000);
+    expect(feed.projects[0].openWarnings).toHaveLength(1);
+  });
+});
+
+describe("CI check aggregation", () => {
+  it("fails if any run failed, even with others passing or running", () => {
+    expect(
+      aggregateCheckRuns([
+        { status: "completed", conclusion: "success" },
+        { status: "in_progress", conclusion: null },
+        { status: "completed", conclusion: "failure" },
+      ]),
+    ).toBe("failing");
+  });
+
+  it("pending while anything is still running", () => {
+    expect(
+      aggregateCheckRuns([
+        { status: "completed", conclusion: "success" },
+        { status: "queued", conclusion: null },
+      ]),
+    ).toBe("pending");
+  });
+
+  it("passing when all completed without failure (neutral/skipped ok)", () => {
+    expect(
+      aggregateCheckRuns([
+        { status: "completed", conclusion: "success" },
+        { status: "completed", conclusion: "skipped" },
+        { status: "completed", conclusion: "neutral" },
+      ]),
+    ).toBe("passing");
+  });
+
+  it("null when there are no checks", () => {
+    expect(aggregateCheckRuns([])).toBeNull();
   });
 });
 

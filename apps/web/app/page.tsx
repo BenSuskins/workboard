@@ -43,21 +43,27 @@ export default async function Dashboard({
   const active = all.filter((p) => p.status === "active").length;
   const blocked = all.filter((p) => p.status === "blocked").length;
   const stale = all.filter((p) => p.status === "active" && Date.now() - p.lastActivityAt > STALE_MS).length;
-  const openPrs = details.reduce((n, d) => {
+  let openPrs = 0;
+  let ciFailing = 0;
+  for (const d of details) {
     const pipe = prPipeline(d.links);
-    return n + pipe.draft + pipe.inReview + pipe.approved;
-  }, 0);
+    openPrs += pipe.draft + pipe.inReview + pipe.approved;
+    ciFailing += pipe.ciFailing;
+  }
+  const openWarnings = details.reduce((n, d) => n + d.openWarnings.length, 0);
 
   const digest = latestReport(database, "digest");
   const triage = latestReport(database, "triage");
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <StatTile label="Active projects" value={active} />
         <StatTile label="Blocked" value={blocked} tone={blocked > 0 ? "critical" : "default"} />
+        <StatTile label="Warnings" value={openWarnings} tone={openWarnings > 0 ? "warning" : "default"} />
         <StatTile label="Stale (7d+ quiet)" value={stale} tone={stale > 0 ? "warning" : "default"} />
         <StatTile label="Open PRs" value={openPrs} />
+        <StatTile label="CI failing" value={ciFailing} tone={ciFailing > 0 ? "critical" : "default"} />
       </div>
 
       {(digest || triage) && (

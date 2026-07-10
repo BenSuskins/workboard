@@ -69,6 +69,20 @@ CREATE TABLE IF NOT EXISTS links (
 );
 CREATE INDEX IF NOT EXISTS links_project_idx ON links(project_id);
 
+CREATE TABLE IF NOT EXISTS warnings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  severity TEXT NOT NULL DEFAULT 'warning',
+  message TEXT NOT NULL,
+  suggested_action TEXT,
+  status TEXT NOT NULL DEFAULT 'open',
+  raised_by TEXT NOT NULL DEFAULT 'agent',
+  created_at INTEGER NOT NULL,
+  resolved_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS warnings_project_idx ON warnings(project_id);
+CREATE INDEX IF NOT EXISTS warnings_status_idx ON warnings(status);
+
 CREATE TABLE IF NOT EXISTS snapshots (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   link_id INTEGER NOT NULL UNIQUE REFERENCES links(id) ON DELETE CASCADE,
