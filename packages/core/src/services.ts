@@ -18,6 +18,8 @@ import {
   type Snapshot,
   type Summary,
   type SummaryKind,
+  syncState,
+  type SyncState,
   type Task,
   type TaskStatus,
   type Update,
@@ -141,11 +143,16 @@ export function getProject(db: Db, ref: number | string): Project | undefined {
   return db.select().from(projects).where(eq(projects.slug, ref)).get();
 }
 
+export interface LinkWithStatus extends Link {
+  snapshot: Snapshot | null;
+  syncState: SyncState | null;
+}
+
 export interface ProjectDetail {
   project: Project;
   tasks: Task[];
   updates: Update[];
-  links: (Link & { snapshot: Snapshot | null })[];
+  links: LinkWithStatus[];
   latestSummary: Summary | null;
   openWarnings: Warning[];
 }
@@ -156,7 +163,7 @@ export function getProjectDetail(db: Db, ref: number | string, opts: { updatesLi
   const projectTasks = db
     .select()
     .from(tasks)
-    .where(eq(tasks.projectId, project.id))
+    .where(and(eq(tasks.projectId, project.id), isNull(tasks.deletedAt)))
     .orderBy(sql`CASE ${tasks.status} WHEN 'in_progress' THEN 0 WHEN 'todo' THEN 1 ELSE 2 END`, desc(tasks.updatedAt))
     .all();
   const projectUpdates = db
@@ -170,15 +177,16 @@ export function getProjectDetail(db: Db, ref: number | string, opts: { updatesLi
     .select()
     .from(links)
     .leftJoin(snapshots, eq(snapshots.linkId, links.id))
-    .where(eq(links.projectId, project.id))
+    .leftJoin(syncState, eq(syncState.linkId, links.id))
+    .where(and(eq(links.projectId, project.id), isNull(links.deletedAt)))
     .all()
-    .map((row) => ({ ...row.links, snapshot: row.snapshots }));
+    .map((row) => ({ ...row.links, snapshot: row.snapshots, syncState: row.sync_state }));
   const latestSummary =
     db
       .select()
       .from(summaries)
       .where(and(eq(summaries.projectId, project.id), eq(summaries.kind, "project_summary")))
-      .orderBy(desc(summaries.createdAt))
+      .orderBy(desc(summaries.createdAt), desc(summaries.id))
       .limit(1)
       .get() ?? null;
   const openWarnings = listWarnings(db, { projectId: project.id });
@@ -222,8 +230,16 @@ export function updateTask(db: Db, id: number, input: { title?: string; status?:
   return task;
 }
 
+/** Soft delete: the row is kept and can be restored from the project's "recently deleted" list. */
 export function deleteTask(db: Db, id: number): void {
-  db.delete(tasks).where(eq(tasks.id, id)).run();
+  db.update(tasks).set({ deletedAt: now() }).where(eq(tasks.id, id)).run();
+}
+
+export function restoreTask(db: Db, id: number): Task {
+  const task = db.update(tasks).set({ deletedAt: null, updatedAt: now() }).where(eq(tasks.id, id)).returning().get();
+  if (!task) throw new Error(`Task ${id} not found`);
+  touchProject(db, task.projectId);
+  return task;
 }
 
 // ---------- updates (activity) ----------
@@ -254,6 +270,17 @@ export function upsertSummary(db: Db, projectId: number, body: string, generated
     .get();
   touchProject(db, projectId);
   return summary;
+}
+
+/** Past AI summaries for a project, newest first (every upsert_summary keeps history). */
+export function listSummaryHistory(db: Db, projectId: number, limit = 20): Summary[] {
+  return db
+    .select()
+    .from(summaries)
+    .where(and(eq(summaries.projectId, projectId), eq(summaries.kind, "project_summary")))
+    .orderBy(desc(summaries.createdAt), desc(summaries.id))
+    .limit(limit)
+    .all();
 }
 
 export function saveReport(db: Db, kind: "digest" | "triage", body: string, generatedBy = "agent"): Summary {
@@ -324,8 +351,38 @@ export function addLink(db: Db, projectId: number, input: Partial<AddLinkInput> 
   return link;
 }
 
+/** Soft delete: snapshots and sync state are kept; the link is hidden and syncs stop. */
 export function deleteLink(db: Db, id: number): void {
-  db.delete(links).where(eq(links.id, id)).run();
+  db.update(links).set({ deletedAt: now() }).where(eq(links.id, id)).run();
+}
+
+export function restoreLink(db: Db, id: number): Link {
+  const link = db.update(links).set({ deletedAt: null }).where(eq(links.id, id)).returning().get();
+  if (!link) throw new Error(`Link ${id} not found`);
+  touchProject(db, link.projectId);
+  return link;
+}
+
+export interface DeletedItems {
+  tasks: Task[];
+  links: Link[];
+}
+
+export function listDeleted(db: Db, projectId: number): DeletedItems {
+  return {
+    tasks: db
+      .select()
+      .from(tasks)
+      .where(and(eq(tasks.projectId, projectId), sql`${tasks.deletedAt} IS NOT NULL`))
+      .orderBy(desc(tasks.deletedAt))
+      .all(),
+    links: db
+      .select()
+      .from(links)
+      .where(and(eq(links.projectId, projectId), sql`${links.deletedAt} IS NOT NULL`))
+      .orderBy(desc(links.deletedAt))
+      .all(),
+  };
 }
 
 export function saveSnapshot(db: Db, linkId: number, data: unknown): void {
@@ -333,6 +390,69 @@ export function saveSnapshot(db: Db, linkId: number, data: unknown): void {
     .values({ linkId, data, fetchedAt: now() })
     .onConflictDoUpdate({ target: snapshots.linkId, set: { data, fetchedAt: now() } })
     .run();
+}
+
+// ---------- sync health ----------
+
+export function recordSyncResult(db: Db, linkId: number, error: string | null): void {
+  const t = now();
+  db.insert(syncState)
+    .values({ linkId, lastAttemptAt: t, lastSuccessAt: error ? null : t, lastError: error })
+    .onConflictDoUpdate({
+      target: syncState.linkId,
+      set: error ? { lastAttemptAt: t, lastError: error } : { lastAttemptAt: t, lastSuccessAt: t, lastError: null },
+    })
+    .run();
+}
+
+export interface FailingSync {
+  linkId: number;
+  url: string;
+  title: string;
+  provider: LinkProvider;
+  projectSlug: string;
+  projectName: string;
+  error: string;
+  lastAttemptAt: number;
+  lastSuccessAt: number | null;
+}
+
+export interface SyncHealth {
+  failing: FailingSync[];
+  /** Most recent successful sync across all live links; null if nothing has ever synced. */
+  lastSuccessAt: number | null;
+}
+
+export function getSyncHealth(db: Db): SyncHealth {
+  const rows = db
+    .select()
+    .from(syncState)
+    .innerJoin(links, eq(syncState.linkId, links.id))
+    .innerJoin(projects, eq(links.projectId, projects.id))
+    .where(and(isNull(links.deletedAt), sql`${projects.status} != 'archived'`))
+    .all();
+  const failing: FailingSync[] = [];
+  let lastSuccessAt: number | null = null;
+  for (const row of rows) {
+    if (row.sync_state.lastSuccessAt && (!lastSuccessAt || row.sync_state.lastSuccessAt > lastSuccessAt)) {
+      lastSuccessAt = row.sync_state.lastSuccessAt;
+    }
+    if (row.sync_state.lastError) {
+      failing.push({
+        linkId: row.links.id,
+        url: row.links.url,
+        title: row.links.title,
+        provider: row.links.provider,
+        projectSlug: row.projects.slug,
+        projectName: row.projects.name,
+        error: row.sync_state.lastError,
+        lastAttemptAt: row.sync_state.lastAttemptAt,
+        lastSuccessAt: row.sync_state.lastSuccessAt,
+      });
+    }
+  }
+  failing.sort((a, b) => b.lastAttemptAt - a.lastAttemptAt);
+  return { failing, lastSuccessAt };
 }
 
 // ---------- warnings ----------
@@ -425,7 +545,7 @@ export function findProject(db: Db, query: FindProjectQuery): ProjectMatch[] {
     .select()
     .from(links)
     .innerJoin(projects, eq(links.projectId, projects.id))
-    .where(sql`${projects.status} != 'archived'`)
+    .where(and(isNull(links.deletedAt), sql`${projects.status} != 'archived'`))
     .all();
 
   const push = (project: Project, confidence: ProjectMatch["confidence"], reason: string) => {
@@ -515,7 +635,7 @@ export function getActivity(db: Db, since: number): ActivityFeed {
       const openTasks = db
         .select()
         .from(tasks)
-        .where(and(eq(tasks.projectId, project.id), inArray(tasks.status, ["todo", "in_progress"])))
+        .where(and(eq(tasks.projectId, project.id), inArray(tasks.status, ["todo", "in_progress"]), isNull(tasks.deletedAt)))
         .all();
       const latest = db
         .select()
@@ -528,7 +648,7 @@ export function getActivity(db: Db, since: number): ActivityFeed {
         .select()
         .from(links)
         .leftJoin(snapshots, eq(snapshots.linkId, links.id))
-        .where(eq(links.projectId, project.id))
+        .where(and(eq(links.projectId, project.id), isNull(links.deletedAt)))
         .all()
         .map((row) => ({
           url: row.links.url,

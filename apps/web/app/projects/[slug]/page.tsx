@@ -4,20 +4,21 @@ import {
   CATEGORY_PRESETS,
   getProjectDetail,
   integrationStatus,
+  listDeleted,
+  listSummaryHistory,
   type GdocSnapshot,
   type JiraIssueSnapshot,
   type JiraProjectSnapshot,
-  type Link as WbLink,
+  type LinkWithStatus,
   type PrSnapshot,
   type RepoScopeSnapshot,
-  type Snapshot,
 } from "@workboard/core";
 import { CategoryBadge, HealthBadge, PriorityBadge, StatusBadge } from "@/components/badges";
 import { ciLabel, GitHubMark, JiraMark, DocMark } from "@/components/chips";
 import { Markdown } from "@/components/markdown";
 import { WarningsPanel } from "@/components/warnings";
 import { db } from "@/lib/db";
-import { authorLabel, relativeTime } from "@/lib/format";
+import { authorLabel, fullDate, relativeTime } from "@/lib/format";
 import {
   addLinkAction,
   addTaskAction,
@@ -25,6 +26,8 @@ import {
   deleteLinkAction,
   deleteTaskAction,
   refreshProjectAction,
+  restoreLinkAction,
+  restoreTaskAction,
   setTaskStatusAction,
   updateProjectAction,
 } from "@/lib/actions";
@@ -37,7 +40,7 @@ const btnCls = "rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white 
 const ghostBtnCls =
   "rounded-lg border border-hairline px-3 py-1.5 text-sm text-ink-2 transition-colors hover:border-muted hover:text-ink";
 
-function LinkSnapshot({ link }: { link: WbLink & { snapshot: Snapshot | null } }) {
+function LinkSnapshot({ link }: { link: LinkWithStatus }) {
   const data = link.snapshot?.data as
     | PrSnapshot
     | RepoScopeSnapshot
@@ -114,6 +117,9 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
   const { project, tasks, updates, links, latestSummary, openWarnings } = detail;
   const integrations = integrationStatus();
   const anyConfigured = integrations.github || integrations.jira || integrations.google;
+  const summaryHistory = listSummaryHistory(db(), project.id, 11).slice(1);
+  const deleted = listDeleted(db(), project.id);
+  const deletedCount = deleted.tasks.length + deleted.links.length;
 
   return (
     <div className="flex flex-col gap-6">
@@ -227,6 +233,23 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
               <p className="text-sm text-muted">
                 No summary yet. A coding agent connected to the Workboard MCP can write one with <code>upsert_summary</code>.
               </p>
+            )}
+            {summaryHistory.length > 0 && (
+              <details className="mt-3 border-t border-hairline pt-2">
+                <summary className="cursor-pointer select-none text-xs text-muted hover:text-ink">
+                  History ({summaryHistory.length} previous)
+                </summary>
+                <ol className="mt-2 flex flex-col gap-3">
+                  {summaryHistory.map((s) => (
+                    <li key={s.id} className="border-l border-grid pl-3">
+                      <div className="mb-1 text-[11px] text-muted">
+                        {authorLabel(s.generatedBy)} · {fullDate(s.createdAt)}
+                      </div>
+                      <Markdown>{s.body}</Markdown>
+                    </li>
+                  ))}
+                </ol>
+              </details>
             )}
           </section>
 
@@ -345,6 +368,17 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
                     </div>
                     <div className="pl-5">
                       <LinkSnapshot link={l} />
+                      {l.syncState?.lastError && (
+                        <div className="text-[11px] font-medium text-critical">
+                          ⚠ sync failing ({relativeTime(l.syncState.lastAttemptAt)}): {l.syncState.lastError.slice(0, 140)}
+                          {l.syncState.lastSuccessAt && (
+                            <span className="font-normal text-muted"> — showing data from {relativeTime(l.syncState.lastSuccessAt)}</span>
+                          )}
+                        </div>
+                      )}
+                      {!l.syncState?.lastError && l.snapshot && (
+                        <div className="text-[11px] text-muted">synced {relativeTime(l.snapshot.fetchedAt)}</div>
+                      )}
                       {l.kind === "repo" && l.scope && (
                         <div className="text-[11px] text-muted">
                           scope:{" "}
@@ -362,7 +396,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
                 ))}
               </ul>
             )}
-            <details>
+            <details className="mb-1">
               <summary className="cursor-pointer select-none text-xs text-accent hover:underline">+ Add link</summary>
               <form action={addLinkAction} className="mt-3 flex flex-col gap-2">
                 <input type="hidden" name="projectId" value={project.id} />
@@ -381,6 +415,42 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
               </form>
             </details>
           </section>
+
+          {deletedCount > 0 && (
+            <details className="rounded-xl border border-hairline bg-surface">
+              <summary className="cursor-pointer select-none px-4 py-2.5 text-xs text-muted hover:text-ink">
+                Recently deleted ({deletedCount})
+              </summary>
+              <div className="flex flex-col gap-1.5 border-t border-hairline p-4">
+                {deleted.tasks.map((t) => (
+                  <div key={`t-${t.id}`} className="flex items-center gap-2 text-sm">
+                    <span className="truncate text-muted line-through">{t.title}</span>
+                    <span className="text-[11px] text-muted">task · {relativeTime(t.deletedAt!)}</span>
+                    <form action={restoreTaskAction} className="ml-auto">
+                      <input type="hidden" name="taskId" value={t.id} />
+                      <input type="hidden" name="slug" value={project.slug} />
+                      <button type="submit" className="text-xs text-accent hover:underline">
+                        Restore
+                      </button>
+                    </form>
+                  </div>
+                ))}
+                {deleted.links.map((l) => (
+                  <div key={`l-${l.id}`} className="flex items-center gap-2 text-sm">
+                    <span className="truncate text-muted line-through">{l.title || l.externalId || l.url}</span>
+                    <span className="text-[11px] text-muted">link · {relativeTime(l.deletedAt!)}</span>
+                    <form action={restoreLinkAction} className="ml-auto">
+                      <input type="hidden" name="linkId" value={l.id} />
+                      <input type="hidden" name="slug" value={project.slug} />
+                      <button type="submit" className="text-xs text-accent hover:underline">
+                        Restore
+                      </button>
+                    </form>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
         </div>
       </div>
     </div>

@@ -44,7 +44,14 @@ export function githubConfigured(): boolean {
   return Boolean(process.env.GITHUB_TOKEN);
 }
 
+// When GitHub reports an exhausted quota, all calls short-circuit until the
+// advertised reset so a 10-minute poll can't dig the hole deeper.
+let rateLimitedUntil = 0;
+
 async function gh<T>(path: string): Promise<T> {
+  if (Date.now() < rateLimitedUntil) {
+    throw new Error(`GitHub rate limited — retrying after ${new Date(rateLimitedUntil).toISOString()}`);
+  }
   const res = await fetch(`${API}${path}`, {
     headers: {
       Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
@@ -52,6 +59,11 @@ async function gh<T>(path: string): Promise<T> {
       "X-GitHub-Api-Version": "2022-11-28",
     },
   });
+  if ((res.status === 403 || res.status === 429) && res.headers.get("x-ratelimit-remaining") === "0") {
+    const reset = Number(res.headers.get("x-ratelimit-reset")) * 1000;
+    rateLimitedUntil = Number.isFinite(reset) && reset > Date.now() ? reset : Date.now() + 15 * 60 * 1000;
+    throw new Error(`GitHub rate limited — retrying after ${new Date(rateLimitedUntil).toISOString()}`);
+  }
   if (!res.ok) throw new Error(`GitHub ${path} → ${res.status} ${await res.text().then((t) => t.slice(0, 200))}`);
   return res.json() as Promise<T>;
 }

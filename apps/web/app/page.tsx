@@ -11,6 +11,7 @@ import { FilterBar, type Filters } from "@/components/filter-bar";
 import { Markdown } from "@/components/markdown";
 import { ProjectCard } from "@/components/project-card";
 import { StatTile } from "@/components/stat-tile";
+import { SyncBanner } from "@/components/sync-banner";
 import { db } from "@/lib/db";
 import { relativeTime } from "@/lib/format";
 import { prPipeline } from "@/lib/pipeline";
@@ -57,6 +58,7 @@ export default async function Dashboard({
 
   return (
     <div className="flex flex-col gap-6">
+      <SyncBanner />
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <StatTile label="Active projects" value={active} />
         <StatTile label="Blocked" value={blocked} tone={blocked > 0 ? "critical" : "default"} />

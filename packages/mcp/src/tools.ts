@@ -12,6 +12,7 @@ import {
   integrationStatus,
   listProjects,
   listReports,
+  listSummaryHistory,
   PROJECT_HEALTHS,
   PROJECT_PRIORITIES,
   PROJECT_STATUSES,
@@ -98,18 +99,24 @@ export function registerTools(server: McpServer, db: Db): void {
     {
       title: "Get project context",
       description:
-        "Full context for one project: description/goal, status, tasks, recent updates, linked PRs/tickets/docs with cached live status, and the latest AI summary. Use this to ground your work in what the project is about.",
+        "Full context for one project: description/goal, status, tasks, recent updates, linked PRs/tickets/docs with cached live status, the latest AI summary, and recent summary history. Use this to ground your work in what the project is about.",
       inputSchema: { project: projectRef },
     },
     async ({ project }) => {
       const detail = getProjectDetail(db, typeof project === "string" && /^\d+$/.test(project) ? Number(project) : project);
       if (!detail) throw new Error(`No project found for "${project}". Use list_projects to see available projects.`);
+      const history = listSummaryHistory(db, detail.project.id, 5);
       return json({
         ...projectCard(detail.project),
         openWarnings: detail.openWarnings.map(warningCard),
         latestSummary: detail.latestSummary
           ? { body: detail.latestSummary.body, generatedAt: new Date(detail.latestSummary.createdAt).toISOString() }
           : null,
+        summaryHistory: history.slice(1).map((s) => ({
+          body: s.body,
+          generatedBy: s.generatedBy,
+          at: new Date(s.createdAt).toISOString(),
+        })),
         tasks: detail.tasks.map((t) => ({ id: t.id, title: t.title, status: t.status, dueDate: t.dueDate })),
         updates: detail.updates.slice(0, 20).map((u) => ({
           type: u.type,
@@ -127,6 +134,7 @@ export function registerTools(server: McpServer, db: Db): void {
           scope: l.scope,
           snapshot: l.snapshot?.data ?? null,
           snapshotFetchedAt: l.snapshot ? new Date(l.snapshot.fetchedAt).toISOString() : null,
+          syncError: l.syncState?.lastError ?? null,
         })),
       });
     },

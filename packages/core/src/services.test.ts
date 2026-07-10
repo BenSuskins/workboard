@@ -2,9 +2,17 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { openDb, type Db } from "./db/client.js";
 import { aggregateCheckRuns } from "./integrations/github.js";
 import {
+  deleteLink,
+  deleteTask,
+  getSyncHealth,
+  listDeleted,
+  listSummaryHistory,
   listWarnings,
   raiseWarning,
+  recordSyncResult,
   resolveWarning,
+  restoreLink,
+  restoreTask,
 } from "./services.js";
 import {
   addLink,
@@ -236,5 +244,84 @@ describe("tasks", () => {
     updateTask(db, t1.id, { status: "done" });
     const detail = getProjectDetail(db, p.id)!;
     expect(detail.tasks.map((t) => t.status)).toEqual(["in_progress", "done"]);
+  });
+});
+
+describe("soft deletes", () => {
+  it("deleted tasks vanish from detail and activity but can be restored", () => {
+    const p = createProject(db, { name: "Alpha" });
+    const t = addTask(db, p.id, "keep me");
+    deleteTask(db, t.id);
+    expect(getProjectDetail(db, p.id)!.tasks).toHaveLength(0);
+    expect(getActivity(db, 0).projects[0].openTasks).toHaveLength(0);
+    expect(listDeleted(db, p.id).tasks.map((x) => x.title)).toEqual(["keep me"]);
+    restoreTask(db, t.id);
+    expect(getProjectDetail(db, p.id)!.tasks.map((x) => x.title)).toEqual(["keep me"]);
+    expect(listDeleted(db, p.id).tasks).toHaveLength(0);
+  });
+
+  it("deleted links vanish from detail, find_project, activity, and sync health", () => {
+    const p = createProject(db, { name: "Alpha" });
+    const l = addLink(db, p.id, { url: "https://github.com/acme/solo" });
+    recordSyncResult(db, l.id, "boom");
+    deleteLink(db, l.id);
+    expect(getProjectDetail(db, p.id)!.links).toHaveLength(0);
+    expect(findProject(db, { repo: "acme/solo" })).toHaveLength(0);
+    expect(getActivity(db, 0).projects[0].links).toHaveLength(0);
+    expect(getSyncHealth(db).failing).toHaveLength(0);
+    restoreLink(db, l.id);
+    expect(getProjectDetail(db, p.id)!.links).toHaveLength(1);
+    expect(findProject(db, { repo: "acme/solo" })).toHaveLength(1);
+    expect(getSyncHealth(db).failing).toHaveLength(1);
+  });
+});
+
+describe("summary history", () => {
+  it("returns project summaries newest first, excluding reports", () => {
+    const p = createProject(db, { name: "Alpha" });
+    upsertSummary(db, p.id, "v1");
+    upsertSummary(db, p.id, "v2");
+    upsertSummary(db, p.id, "v3");
+    saveReport(db, "digest", "not a summary");
+    const history = listSummaryHistory(db, p.id);
+    expect(history.map((s) => s.body)).toEqual(["v3", "v2", "v1"]);
+    expect(getProjectDetail(db, p.id)!.latestSummary!.body).toBe("v3");
+  });
+});
+
+describe("sync health", () => {
+  it("tracks failures and recovery per link", () => {
+    const p = createProject(db, { name: "Alpha" });
+    const l = addLink(db, p.id, { url: "https://github.com/acme/solo" });
+    recordSyncResult(db, l.id, null);
+    expect(getSyncHealth(db).failing).toHaveLength(0);
+    expect(getSyncHealth(db).lastSuccessAt).not.toBeNull();
+
+    recordSyncResult(db, l.id, "GitHub rate limited");
+    const health = getSyncHealth(db);
+    expect(health.failing).toHaveLength(1);
+    expect(health.failing[0].error).toBe("GitHub rate limited");
+    expect(health.failing[0].projectSlug).toBe("alpha");
+    // the earlier success timestamp is retained so the UI can say how old the data is
+    expect(health.failing[0].lastSuccessAt).not.toBeNull();
+
+    recordSyncResult(db, l.id, null);
+    expect(getSyncHealth(db).failing).toHaveLength(0);
+  });
+
+  it("surfaces sync errors on project detail links", () => {
+    const p = createProject(db, { name: "Alpha" });
+    const l = addLink(db, p.id, { url: "https://github.com/acme/solo" });
+    recordSyncResult(db, l.id, "401 bad credentials");
+    const detail = getProjectDetail(db, p.id)!;
+    expect(detail.links[0].syncState?.lastError).toBe("401 bad credentials");
+  });
+
+  it("archived projects' links don't pollute health", () => {
+    const p = createProject(db, { name: "Old" });
+    const l = addLink(db, p.id, { url: "https://github.com/acme/old" });
+    recordSyncResult(db, l.id, "boom");
+    updateProject(db, p.id, { status: "archived" });
+    expect(getSyncHealth(db).failing).toHaveLength(0);
   });
 });

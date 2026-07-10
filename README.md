@@ -86,6 +86,19 @@ on the project's dashboard card and page until you (or an agent, once the
 condition clears) resolve them; resolutions are logged to the project's
 activity timeline.
 
+## Trustworthy data
+
+- **Sync health is visible.** Every sync attempt is recorded per link. A banner
+  appears on the dashboard when any sync is failing (with the error and how old
+  the last good data is) or when live data has gone stale; each linked resource
+  shows its last-synced time or current error. GitHub rate limiting triggers a
+  cooldown until the advertised reset instead of hammering the API.
+- **Soft deletes.** Deleting a task or link hides it and stops its syncs, but
+  keeps the row — restore from the project page's "Recently deleted" panel.
+- **Summary history.** Every `upsert_summary` is kept; the project page shows
+  previous versions under the current AI summary, and `get_project` returns the
+  last few so agents can see how the story has evolved.
+
 ## MCP tool surface
 
 `list_projects` · `get_project` · `find_project` · `create_project` ·

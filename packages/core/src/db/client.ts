@@ -30,7 +30,8 @@ CREATE TABLE IF NOT EXISTS tasks (
   due_date TEXT,
   author TEXT NOT NULL DEFAULT 'user',
   created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
+  updated_at INTEGER NOT NULL,
+  deleted_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS tasks_project_idx ON tasks(project_id);
 
@@ -65,9 +66,18 @@ CREATE TABLE IF NOT EXISTS links (
   external_id TEXT,
   title TEXT NOT NULL DEFAULT '',
   scope TEXT,
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  deleted_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS links_project_idx ON links(project_id);
+
+CREATE TABLE IF NOT EXISTS sync_state (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  link_id INTEGER NOT NULL UNIQUE REFERENCES links(id) ON DELETE CASCADE,
+  last_attempt_at INTEGER NOT NULL,
+  last_success_at INTEGER,
+  last_error TEXT
+);
 
 CREATE TABLE IF NOT EXISTS warnings (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -122,7 +132,18 @@ export function openDb(path: string = defaultDbPath()): Db {
   sqlite.pragma("busy_timeout = 5000");
   sqlite.pragma("foreign_keys = ON");
   sqlite.exec(DDL);
+  migrate(sqlite);
   return drizzle(sqlite, { schema });
+}
+
+/** Additive migrations for databases created before a column existed. */
+function migrate(sqlite: Database.Database): void {
+  const ensureColumn = (table: string, column: string, ddl: string) => {
+    const cols = sqlite.pragma(`table_info(${table})`) as { name: string }[];
+    if (!cols.some((c) => c.name === column)) sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+  };
+  ensureColumn("tasks", "deleted_at", "deleted_at INTEGER");
+  ensureColumn("links", "deleted_at", "deleted_at INTEGER");
 }
 
 let shared: Db | undefined;

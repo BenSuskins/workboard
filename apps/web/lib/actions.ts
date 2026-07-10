@@ -9,6 +9,8 @@ import {
   deleteTask,
   getProject,
   resolveWarning,
+  restoreLink,
+  restoreTask,
   syncProject,
   updateProject,
   updateTask,
@@ -82,6 +84,17 @@ export async function setTaskStatusAction(formData: FormData) {
 export async function deleteTaskAction(formData: FormData) {
   deleteTask(db(), Number(formData.get("taskId")));
   revalidatePath(`/projects/${String(formData.get("slug"))}`);
+}
+
+export async function restoreTaskAction(formData: FormData) {
+  restoreTask(db(), Number(formData.get("taskId")));
+  revalidatePath(`/projects/${String(formData.get("slug"))}`);
+}
+
+export async function restoreLinkAction(formData: FormData) {
+  restoreLink(db(), Number(formData.get("linkId")));
+  revalidatePath(`/projects/${String(formData.get("slug"))}`);
+  revalidatePath("/");
 }
 
 export async function addLinkAction(formData: FormData) {

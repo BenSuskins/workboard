@@ -61,6 +61,7 @@ export const tasks = sqliteTable(
     author: text("author").notNull().default("user"),
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
+    deletedAt: integer("deleted_at"),
   },
   (t) => [index("tasks_project_idx").on(t.projectId)],
 );
@@ -109,9 +110,22 @@ export const links = sqliteTable(
     title: text("title").notNull().default(""),
     scope: text("scope", { mode: "json" }).$type<RepoScope | null>(),
     createdAt: integer("created_at").notNull(),
+    deletedAt: integer("deleted_at"),
   },
   (t) => [index("links_project_idx").on(t.projectId)],
 );
+
+/** One row per link: outcome of the most recent sync attempt, kept across successes and failures. */
+export const syncState = sqliteTable("sync_state", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  linkId: integer("link_id")
+    .notNull()
+    .unique()
+    .references(() => links.id, { onDelete: "cascade" }),
+  lastAttemptAt: integer("last_attempt_at").notNull(),
+  lastSuccessAt: integer("last_success_at"),
+  lastError: text("last_error"),
+});
 
 export const warnings = sqliteTable(
   "warnings",
@@ -152,3 +166,4 @@ export type Summary = typeof summaries.$inferSelect;
 export type Link = typeof links.$inferSelect;
 export type Snapshot = typeof snapshots.$inferSelect;
 export type Warning = typeof warnings.$inferSelect;
+export type SyncState = typeof syncState.$inferSelect;
