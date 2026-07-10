@@ -11,6 +11,7 @@ import {
   resolveWarning,
   restoreLink,
   restoreTask,
+  syncAll,
   syncProject,
   updateProject,
   updateTask,
@@ -128,6 +129,19 @@ export async function resolveWarningAction(formData: FormData) {
 
 export async function refreshProjectAction(formData: FormData) {
   const slug = String(formData.get("slug"));
+  const project = getProject(db(), slug);
+  if (project) await syncProject(db(), project.id);
+  revalidatePath(`/projects/${slug}`);
+  revalidatePath("/");
+}
+
+export async function refreshAllAction() {
+  await syncAll(db());
+  revalidatePath("/");
+}
+
+/** Bindable variant for the RefreshButton: refreshProjectBySlug.bind(null, slug). */
+export async function refreshProjectBySlug(slug: string) {
   const project = getProject(db(), slug);
   if (project) await syncProject(db(), project.id);
   revalidatePath(`/projects/${slug}`);

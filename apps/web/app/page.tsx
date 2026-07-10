@@ -1,12 +1,16 @@
 import Link from "next/link";
 import {
   getProjectDetail,
+  getSyncHealth,
+  integrationStatus,
   latestReport,
   listProjects,
   type ProjectDetail,
   type ProjectHealth,
   type ProjectStatus,
 } from "@workboard/core";
+import { RefreshButton } from "@/components/refresh-button";
+import { refreshAllAction } from "@/lib/actions";
 import { FilterBar, type Filters } from "@/components/filter-bar";
 import { Markdown } from "@/components/markdown";
 import { ProjectCard } from "@/components/project-card";
@@ -55,10 +59,26 @@ export default async function Dashboard({
 
   const digest = latestReport(database, "digest");
   const triage = latestReport(database, "triage");
+  const integrations = integrationStatus();
+  const anyConfigured = integrations.github || integrations.jira || integrations.google;
+  const lastSyncAt = getSyncHealth(database).lastSuccessAt;
 
   return (
     <div className="flex flex-col gap-6">
       <SyncBanner />
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-lg font-semibold tracking-tight text-ink">Board</h1>
+        <div className="flex items-center gap-2.5">
+          {lastSyncAt && <span className="text-[11px] text-muted">data synced {relativeTime(lastSyncAt)}</span>}
+          {anyConfigured ? (
+            <RefreshButton action={refreshAllAction} label="Refresh data" />
+          ) : (
+            <span className="text-[11px] text-muted" title="Set GITHUB_TOKEN / JIRA_* / GOOGLE_* in .env to enable live data">
+              no integrations configured
+            </span>
+          )}
+        </div>
+      </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <StatTile label="Active projects" value={active} />
         <StatTile label="Blocked" value={blocked} tone={blocked > 0 ? "critical" : "default"} />

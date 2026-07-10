@@ -25,20 +25,19 @@ import {
   addUpdateAction,
   deleteLinkAction,
   deleteTaskAction,
-  refreshProjectAction,
+  refreshProjectBySlug,
   restoreLinkAction,
   restoreTaskAction,
   setTaskStatusAction,
   updateProjectAction,
 } from "@/lib/actions";
+import { RefreshButton } from "@/components/refresh-button";
 
 export const dynamic = "force-dynamic";
 
 const inputCls =
   "w-full rounded-lg border border-hairline bg-page px-2.5 py-1.5 text-sm text-ink placeholder:text-muted focus:border-accent focus:outline-none";
 const btnCls = "rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-accent-deep";
-const ghostBtnCls =
-  "rounded-lg border border-hairline px-3 py-1.5 text-sm text-ink-2 transition-colors hover:border-muted hover:text-ink";
 
 function LinkSnapshot({ link }: { link: LinkWithStatus }) {
   const data = link.snapshot?.data as
@@ -142,13 +141,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
               <span className="text-[11px] text-muted">· active {relativeTime(project.lastActivityAt)}</span>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <form action={refreshProjectAction}>
-              <input type="hidden" name="slug" value={project.slug} />
-              <button type="submit" className={ghostBtnCls} title={anyConfigured ? "Re-fetch GitHub/Jira/Docs status" : "No integrations configured — set tokens in .env"}>
-                ↻ Refresh
-              </button>
-            </form>
+          <div className="flex items-center gap-2" title={anyConfigured ? "Re-fetch GitHub/Jira/Docs status" : "No integrations configured — set tokens in .env"}>
+            <RefreshButton action={refreshProjectBySlug.bind(null, project.slug)} />
           </div>
         </div>
         {project.description && <Markdown className="max-w-3xl">{project.description}</Markdown>}
