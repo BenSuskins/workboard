@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+@theme {
+  --color-page: #0d0d0d;
+  --color-surface: #1a1a19;
+  --color-surface-2: #232322;
+  --color-ink: #ffffff;
+  --color-ink-2: #c3c2b7;
+  --color-muted: #898781;
+  --color-hairline: rgba(255, 255, 255, 0.1);
+  --color-grid: #2c2c2a;
+  --color-accent: #3987e5;
+  --color-accent-deep: #1c5cab;
+  --color-good: #0ca30c;
+  --color-warning: #fab219;
+  --color-critical: #d03b3b;
+  --color-serious: #ec835a;
+  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-page);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Rendered markdown (summaries, updates, reports) */
+.prose-wb {
+  color: var(--color-ink-2);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+.prose-wb > * + * {
+  margin-top: 0.5rem;
+}
+.prose-wb h1,
+.prose-wb h2,
+.prose-wb h3 {
+  color: var(--color-ink);
+  font-weight: 600;
+}
+.prose-wb h1 { font-size: 1.05rem; }
+.prose-wb h2 { font-size: 0.95rem; }
+.prose-wb h3 { font-size: 0.875rem; }
+.prose-wb strong { color: var(--color-ink); font-weight: 600; }
+.prose-wb a { color: var(--color-accent); text-decoration: none; }
+.prose-wb a:hover { text-decoration: underline; }
+.prose-wb code {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-hairline);
+  border-radius: 4px;
+  padding: 0.05rem 0.3rem;
+  font-size: 0.8em;
+}
+.prose-wb ul, .prose-wb ol { padding-left: 1.25rem; }
+.prose-wb ul { list-style: disc; }
+.prose-wb ol { list-style: decimal; }
+.prose-wb li + li { margin-top: 0.15rem; }
+.prose-wb blockquote {
+  border-left: 2px solid var(--color-grid);
+  padding-left: 0.75rem;
+  color: var(--color-muted);
+}

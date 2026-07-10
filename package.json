@@ -1,0 +1,28 @@
+{
+  "name": "workboard",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "AI-native dashboard for managing work projects — GitHub/Jira/Google Docs aware, with an MCP server for coding agents.",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n web,mcp -c blue,magenta \"npm run dev -w apps/web\" \"npm run dev -w packages/mcp\"",
+    "build": "npm run build -w packages/core -w packages/mcp -w apps/web",
+    "start": "concurrently -n web,mcp -c blue,magenta \"npm run start -w apps/web\" \"npm run start -w packages/mcp\"",
+    "test": "vitest run",
+    "seed": "tsx scripts/seed.ts",
+    "google:auth": "tsx scripts/google-auth.ts",
+    "mcp:smoke": "tsx scripts/mcp-smoke.ts",
+    "skills:install": "tsx scripts/install-skills.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "concurrently": "^9.1.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

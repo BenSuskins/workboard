@@ -1,0 +1,9 @@
+node_modules/
+.next/
+dist/
+data/*.db
+data/*.db-*
+data/google-token.json
+.env
+.env.local
+*.tsbuildinfo
