@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Unit tests
+        run: npx vitest run
+      - name: Typecheck
+        run: |
+          npx tsc --noEmit -p packages/core
+          npx tsc --noEmit -p packages/mcp
+      - name: MCP smoke (full agent flow over stdio)
+        run: npm run mcp:smoke
+      - name: Next.js production build
+        run: npm run build -w apps/web
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate compose file
+        run: docker compose config --quiet
+      - name: Build image
+        run: docker build -t workboard:ci .
+      - name: Boot check — MCP server
+        run: |
+          docker run -d --name mcp -p 8787:8787 workboard:ci npx tsx packages/mcp/src/http.ts
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8787/healthz && ok=1 && break || sleep 1
+          done
+          [ "$ok" = "1" ] || { echo "MCP healthz never came up"; docker logs mcp; exit 1; }
+          docker rm -f mcp
+      - name: Boot check — web app
+        run: |
+          docker run -d --name web -p 3000:3000 workboard:ci
+          for i in $(seq 1 45); do
+            curl -sf http://localhost:3000 >/dev/null && ok=1 && break || sleep 1
+          done
+          [ "$ok" = "1" ] || { echo "web / never came up"; docker logs web; exit 1; }
+          curl -s http://localhost:3000 | grep -q "Workboard" || { echo "unexpected homepage"; exit 1; }
+          docker rm -f web
