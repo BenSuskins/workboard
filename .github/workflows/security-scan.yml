@@ -1,0 +1,14 @@
+name: Security scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '0 6 * * 1'
+
+jobs:
+  codeql:
+    uses: bensuskins/repo-templates/.github/workflows/security-scan.yml@main
+    with:
+      languages: '[{"language":"javascript-typescript","build-mode":"none"}]'
