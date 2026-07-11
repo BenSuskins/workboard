@@ -607,6 +607,28 @@ export function findProject(db: Db, query: FindProjectQuery): ProjectMatch[] {
   return matches.sort((a, b) => rank[a.confidence] - rank[b.confidence]);
 }
 
+/**
+ * Updates-per-day buckets for the last `days` days, oldest first —
+ * sparkline data for project cards. Buckets are local-midnight aligned.
+ */
+export function getActivityCounts(db: Db, projectId: number, days = 14): number[] {
+  const end = new Date();
+  end.setHours(24, 0, 0, 0); // end of today
+  const startMs = end.getTime() - days * 24 * 60 * 60 * 1000;
+  const rows = db
+    .select({ createdAt: updates.createdAt })
+    .from(updates)
+    .where(and(eq(updates.projectId, projectId), gt(updates.createdAt, startMs)))
+    .all();
+  const counts = new Array<number>(days).fill(0);
+  const dayMs = 24 * 60 * 60 * 1000;
+  for (const row of rows) {
+    const bucket = Math.floor((row.createdAt - startMs) / dayMs);
+    if (bucket >= 0 && bucket < days) counts[bucket]++;
+  }
+  return counts;
+}
+
 // ---------- activity feed (digest raw material) ----------
 
 export interface ActivityFeed {

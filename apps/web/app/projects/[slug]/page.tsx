@@ -1,3 +1,4 @@
+import { TimeAgo } from "@/components/time-ago";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
@@ -61,7 +62,7 @@ function LinkSnapshot({ link }: { link: LinkWithStatus }) {
             {" "}· {ciLabel(pr.ciStatus)}
           </span>
         )}{" "}
-        · updated {relativeTime(pr.updatedAt)}
+        · updated {<TimeAgo at={pr.updatedAt} />}
       </span>
     );
   }
@@ -91,13 +92,13 @@ function LinkSnapshot({ link }: { link: LinkWithStatus }) {
     return (
       <span className="text-[11px] text-muted">
         {ji.status}
-        {ji.assignee ? ` · ${ji.assignee}` : ""} · updated {relativeTime(ji.updatedAt)}
+        {ji.assignee ? ` · ${ji.assignee}` : ""} · updated {<TimeAgo at={ji.updatedAt} />}
       </span>
     );
   }
   if (data.type === "gdoc") {
     const doc = data as GdocSnapshot;
-    return <span className="text-[11px] text-muted">edited {relativeTime(doc.modifiedAt)}</span>;
+    return <span className="text-[11px] text-muted">edited {<TimeAgo at={doc.modifiedAt} />}</span>;
   }
   return null;
 }
@@ -138,7 +139,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
               <CategoryBadge category={project.category} />
               <PriorityBadge priority={project.priority} />
               <HealthBadge health={project.health} />
-              <span className="text-[11px] text-muted">· active {relativeTime(project.lastActivityAt)}</span>
+              <span className="text-[11px] text-muted">· active {<TimeAgo at={project.lastActivityAt} />}</span>
             </div>
           </div>
           <div className="flex items-center gap-2" title={anyConfigured ? "Re-fetch GitHub/Jira/Docs status" : "No integrations configured — set tokens in .env"}>
@@ -217,7 +218,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
               <h2 className="text-sm font-semibold text-ink">AI summary</h2>
               {latestSummary && (
                 <span className="text-[11px] text-muted">
-                  {authorLabel(latestSummary.generatedBy)} · {relativeTime(latestSummary.createdAt)}
+                  {authorLabel(latestSummary.generatedBy)} · {<TimeAgo at={latestSummary.createdAt} />}
                 </span>
               )}
             </div>
@@ -274,7 +275,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
                     <div className="mb-1 flex items-center gap-2 text-[11px] text-muted">
                       <span className="font-medium text-ink-2">{authorLabel(u.author)}</span>
                       <span>{u.type.replace("_", " ")}</span>
-                      <span>· {relativeTime(u.createdAt)}</span>
+                      <span>· {<TimeAgo at={u.createdAt} />}</span>
                     </div>
                     <Markdown>{u.body}</Markdown>
                   </li>
@@ -364,14 +365,14 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
                       <LinkSnapshot link={l} />
                       {l.syncState?.lastError && (
                         <div className="text-[11px] font-medium text-critical">
-                          ⚠ sync failing ({relativeTime(l.syncState.lastAttemptAt)}): {l.syncState.lastError.slice(0, 140)}
+                          ⚠ sync failing ({<TimeAgo at={l.syncState.lastAttemptAt} />}): {l.syncState.lastError.slice(0, 140)}
                           {l.syncState.lastSuccessAt && (
-                            <span className="font-normal text-muted"> — showing data from {relativeTime(l.syncState.lastSuccessAt)}</span>
+                            <span className="font-normal text-muted"> — showing data from {<TimeAgo at={l.syncState.lastSuccessAt} />}</span>
                           )}
                         </div>
                       )}
                       {!l.syncState?.lastError && l.snapshot && (
-                        <div className="text-[11px] text-muted">synced {relativeTime(l.snapshot.fetchedAt)}</div>
+                        <div className="text-[11px] text-muted">synced {<TimeAgo at={l.snapshot.fetchedAt} />}</div>
                       )}
                       {l.kind === "repo" && l.scope && (
                         <div className="text-[11px] text-muted">
@@ -419,7 +420,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
                 {deleted.tasks.map((t) => (
                   <div key={`t-${t.id}`} className="flex items-center gap-2 text-sm">
                     <span className="truncate text-muted line-through">{t.title}</span>
-                    <span className="text-[11px] text-muted">task · {relativeTime(t.deletedAt!)}</span>
+                    <span className="text-[11px] text-muted">task · {<TimeAgo at={t.deletedAt!} />}</span>
                     <form action={restoreTaskAction} className="ml-auto">
                       <input type="hidden" name="taskId" value={t.id} />
                       <input type="hidden" name="slug" value={project.slug} />
@@ -432,7 +433,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
                 {deleted.links.map((l) => (
                   <div key={`l-${l.id}`} className="flex items-center gap-2 text-sm">
                     <span className="truncate text-muted line-through">{l.title || l.externalId || l.url}</span>
-                    <span className="text-[11px] text-muted">link · {relativeTime(l.deletedAt!)}</span>
+                    <span className="text-[11px] text-muted">link · {<TimeAgo at={l.deletedAt!} />}</span>
                     <form action={restoreLinkAction} className="ml-auto">
                       <input type="hidden" name="linkId" value={l.id} />
                       <input type="hidden" name="slug" value={project.slug} />

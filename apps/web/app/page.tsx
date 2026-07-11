@@ -1,5 +1,7 @@
+import { TimeAgo } from "@/components/time-ago";
 import Link from "next/link";
 import {
+  getActivityCounts,
   getProjectDetail,
   getSyncHealth,
   integrationStatus,
@@ -17,17 +19,30 @@ import { ProjectCard } from "@/components/project-card";
 import { StatTile } from "@/components/stat-tile";
 import { SyncBanner } from "@/components/sync-banner";
 import { db } from "@/lib/db";
-import { relativeTime } from "@/lib/format";
 import { prPipeline } from "@/lib/pipeline";
 
 export const dynamic = "force-dynamic";
 
 const STALE_MS = 7 * 24 * 60 * 60 * 1000;
 
+const PRIORITY_RANK = { high: 0, medium: 1, low: 2 } as const;
+const HEALTH_RANK = { red: 0, amber: 1, green: 2 } as const;
+
+const SORTERS: Record<string, (a: ProjectDetail, b: ProjectDetail) => number> = {
+  activity: (a, b) => b.project.lastActivityAt - a.project.lastActivityAt,
+  priority: (a, b) =>
+    PRIORITY_RANK[a.project.priority] - PRIORITY_RANK[b.project.priority] ||
+    b.project.lastActivityAt - a.project.lastActivityAt,
+  health: (a, b) =>
+    HEALTH_RANK[a.project.health] - HEALTH_RANK[b.project.health] || b.project.lastActivityAt - a.project.lastActivityAt,
+  stale: (a, b) => a.project.lastActivityAt - b.project.lastActivityAt,
+  name: (a, b) => a.project.name.localeCompare(b.project.name),
+};
+
 export default async function Dashboard({
   searchParams,
 }: {
-  searchParams: Promise<{ category?: string; status?: string; health?: string }>;
+  searchParams: Promise<{ category?: string; status?: string; health?: string; sort?: string }>;
 }) {
   const filters: Filters = await searchParams;
   const database = db();
@@ -37,12 +52,14 @@ export default async function Dashboard({
     .map((p) => getProjectDetail(database, p.id, { updatesLimit: 1 }))
     .filter((d): d is ProjectDetail => d !== undefined);
 
-  const filtered = details.filter(({ project }) => {
-    if (filters.category && project.category !== filters.category) return false;
-    if (filters.status && project.status !== (filters.status as ProjectStatus)) return false;
-    if (filters.health && project.health !== (filters.health as ProjectHealth)) return false;
-    return true;
-  });
+  const filtered = details
+    .filter(({ project }) => {
+      if (filters.category && project.category !== filters.category) return false;
+      if (filters.status && project.status !== (filters.status as ProjectStatus)) return false;
+      if (filters.health && project.health !== (filters.health as ProjectHealth)) return false;
+      return true;
+    })
+    .sort(SORTERS[filters.sort ?? "activity"] ?? SORTERS.activity);
 
   const categories = [...new Set(all.map((p) => p.category))].sort();
   const active = all.filter((p) => p.status === "active").length;
@@ -69,7 +86,7 @@ export default async function Dashboard({
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-lg font-semibold tracking-tight text-ink">Board</h1>
         <div className="flex items-center gap-2.5">
-          {lastSyncAt && <span className="text-[11px] text-muted">data synced {relativeTime(lastSyncAt)}</span>}
+          {lastSyncAt && <span className="text-[11px] text-muted">data synced {<TimeAgo at={lastSyncAt} />}</span>}
           {anyConfigured ? (
             <RefreshButton action={refreshAllAction} label="Refresh data" />
           ) : (
@@ -95,7 +112,7 @@ export default async function Dashboard({
               <div className="mb-2 flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-ink">Latest digest</h2>
                 <span className="text-[11px] text-muted">
-                  {relativeTime(digest.createdAt)} ·{" "}
+                  {<TimeAgo at={digest.createdAt} />} ·{" "}
                   <Link href="/reports" className="text-accent hover:underline">
                     all reports
                   </Link>
@@ -110,7 +127,7 @@ export default async function Dashboard({
             <section className="rounded-xl border border-hairline bg-surface p-4">
               <div className="mb-2 flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-ink">Triage</h2>
-                <span className="text-[11px] text-muted">{relativeTime(triage.createdAt)}</span>
+                <span className="text-[11px] text-muted">{<TimeAgo at={triage.createdAt} />}</span>
               </div>
               <div className="line-clamp-[8]">
                 <Markdown>{triage.body}</Markdown>
@@ -133,7 +150,7 @@ export default async function Dashboard({
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((d) => (
-            <ProjectCard key={d.project.id} detail={d} />
+            <ProjectCard key={d.project.id} detail={d} activityCounts={getActivityCounts(database, d.project.id)} />
           ))}
         </div>
       )}

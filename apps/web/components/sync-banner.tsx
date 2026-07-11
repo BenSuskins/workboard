@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getSyncHealth, integrationStatus } from "@workboard/core";
+import { TimeAgo } from "./time-ago";
 import { db } from "@/lib/db";
-import { relativeTime } from "@/lib/format";
 
 const STALE_AFTER_MS = 30 * 60 * 1000; // 3× the background poll interval
 
@@ -29,7 +29,13 @@ export function SyncBanner() {
         </span>
         <span className="text-muted">
           — PR/ticket/doc status may be stale
-          {health.lastSuccessAt ? ` (last good sync ${relativeTime(health.lastSuccessAt)})` : ""}
+          {health.lastSuccessAt && (
+            <>
+              {" (last good sync "}
+              <TimeAgo at={health.lastSuccessAt} />
+              {")"}
+            </>
+          )}
         </span>
       </div>
     );
@@ -40,7 +46,7 @@ export function SyncBanner() {
       <div className="rounded-xl border border-warning/50 bg-warning/10 px-4 py-2.5 text-[13px]">
         <span className="font-semibold text-warning">⚠ Live data is stale</span>{" "}
         <span className="text-ink-2">
-          — last successful sync {relativeTime(health.lastSuccessAt)}. Refresh a project or check the server logs.
+          — last successful sync {<TimeAgo at={health.lastSuccessAt} />}. Refresh a project or check the server logs.
         </span>
       </div>
     );

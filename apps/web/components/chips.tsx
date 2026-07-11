@@ -1,8 +1,21 @@
+import { TimeAgo } from "./time-ago";
 import type { GdocSnapshot, JiraIssueSnapshot, JiraProjectSnapshot, Link, Snapshot } from "@workboard/core";
-import { relativeTime } from "@/lib/format";
+
 import { hasPipeline, type Pipeline } from "@/lib/pipeline";
 
-/** PR pipeline: n draft · n in review · n approved · n merged (7d), plus CI failures on in-flight PRs. */
+function prStateDot(pr: Pipeline["prs"][number]): { cls: string; label: string } {
+  if (pr.merged) return { cls: "bg-accent", label: "merged" };
+  if (pr.state === "closed") return { cls: "bg-muted", label: "closed" };
+  if (pr.draft) return { cls: "bg-muted", label: "draft" };
+  if (pr.reviewDecision === "approved") return { cls: "bg-good", label: "approved" };
+  if (pr.reviewDecision === "changes_requested") return { cls: "bg-critical", label: "changes requested" };
+  return { cls: "bg-warning", label: "in review" };
+}
+
+/**
+ * PR pipeline: n draft · n in review · n approved · n merged (7d), plus CI failures
+ * on in-flight PRs. Hover or focus reveals a popover listing the PRs themselves.
+ */
 export function PipelineChip({ pipeline }: { pipeline: Pipeline }) {
   if (!hasPipeline(pipeline)) return null;
   const parts: string[] = [];
@@ -10,13 +23,51 @@ export function PipelineChip({ pipeline }: { pipeline: Pipeline }) {
   if (pipeline.inReview) parts.push(`${pipeline.inReview} in review`);
   if (pipeline.approved) parts.push(`${pipeline.approved} approved`);
   if (pipeline.mergedRecently) parts.push(`${pipeline.mergedRecently} merged·7d`);
+  const popoverPrs = pipeline.prs.slice(0, 6);
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-surface-2 px-2 py-0.5 text-[11px] text-ink-2">
-      <GitHubMark />
-      {parts.join(" · ")}
-      {pipeline.ciFailing > 0 && (
-        <span className="font-semibold text-critical">✗ {pipeline.ciFailing} CI failing</span>
-      )}
+    <span className="group/chip relative inline-flex" tabIndex={0}>
+      <span className="inline-flex cursor-default items-center gap-1.5 rounded-full border border-hairline bg-surface-2 px-2 py-0.5 text-[11px] text-ink-2">
+        <GitHubMark />
+        {parts.join(" · ")}
+        {pipeline.ciFailing > 0 && <span className="font-semibold text-critical">✗ {pipeline.ciFailing} CI failing</span>}
+      </span>
+      <span className="invisible absolute left-0 top-full z-50 mt-1.5 w-80 rounded-xl border border-hairline bg-surface p-2 opacity-0 shadow-lg transition-opacity duration-100 group-hover/chip:visible group-hover/chip:opacity-100 group-focus-within/chip:visible group-focus-within/chip:opacity-100">
+        <span className="flex flex-col gap-1">
+          {popoverPrs.map((pr) => {
+            const dot = prStateDot(pr);
+            const ci = pr.state === "open" ? ciLabel(pr.ciStatus) : null;
+            return (
+              <a
+                key={`${pr.repo}#${pr.number}`}
+                href={pr.url}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-2 rounded-lg px-2 py-1 text-[12px] text-ink-2 hover:bg-surface-2 hover:text-ink"
+              >
+                <span className={`size-2 shrink-0 rounded-full ${dot.cls}`} title={dot.label} aria-hidden />
+                <span className="truncate">
+                  <span className="text-muted">#{pr.number}</span> {pr.title}
+                </span>
+                <span className="ml-auto flex shrink-0 items-center gap-1.5 text-[10px] text-muted">
+                  {ci && (
+                    <span
+                      className={
+                        pr.ciStatus === "failing" ? "font-semibold text-critical" : pr.ciStatus === "passing" ? "text-good" : ""
+                      }
+                    >
+                      {ci}
+                    </span>
+                  )}
+                  {dot.label}
+                </span>
+              </a>
+            );
+          })}
+          {pipeline.prs.length > popoverPrs.length && (
+            <span className="px-2 py-0.5 text-[10px] text-muted">+{pipeline.prs.length - popoverPrs.length} more tracked</span>
+          )}
+        </span>
+      </span>
     </span>
   );
 }
@@ -62,7 +113,7 @@ export function DocChips({ links }: { links: (Link & { snapshot: Snapshot | null
     chips.push(
       <span key={link.id} className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-surface-2 px-2 py-0.5 text-[11px] text-ink-2">
         <DocMark />
-        {data.name} · edited {relativeTime(data.modifiedAt)}
+        {data.name} · edited {<TimeAgo at={data.modifiedAt} />}
       </span>,
     );
   }

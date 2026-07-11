@@ -4,6 +4,7 @@ import { aggregateCheckRuns } from "./integrations/github.js";
 import {
   deleteLink,
   deleteTask,
+  getActivityCounts,
   getSyncHealth,
   listDeleted,
   listSummaryHistory,
@@ -286,6 +287,23 @@ describe("summary history", () => {
     const history = listSummaryHistory(db, p.id);
     expect(history.map((s) => s.body)).toEqual(["v3", "v2", "v1"]);
     expect(getProjectDetail(db, p.id)!.latestSummary!.body).toBe("v3");
+  });
+});
+
+describe("activity counts (sparkline data)", () => {
+  it("buckets updates per day, oldest first", () => {
+    const p = createProject(db, { name: "Alpha" });
+    addUpdate(db, p.id, "today 1");
+    addUpdate(db, p.id, "today 2");
+    const counts = getActivityCounts(db, p.id, 14);
+    expect(counts).toHaveLength(14);
+    expect(counts[13]).toBe(2); // today is the last bucket
+    expect(counts.slice(0, 13).every((c) => c === 0)).toBe(true);
+  });
+
+  it("returns all zeros for a quiet project", () => {
+    const p = createProject(db, { name: "Quiet" });
+    expect(getActivityCounts(db, p.id, 7)).toEqual([0, 0, 0, 0, 0, 0, 0]);
   });
 });
 

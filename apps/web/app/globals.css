@@ -1,37 +1,76 @@
 @import "tailwindcss";
 
-@theme {
-  --color-page: #0d0d0d;
-  --color-surface: #1a1a19;
-  --color-surface-2: #232322;
-  --color-ink: #ffffff;
-  --color-ink-2: #c3c2b7;
-  --color-muted: #898781;
-  --color-hairline: rgba(255, 255, 255, 0.1);
-  --color-grid: #2c2c2a;
-  --color-accent: #3987e5;
-  --color-accent-deep: #1c5cab;
-  --color-good: #0ca30c;
-  --color-warning: #fab219;
-  --color-critical: #d03b3b;
-  --color-serious: #ec835a;
-  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+/*
+ * Theme tokens. Utilities (bg-surface, text-ink, …) resolve through var()
+ * indirection so light/dark swap at runtime via [data-theme] on <html>.
+ * Values come from the validated reference palette (light + dark columns).
+ */
+:root {
+  --wb-page: #f9f9f7;
+  --wb-surface: #fcfcfb;
+  --wb-surface-2: #f0efec;
+  --wb-ink: #0b0b0b;
+  --wb-ink-2: #52514e;
+  --wb-muted: #898781;
+  --wb-hairline: rgba(11, 11, 11, 0.1);
+  --wb-grid: #e1e0d9;
+  --wb-accent: #2a78d6;
+  --wb-accent-deep: #1c5cab;
+  --wb-good: #0ca30c;
+  /* warning steps darker in light mode so warning *text* stays readable;
+     badges/dots keep the icon+label pairing either way */
+  --wb-warning: #9a6a00;
+  --wb-critical: #d03b3b;
+  --wb-serious: #b45309;
+  color-scheme: light;
 }
 
-html {
+:root[data-theme="dark"] {
+  --wb-page: #0d0d0d;
+  --wb-surface: #1a1a19;
+  --wb-surface-2: #232322;
+  --wb-ink: #ffffff;
+  --wb-ink-2: #c3c2b7;
+  --wb-muted: #898781;
+  --wb-hairline: rgba(255, 255, 255, 0.1);
+  --wb-grid: #2c2c2a;
+  --wb-accent: #3987e5;
+  --wb-accent-deep: #1c5cab;
+  --wb-good: #0ca30c;
+  --wb-warning: #fab219;
+  --wb-critical: #d03b3b;
+  --wb-serious: #ec835a;
   color-scheme: dark;
 }
 
+@theme inline {
+  --color-page: var(--wb-page);
+  --color-surface: var(--wb-surface);
+  --color-surface-2: var(--wb-surface-2);
+  --color-ink: var(--wb-ink);
+  --color-ink-2: var(--wb-ink-2);
+  --color-muted: var(--wb-muted);
+  --color-hairline: var(--wb-hairline);
+  --color-grid: var(--wb-grid);
+  --color-accent: var(--wb-accent);
+  --color-accent-deep: var(--wb-accent-deep);
+  --color-good: var(--wb-good);
+  --color-warning: var(--wb-warning);
+  --color-critical: var(--wb-critical);
+  --color-serious: var(--wb-serious);
+  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
 body {
-  background: var(--color-page);
-  color: var(--color-ink);
+  background: var(--wb-page);
+  color: var(--wb-ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
 
 /* Rendered markdown (summaries, updates, reports) */
 .prose-wb {
-  color: var(--color-ink-2);
+  color: var(--wb-ink-2);
   font-size: 0.875rem;
   line-height: 1.6;
 }
@@ -41,18 +80,18 @@ body {
 .prose-wb h1,
 .prose-wb h2,
 .prose-wb h3 {
-  color: var(--color-ink);
+  color: var(--wb-ink);
   font-weight: 600;
 }
 .prose-wb h1 { font-size: 1.05rem; }
 .prose-wb h2 { font-size: 0.95rem; }
 .prose-wb h3 { font-size: 0.875rem; }
-.prose-wb strong { color: var(--color-ink); font-weight: 600; }
-.prose-wb a { color: var(--color-accent); text-decoration: none; }
+.prose-wb strong { color: var(--wb-ink); font-weight: 600; }
+.prose-wb a { color: var(--wb-accent); text-decoration: none; }
 .prose-wb a:hover { text-decoration: underline; }
 .prose-wb code {
-  background: var(--color-surface-2);
-  border: 1px solid var(--color-hairline);
+  background: var(--wb-surface-2);
+  border: 1px solid var(--wb-hairline);
   border-radius: 4px;
   padding: 0.05rem 0.3rem;
   font-size: 0.8em;
@@ -62,7 +101,7 @@ body {
 .prose-wb ol { list-style: decimal; }
 .prose-wb li + li { margin-top: 0.15rem; }
 .prose-wb blockquote {
-  border-left: 2px solid var(--color-grid);
+  border-left: 2px solid var(--wb-grid);
   padding-left: 0.75rem;
-  color: var(--color-muted);
+  color: var(--wb-muted);
 }

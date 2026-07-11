@@ -1,3 +1,4 @@
+import { TimeAgo } from "./time-ago";
 import type { Warning, WarningSeverity } from "@workboard/core";
 import { resolveWarningAction } from "@/lib/actions";
 import { authorLabel, relativeTime } from "@/lib/format";
@@ -42,7 +43,7 @@ export function WarningsPanel({ warnings, slug }: { warnings: Warning[]; slug: s
                     {s.icon} {s.label}
                   </span>
                   <span className="text-muted">
-                    {authorLabel(w.raisedBy)} · {relativeTime(w.createdAt)}
+                    {authorLabel(w.raisedBy)} · {<TimeAgo at={w.createdAt} />}
                   </span>
                 </div>
                 <Markdown>{w.message}</Markdown>
