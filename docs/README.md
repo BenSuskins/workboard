@@ -124,6 +124,32 @@ npm run skills:install
 Schedule digests however you run Claude — e.g. a cron entry like
 `0 8 * * 1-5 claude -p "/workboard-digest"`, or a Claude Code Routine.
 
+### Tell your agent about Workboard
+
+Once the MCP server is connected and the skills are installed, drop this into
+your global `~/.claude/CLAUDE.md` (or a repo's `CLAUDE.md`) so agents know
+Workboard exists and keep it current without being asked:
+
+```markdown
+## Workboard
+
+This machine runs **Workboard**, an AI-native project dashboard, reachable over
+its MCP server (server name: `workboard`). Workboard is the source of truth for
+*projects*; use it to keep work status current.
+
+- At the **end of a working session**, run `/workboard-status` to resolve the
+  current project, post what you did, link any new PRs, and refresh the summary.
+- Before starting, you may call the `find_project` / `get_project` MCP tools to
+  load existing context for the repo you're in.
+- If you hit something you can't fix (blocked, needs a human, external outage),
+  raise it with the `raise_warning` MCP tool instead of silently moving on.
+- Do **not** create a new project for work that already maps to an existing one
+  — search first with `find_project`.
+```
+
+Trim it to taste — the key parts are naming the `workboard` MCP server and
+pointing at `/workboard-status` so updates happen automatically.
+
 ## Testing
 
 ```bash
