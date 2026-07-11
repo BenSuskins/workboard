@@ -1,0 +1,44 @@
+name: workboard
+
+# Two services from one image, sharing the SQLite database on the `data` volume
+# (WAL mode makes cross-process access safe). Integration credentials are read
+# from a `.env` file next to this compose file if present — see .env.example.
+
+x-workboard: &workboard
+  build: .
+  image: workboard:latest
+  env_file:
+    - path: .env
+      required: false
+  environment:
+    WORKBOARD_DB_PATH: /data/workboard.db
+  volumes:
+    - data:/data
+  restart: unless-stopped
+
+services:
+  web:
+    <<: *workboard
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  mcp:
+    <<: *workboard
+    command: ["npx", "tsx", "packages/mcp/src/http.ts"]
+    ports:
+      - "8787:8787"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8787/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  data:

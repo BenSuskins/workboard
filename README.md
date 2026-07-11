@@ -28,6 +28,29 @@ npm run seed        # optional: sample data
 npm run dev         # web on :3000, MCP server on :8787
 ```
 
+### Or with Docker
+
+```bash
+cp .env.example .env          # fill in integration credentials (all optional)
+docker compose up -d --build  # web on :3000, MCP on :8787
+docker compose run --rm web npm run seed   # optional: sample data
+```
+
+One image, two services (`web` and `mcp`), sharing the SQLite database on the
+named `data` volume — that volume is the only state worth backing up. The
+`.env` file next to the compose file is loaded automatically when present.
+
+Notes for Docker deployments:
+
+- **MCP from other machines**: agents connect to `http://<host>:8787/mcp`. If
+  that port is reachable beyond localhost, set `WORKBOARD_MCP_TOKEN` in `.env`
+  so a bearer token is required.
+- **Google Docs auth**: the one-time OAuth flow needs a browser on localhost,
+  so run `npm run google:auth` on the host, then copy the token into the
+  volume: `docker compose cp data/google-token.json web:/data/google-token.json`.
+- **Backups**: `docker compose cp web:/data/workboard.db ./backup.db` (WAL
+  checkpoints on open, so a copied file is usable as-is).
+
 Copy `.env.example` to `.env` and fill in what you use — every integration is
 optional and the UI degrades to plain links without credentials:
 
@@ -115,6 +138,8 @@ apps/web        Next.js dashboard (server components + server actions)
 skills/         Claude Code skills (see above)
 scripts/        seed, google-auth, install-skills, mcp-smoke
 data/           workboard.db (created on first run; gitignored)
+Dockerfile      multi-stage image used by both compose services
+docker-compose.yml  web + mcp services sharing the `data` volume
 ```
 
 ## Development
