@@ -8,17 +8,19 @@ import { Sparkline } from "./sparkline";
 import { TimeAgo } from "./time-ago";
 import { WarningStrip } from "./warnings";
 
-// A <div>, not a <Link>: the pipeline chip's popover contains real PR links,
-// which can't be nested inside an anchor. The title carries the navigation.
+// The whole card is clickable via the title link's stretched ::after (fills the
+// nearest positioned ancestor, i.e. this card). The pipeline chip's popover PR
+// links sit later in the DOM at the same stacking level, so they paint above the
+// stretched area and stay independently clickable — no nested <a> involved.
 export function ProjectCard({ detail, activityCounts }: { detail: ProjectDetail; activityCounts?: number[] }) {
   const { project, latestSummary, links, tasks, openWarnings } = detail;
   const pipeline = prPipeline(links);
   const openTasks = tasks.filter((t) => t.status !== "done").length;
   return (
-    <div className="flex flex-col gap-2 rounded-[10px] border border-hairline bg-surface p-3.5 transition-colors hover:border-accent/50">
+    <div className="relative flex flex-col gap-2 rounded-[10px] border border-hairline bg-surface p-3.5 transition-colors hover:border-accent/50">
       <div className="flex items-start justify-between gap-2">
         <h3 className="text-[14.5px] font-semibold leading-snug">
-          <Link href={`/projects/${project.slug}`} className="text-ink hover:text-accent">
+          <Link href={`/projects/${project.slug}`} className="text-ink after:absolute after:inset-0 after:content-[''] hover:text-accent">
             {project.name}
           </Link>
         </h3>
