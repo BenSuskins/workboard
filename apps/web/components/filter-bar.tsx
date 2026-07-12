@@ -22,8 +22,8 @@ function chip(href: string, label: string, active: boolean, key?: string) {
     <Link
       key={key ?? label}
       href={href}
-      className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
-        active ? "border-accent bg-accent/15 text-accent" : "border-hairline text-ink-2 hover:border-muted hover:text-ink"
+      className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+        active ? "bg-accent/15 text-accent" : "text-ink-2 hover:text-ink"
       }`}
     >
       {label}

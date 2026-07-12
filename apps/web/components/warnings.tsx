@@ -35,7 +35,7 @@ export function WarningsPanel({ warnings, slug }: { warnings: Warning[]; slug: s
       {warnings.map((w) => {
         const s = SEVERITY[w.severity];
         return (
-          <div key={w.id} className={`rounded-xl border p-3.5 ${s.cls}`}>
+          <div key={w.id} className={`rounded-[10px] border p-3.5 ${s.cls}`}>
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px]">

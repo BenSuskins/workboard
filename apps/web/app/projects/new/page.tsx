@@ -6,9 +6,9 @@ const inputCls =
 
 export default function NewProjectPage() {
   return (
-    <div className="mx-auto max-w-xl">
-      <h1 className="mb-4 text-2xl font-semibold tracking-tight text-ink">New project</h1>
-      <form action={createProjectAction} className="flex flex-col gap-4 rounded-xl border border-hairline bg-surface p-5">
+    <div className="mx-auto max-w-[460px]">
+      <h1 className="mb-4 text-lg font-semibold tracking-tight text-ink">New project</h1>
+      <form action={createProjectAction} className="flex flex-col gap-3.5 rounded-[10px] border border-hairline bg-surface p-[18px]">
         <label className="flex flex-col gap-1 text-xs text-muted">
           Name
           <input name="name" required placeholder="Payments v2 migration" className={inputCls} />

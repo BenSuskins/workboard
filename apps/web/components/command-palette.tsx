@@ -108,7 +108,7 @@ export function CommandPalette() {
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-[15vh]" onMouseDown={close} role="dialog" aria-modal>
       <div
-        className="w-full max-w-lg overflow-hidden rounded-xl border border-hairline bg-surface shadow-2xl"
+        className="w-full max-w-lg overflow-hidden rounded-[10px] border border-hairline bg-surface shadow-2xl"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <input
@@ -165,7 +165,7 @@ export function PaletteHint() {
       aria-label="Open command palette"
       title="Command palette (⌘K)"
       onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))}
-      className="hidden items-center gap-1 rounded-lg border border-hairline px-2 py-1.5 text-[11px] text-muted transition-colors hover:border-muted hover:text-ink sm:inline-flex"
+      className="hidden items-center gap-1 rounded-md border border-hairline px-2 py-1 font-mono text-[11px] text-muted transition-colors hover:border-muted hover:text-ink sm:inline-flex"
     >
       ⌘K
     </button>

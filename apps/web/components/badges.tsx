@@ -1,55 +1,55 @@
 import type { ProjectHealth, ProjectPriority, ProjectStatus } from "@workboard/core";
 
-const STATUS_STYLES: Record<ProjectStatus, { label: string; cls: string }> = {
-  active: { label: "Active", cls: "text-good border-good/40 bg-good/10" },
-  blocked: { label: "Blocked", cls: "text-critical border-critical/40 bg-critical/10" },
-  on_hold: { label: "On hold", cls: "text-warning border-warning/40 bg-warning/10" },
-  done: { label: "Done", cls: "text-accent border-accent/40 bg-accent/10" },
-  archived: { label: "Archived", cls: "text-muted border-hairline bg-surface-2" },
+const STATUS_STYLES: Record<ProjectStatus, { label: string; text: string; dot: string }> = {
+  active: { label: "Active", text: "text-good", dot: "bg-good" },
+  blocked: { label: "Blocked", text: "text-critical", dot: "bg-critical" },
+  on_hold: { label: "On hold", text: "text-warning", dot: "bg-warning" },
+  done: { label: "Done", text: "text-accent", dot: "bg-accent" },
+  archived: { label: "Archived", text: "text-muted", dot: "bg-muted" },
 };
 
+/** Colored dot + label, no chrome — used wherever a project's lifecycle status is shown. */
 export function StatusBadge({ status }: { status: ProjectStatus }) {
   const s = STATUS_STYLES[status];
   return (
-    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${s.cls}`}>
+    <span className={`inline-flex flex-none items-center gap-1.5 text-[11px] font-medium ${s.text}`}>
+      <span className={`size-1.5 rounded-full ${s.dot}`} aria-hidden />
       {s.label}
     </span>
   );
 }
 
-const HEALTH_STYLES: Record<ProjectHealth, { label: string; dot: string }> = {
-  green: { label: "On track", dot: "bg-good" },
-  amber: { label: "At risk", dot: "bg-warning" },
-  red: { label: "Off track", dot: "bg-critical" },
+const HEALTH_LABEL: Record<ProjectHealth, string> = {
+  green: "On track",
+  amber: "At risk",
+  red: "Off track",
 };
 
-export function HealthBadge({ health }: { health: ProjectHealth }) {
-  const h = HEALTH_STYLES[health];
+/** Plain-text "category · health · priority" meta line shared by the board card and project page. */
+export function ProjectMeta({
+  category,
+  health,
+  priority,
+  className = "",
+}: {
+  category: string;
+  health: ProjectHealth;
+  priority: ProjectPriority;
+  className?: string;
+}) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-[11px] text-ink-2">
-      <span className={`size-2 rounded-full ${h.dot}`} aria-hidden />
-      {h.label}
-    </span>
-  );
-}
-
-export function CategoryBadge({ category }: { category: string }) {
-  return (
-    <span className="inline-flex items-center rounded-full border border-hairline bg-surface-2 px-2 py-0.5 text-[11px] text-ink-2 capitalize">
-      {category}
-    </span>
-  );
-}
-
-export function PriorityBadge({ priority }: { priority: ProjectPriority }) {
-  if (priority === "medium") return null;
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
-        priority === "high" ? "bg-serious/10 text-serious border border-serious/40" : "text-muted border border-hairline"
-      }`}
-    >
-      {priority === "high" ? "High priority" : "Low priority"}
-    </span>
+    <div className={`flex flex-wrap items-center gap-x-1.5 text-[11px] text-muted ${className}`}>
+      <span className="capitalize">{category}</span>
+      <span>·</span>
+      <span>{HEALTH_LABEL[health]}</span>
+      {priority !== "medium" && (
+        <>
+          <span>·</span>
+          <span className={priority === "high" ? "font-semibold text-serious" : "text-muted"}>
+            {priority === "high" ? "High priority" : "Low priority"}
+          </span>
+        </>
+      )}
+    </div>
   );
 }
