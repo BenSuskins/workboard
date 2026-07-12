@@ -14,7 +14,7 @@ import {
   type PrSnapshot,
   type RepoScopeSnapshot,
 } from "@workboard/core";
-import { CategoryBadge, HealthBadge, PriorityBadge, StatusBadge } from "@/components/badges";
+import { ProjectMeta, StatusBadge } from "@/components/badges";
 import { ciLabel, GitHubMark, JiraMark, DocMark } from "@/components/chips";
 import { Markdown } from "@/components/markdown";
 import { WarningsPanel } from "@/components/warnings";
@@ -133,13 +133,15 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
         </div>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex flex-col gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight text-ink">{project.name}</h1>
-            <div className="flex flex-wrap items-center gap-1.5">
+            <h1 className="text-[22px] font-semibold tracking-tight text-ink">{project.name}</h1>
+            <div className="flex flex-wrap items-center gap-1.5 text-[12px] text-ink-2">
               <StatusBadge status={project.status} />
-              <CategoryBadge category={project.category} />
-              <PriorityBadge priority={project.priority} />
-              <HealthBadge health={project.health} />
-              <span className="text-[11px] text-muted">· active {<TimeAgo at={project.lastActivityAt} />}</span>
+              <span>·</span>
+              <ProjectMeta category={project.category} health={project.health} priority={project.priority} className="text-ink-2" />
+              <span>·</span>
+              <span className="text-muted">
+                active {<TimeAgo at={project.lastActivityAt} />}
+              </span>
             </div>
           </div>
           <div className="flex items-center gap-2" title={anyConfigured ? "Re-fetch GitHub/Jira/Docs status" : "No integrations configured — set tokens in .env"}>
@@ -151,7 +153,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
 
       <WarningsPanel warnings={openWarnings} slug={project.slug} />
 
-      <details className="rounded-xl border border-hairline bg-surface">
+      <details className="rounded-[10px] border border-hairline bg-surface">
         <summary className="cursor-pointer select-none px-4 py-2.5 text-sm text-ink-2 hover:text-ink">Edit project</summary>
         <form action={updateProjectAction} className="grid gap-3 border-t border-hairline p-4 sm:grid-cols-2">
           <input type="hidden" name="id" value={project.id} />
@@ -213,7 +215,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
 
       <div className="grid gap-6 lg:grid-cols-[1fr_minmax(280px,0.7fr)]">
         <div className="flex flex-col gap-6">
-          <section className="rounded-xl border border-hairline bg-surface p-4">
+          <section className="rounded-[10px] border border-hairline bg-surface p-4">
             <div className="mb-2 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-ink">AI summary</h2>
               {latestSummary && (
@@ -248,7 +250,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
             )}
           </section>
 
-          <section className="rounded-xl border border-hairline bg-surface p-4">
+          <section className="rounded-[10px] border border-hairline bg-surface p-4">
             <h2 className="mb-3 text-sm font-semibold text-ink">Activity</h2>
             <form action={addUpdateAction} className="mb-4 flex flex-col gap-2">
               <input type="hidden" name="projectId" value={project.id} />
@@ -286,7 +288,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
         </div>
 
         <div className="flex flex-col gap-6">
-          <section className="rounded-xl border border-hairline bg-surface p-4">
+          <section className="rounded-[10px] border border-hairline bg-surface p-4">
             <h2 className="mb-3 text-sm font-semibold text-ink">Tasks</h2>
             <form action={addTaskAction} className="mb-3 flex gap-2">
               <input type="hidden" name="projectId" value={project.id} />
@@ -335,7 +337,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
             )}
           </section>
 
-          <section className="rounded-xl border border-hairline bg-surface p-4">
+          <section className="rounded-[10px] border border-hairline bg-surface p-4">
             <h2 className="mb-3 text-sm font-semibold text-ink">Linked resources</h2>
             {links.length === 0 ? (
               <p className="mb-3 text-sm text-muted">Nothing linked yet.</p>
@@ -412,7 +414,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
           </section>
 
           {deletedCount > 0 && (
-            <details className="rounded-xl border border-hairline bg-surface">
+            <details className="rounded-[10px] border border-hairline bg-surface">
               <summary className="cursor-pointer select-none px-4 py-2.5 text-xs text-muted hover:text-ink">
                 Recently deleted ({deletedCount})
               </summary>

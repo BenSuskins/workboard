@@ -6,17 +6,17 @@
  * Values come from the validated reference palette (light + dark columns).
  */
 :root {
-  --wb-page: #f9f9f7;
-  --wb-surface: #fcfcfb;
-  --wb-surface-2: #f0efec;
-  --wb-ink: #0b0b0b;
-  --wb-ink-2: #52514e;
-  --wb-muted: #898781;
-  --wb-hairline: rgba(11, 11, 11, 0.1);
-  --wb-grid: #e1e0d9;
-  --wb-accent: #2a78d6;
-  --wb-accent-deep: #1c5cab;
-  --wb-good: #0ca30c;
+  --wb-page: #e5e3dc;
+  --wb-surface: #fbfbfa;
+  --wb-surface-2: #f4f3f0;
+  --wb-ink: #18181a;
+  --wb-ink-2: #5c5a54;
+  --wb-muted: #918f87;
+  --wb-hairline: rgba(20, 20, 20, 0.09);
+  --wb-grid: rgba(20, 20, 20, 0.14);
+  --wb-accent: #3d55d9;
+  --wb-accent-deep: #2c3fac;
+  --wb-good: #178a3e;
   /* warning steps darker in light mode so warning *text* stays readable;
      badges/dots keep the icon+label pairing either way */
   --wb-warning: #9a6a00;
@@ -26,20 +26,20 @@
 }
 
 :root[data-theme="dark"] {
-  --wb-page: #0d0d0d;
-  --wb-surface: #1a1a19;
-  --wb-surface-2: #232322;
-  --wb-ink: #ffffff;
-  --wb-ink-2: #c3c2b7;
-  --wb-muted: #898781;
+  --wb-page: #181713;
+  --wb-surface: #211f1b;
+  --wb-surface-2: #2a2824;
+  --wb-ink: #f5f4f0;
+  --wb-ink-2: #c9c7bf;
+  --wb-muted: #948f84;
   --wb-hairline: rgba(255, 255, 255, 0.1);
-  --wb-grid: #2c2c2a;
-  --wb-accent: #3987e5;
-  --wb-accent-deep: #1c5cab;
-  --wb-good: #0ca30c;
+  --wb-grid: rgba(255, 255, 255, 0.14);
+  --wb-accent: #7c8ff2;
+  --wb-accent-deep: #a6b2f6;
+  --wb-good: #34b566;
   --wb-warning: #fab219;
-  --wb-critical: #d03b3b;
-  --wb-serious: #ec835a;
+  --wb-critical: #e5675f;
+  --wb-serious: #dd8a4c;
   color-scheme: dark;
 }
 
@@ -58,7 +58,8 @@
   --color-warning: var(--wb-warning);
   --color-critical: var(--wb-critical);
   --color-serious: var(--wb-serious);
-  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans: var(--font-inter), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
 }
 
 body {
@@ -95,6 +96,7 @@ body {
   border-radius: 4px;
   padding: 0.05rem 0.3rem;
   font-size: 0.8em;
+  font-family: var(--font-mono);
 }
 .prose-wb ul, .prose-wb ol { padding-left: 1.25rem; }
 .prose-wb ul { list-style: disc; }

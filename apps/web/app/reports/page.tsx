@@ -14,9 +14,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const tab = (href: string, label: string, active: boolean) => (
     <Link
       href={href}
-      className={`rounded-full border px-3 py-1 text-xs ${
-        active ? "border-accent bg-accent/15 text-accent" : "border-hairline text-ink-2 hover:text-ink"
-      }`}
+      className={`rounded-md px-2.5 py-1 text-xs font-medium ${active ? "bg-accent/15 text-accent" : "text-ink-2 hover:text-ink"}`}
     >
       {label}
     </Link>
@@ -33,13 +31,13 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         </div>
       </div>
       {reports.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-grid px-6 py-16 text-center text-sm text-muted">
+        <div className="rounded-[10px] border border-dashed border-grid px-6 py-16 text-center text-sm text-muted">
           No reports yet. Run the <code>workboard-digest</code> or <code>workboard-triage</code> skill from a coding agent to
           generate one.
         </div>
       ) : (
         reports.map((r) => (
-          <article key={r.id} className="rounded-xl border border-hairline bg-surface p-5">
+          <article key={r.id} className="rounded-[10px] border border-hairline bg-surface p-5">
             <div className="mb-3 flex items-center gap-2 text-[11px] text-muted">
               <span
                 className={`rounded-full border px-2 py-0.5 font-medium ${

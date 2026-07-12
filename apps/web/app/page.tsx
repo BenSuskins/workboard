@@ -108,7 +108,7 @@ export default async function Dashboard({
       {(digest || triage) && (
         <div className="grid gap-3 lg:grid-cols-2">
           {digest && (
-            <section className="rounded-xl border border-hairline bg-surface p-4">
+            <section className="rounded-[10px] border border-hairline bg-surface p-4">
               <div className="mb-2 flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-ink">Latest digest</h2>
                 <span className="text-[11px] text-muted">
@@ -124,7 +124,7 @@ export default async function Dashboard({
             </section>
           )}
           {triage && (
-            <section className="rounded-xl border border-hairline bg-surface p-4">
+            <section className="rounded-[10px] border border-hairline bg-surface p-4">
               <div className="mb-2 flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-ink">Triage</h2>
                 <span className="text-[11px] text-muted">{<TimeAgo at={triage.createdAt} />}</span>
@@ -140,7 +140,7 @@ export default async function Dashboard({
       <FilterBar filters={filters} categories={categories} />
 
       {filtered.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-grid px-6 py-16 text-center text-sm text-muted">
+        <div className="rounded-[10px] border border-dashed border-grid px-6 py-16 text-center text-sm text-muted">
           No projects match.{" "}
           <Link href="/projects/new" className="text-accent hover:underline">
             Create one
