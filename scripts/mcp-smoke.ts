@@ -107,19 +107,39 @@ await step("agent task queue: queue, list, claim, double-claim rejection", async
   const queued = await call("add_task", { project: "smoke-project", title: "Queued work", agent_ready: true });
   if (queued.created.agent_ready !== true) throw new Error(JSON.stringify(queued));
 
-  const listed = await call("list_queued_tasks", { project: "smoke-project" });
-  if (!listed.queued.some((t: any) => t.id === queued.created.id)) throw new Error(JSON.stringify(listed));
+  // later-created but higher priority must lead the list; the spec rides along
+  const urgent = await call("add_task", {
+    project: "smoke-project",
+    title: "Urgent fix",
+    description: "## Problem\n\nThe thing is broken.\n\n**Accept:** it is not broken.",
+    priority: "high",
+    agent_ready: true,
+  });
+  if (urgent.created.priority !== "high") throw new Error(JSON.stringify(urgent));
 
-  const claimed = await call("claim_task", { task_id: queued.created.id, agent_name: "smoke-agent" });
+  const listed = await call("list_queued_tasks", { project: "smoke-project" });
+  if (listed.queued[0].id !== urgent.created.id) throw new Error(`priority ordering wrong: ${JSON.stringify(listed)}`);
+  if (!listed.queued[0].description.includes("Accept:")) throw new Error("description missing from queue listing");
+
+  const claimed = await call("claim_task", { task_id: urgent.created.id, agent_name: "smoke-agent" });
   if (claimed.claimed.status !== "in_progress") throw new Error(JSON.stringify(claimed));
+  if (claimed.claimed.description !== listed.queued[0].description) throw new Error("description missing from claim");
 
   // claimed tasks leave the queue
   const after = await call("list_queued_tasks", {});
-  if (after.queued.some((t: any) => t.id === queued.created.id)) throw new Error(JSON.stringify(after));
+  if (after.queued.some((t: any) => t.id === urgent.created.id)) throw new Error(JSON.stringify(after));
 
-  const double = await client.callTool({ name: "claim_task", arguments: { task_id: queued.created.id, agent_name: "other-agent" } });
+  const double = await client.callTool({ name: "claim_task", arguments: { task_id: urgent.created.id, agent_name: "other-agent" } });
   if (!(double as { isError?: boolean }).isError) throw new Error("double claim should error");
 
+  // agents refine specs as they learn; clearing priority must be allowed too
+  const refined = await call("update_task", {
+    task_id: urgent.created.id,
+    status: "done",
+    description: "Fixed. Root cause was flaky CI, not the thing itself.",
+    priority: null,
+  });
+  if (refined.updated.priority !== null) throw new Error(JSON.stringify(refined));
   await call("update_task", { task_id: queued.created.id, status: "done" });
 });
 

@@ -23,6 +23,7 @@ import {
   resolveWarning,
   saveReport,
   syncProject,
+  TASK_PRIORITIES,
   TASK_STATUSES,
   updateProject,
   updateTask,
@@ -37,6 +38,7 @@ const statusEnum = z.enum(PROJECT_STATUSES);
 const healthEnum = z.enum(PROJECT_HEALTHS);
 const priorityEnum = z.enum(PROJECT_PRIORITIES);
 const taskStatusEnum = z.enum(TASK_STATUSES);
+const taskPriorityEnum = z.enum(TASK_PRIORITIES);
 
 const projectRef = z
   .union([z.number(), z.string()])
@@ -129,7 +131,7 @@ export function registerTools(server: McpServer, db: Db): void {
           generatedBy: s.generatedBy,
           at: new Date(s.createdAt).toISOString(),
         })),
-        tasks: detail.tasks.map((t) => ({ id: t.id, title: t.title, status: t.status, dueDate: t.dueDate })),
+        tasks: detail.tasks.map((t) => ({ id: t.id, title: t.title, description: t.description, status: t.status, priority: t.priority, dueDate: t.dueDate })),
         updates: detail.updates.slice(0, 20).map((u) => ({
           type: u.type,
           author: u.author,
@@ -250,23 +252,37 @@ export function registerTools(server: McpServer, db: Db): void {
     "add_task",
     {
       title: "Add task",
-      description: "Add a task/TODO to a project.",
+      description:
+        "Add a task/TODO to a project. Give it a description (markdown) with the problem, constraints, and acceptance criteria — queued tasks are claimed by agents who work from that spec, not from the title alone.",
       inputSchema: {
         project: projectRef,
         title: z.string(),
+        description: z.string().optional().describe("The spec an implementing agent will work from (markdown)"),
+        priority: taskPriorityEnum.nullable().optional().describe("Queue order: high before medium before low before unprioritized"),
         due_date: z.string().optional().describe("ISO date, e.g. 2026-07-15"),
         agent_ready: z.boolean().optional().describe("Queue the task for agents to claim (list_queued_tasks / claim_task)"),
         agent_name: z.string().optional(),
       },
     },
-    async ({ project, title, due_date, agent_ready, agent_name }) => {
+    async ({ project, title, description, priority, due_date, agent_ready, agent_name }) => {
       const target = resolveProject(db, project);
       const task = addTask(db, target.id, title, {
+        description,
+        priority,
         dueDate: due_date,
         author: agent_name ? `agent:${agent_name}` : "agent",
         agentReady: agent_ready,
       });
-      return json({ created: { id: task.id, title: task.title, status: task.status, agent_ready: Boolean(task.agentReady), project: target.slug } });
+      return json({
+        created: {
+          id: task.id,
+          title: task.title,
+          status: task.status,
+          priority: task.priority,
+          agent_ready: Boolean(task.agentReady),
+          project: target.slug,
+        },
+      });
     },
   );
 
@@ -274,17 +290,20 @@ export function registerTools(server: McpServer, db: Db): void {
     "update_task",
     {
       title: "Update task",
-      description: "Change a task's status (todo | in_progress | done), title, or due date.",
+      description:
+        "Change a task's status (todo | in_progress | done), title, description, priority, or due date. Agents refining a spec as they learn should update the description rather than leaving it stale.",
       inputSchema: {
         task_id: z.number(),
         status: taskStatusEnum.optional(),
         title: z.string().optional(),
+        description: z.string().optional(),
+        priority: taskPriorityEnum.nullable().optional(),
         due_date: z.string().nullable().optional(),
       },
     },
-    async ({ task_id, status, title, due_date }) => {
-      const task = updateTask(db, task_id, { status, title, dueDate: due_date });
-      return json({ updated: { id: task.id, title: task.title, status: task.status } });
+    async ({ task_id, status, title, description, priority, due_date }) => {
+      const task = updateTask(db, task_id, { status, title, description, priority, dueDate: due_date });
+      return json({ updated: { id: task.id, title: task.title, status: task.status, priority: task.priority } });
     },
   );
 
@@ -306,7 +325,9 @@ export function registerTools(server: McpServer, db: Db): void {
           id: t.id,
           project: t.projectId,
           title: t.title,
+          description: t.description,
           status: t.status,
+          priority: t.priority,
           due_date: t.dueDate,
           queued_at: new Date(t.createdAt).toISOString(),
         })),
@@ -327,7 +348,16 @@ export function registerTools(server: McpServer, db: Db): void {
     },
     async ({ task_id, agent_name }) => {
       const task = claimTask(db, task_id, `agent:${agent_name}`);
-      return json({ claimed: { id: task.id, title: task.title, status: task.status, claimed_by: task.claimedBy } });
+      return json({
+        claimed: {
+          id: task.id,
+          title: task.title,
+          description: task.description,
+          status: task.status,
+          priority: task.priority,
+          claimed_by: task.claimedBy,
+        },
+      });
     },
   );
 

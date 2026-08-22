@@ -7,6 +7,7 @@ import {
   deleteTask,
   getActivityCounts,
   getSyncHealth,
+  getTaskDetail,
   listDeleted,
   listQueuedTasks,
   listShelvedProjects,
@@ -252,6 +253,35 @@ describe("tasks", () => {
     const detail = getProjectDetail(db, p.id)!;
     expect(detail.tasks.map((t) => t.status)).toEqual(["in_progress", "done"]);
   });
+
+  it("stores description and priority, and get_task detail resolves the project", () => {
+    const p = createProject(db, { name: "Alpha" });
+    const task = addTask(db, p.id, "ship it", {
+      description: "## Problem\n\nQueue ignores priority.\n\n**Accept:** high first",
+      priority: "high",
+    });
+
+    const detail = getTaskDetail(db, task.id)!;
+    expect(detail.task.title).toBe("ship it");
+    expect(detail.task.description).toContain("Accept:");
+    expect(detail.task.priority).toBe("high");
+    expect(detail.project.slug).toBe("alpha");
+    expect(getTaskDetail(db, 99999)).toBeUndefined();
+
+    // unprioritized default + clearing a priority back to none
+    updateTask(db, task.id, { priority: null });
+    expect(getTaskDetail(db, task.id)!.task.priority).toBeNull();
+  });
+
+  it("orders project tasks by status, then priority (null last)", () => {
+    const p = createProject(db, { name: "Alpha" });
+    addTask(db, p.id, "none", {});
+    addTask(db, p.id, "high", { priority: "high" });
+    addTask(db, p.id, "low", { priority: "low" });
+    addTask(db, p.id, "wip none", { status: "in_progress" });
+    const detail = getProjectDetail(db, p.id)!;
+    expect(detail.tasks.map((t) => t.title)).toEqual(["wip none", "high", "low", "none"]);
+  });
 });
 
 describe("soft deletes", () => {
@@ -351,7 +381,7 @@ describe("sync health", () => {
 });
 
 describe("agent task queue", () => {
-  it("lists queued tasks FIFO, scoped and filtered", () => {
+  it("lists queued tasks priority-first (null last), FIFO within each, scoped and filtered", () => {
     const p1 = createProject(db, { name: "Alpha" });
     const p2 = createProject(db, { name: "Beta" });
     const first = addTask(db, p1.id, "first", { agentReady: true });
@@ -362,6 +392,13 @@ describe("agent task queue", () => {
     expect(listQueuedTasks(db).map((t) => t.id)).toEqual([first.id, second.id, other.id]);
     expect(listQueuedTasks(db, { projectId: p1.id })).toHaveLength(2);
     expect(listQueuedTasks(db, { projectId: p2.id }).map((t) => t.title)).toEqual(["other project"]);
+
+    // a later-created high jumps ahead of earlier unprioritized work; null trails
+    const urgent = addTask(db, p1.id, "urgent", { agentReady: true, priority: "high" });
+    const low = addTask(db, p1.id, "low prio", { agentReady: true, priority: "low" });
+    expect(listQueuedTasks(db, { projectId: p1.id }).map((t) => t.title)).toEqual(["urgent", "low prio", "first", "second"]);
+    expect(urgent.priority).toBe("high");
+    expect(low.description).toBe("");
   });
 
   it("excludes done and soft-deleted tasks from the queue", () => {

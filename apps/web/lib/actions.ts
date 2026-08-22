@@ -15,12 +15,14 @@ import {
   setTaskAgentReady,
   syncAll,
   syncProject,
+  TASK_PRIORITIES,
   updateProject,
   updateTask,
   type ProjectHealth,
   type ProjectPriority,
   type ProjectStatus,
   type RepoScope,
+  type TaskPriority,
   type TaskStatus,
 } from "@workboard/core";
 import { revalidatePath } from "next/cache";
@@ -68,12 +70,21 @@ export async function addUpdateAction(formData: FormData) {
   revalidatePath("/");
 }
 
+/** Empty/absent select value means "no priority"; anything else must be a known level. */
+function taskPriority(value: FormDataEntryValue | null): TaskPriority | null {
+  const raw = String(value ?? "").trim();
+  return (TASK_PRIORITIES as readonly string[]).includes(raw) ? (raw as TaskPriority) : null;
+}
+
 export async function addTaskAction(formData: FormData) {
   const projectId = Number(formData.get("projectId"));
   const title = String(formData.get("title") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
   const dueDate = String(formData.get("dueDate") ?? "").trim();
   if (title)
     addTask(db(), projectId, title, {
+      description,
+      priority: taskPriority(formData.get("priority")),
       dueDate: dueDate || undefined,
       author: "user",
       agentReady: formData.get("agentReady") === "on",
@@ -82,23 +93,44 @@ export async function addTaskAction(formData: FormData) {
   revalidatePath("/");
 }
 
+export async function updateTaskDetailAction(formData: FormData) {
+  const taskId = Number(formData.get("taskId"));
+  updateTask(db(), taskId, {
+    title: String(formData.get("title") ?? "").trim() || undefined,
+    description: String(formData.get("description") ?? ""),
+    priority: taskPriority(formData.get("priority")),
+    dueDate: String(formData.get("dueDate") ?? "").trim() || null,
+  });
+  const slug = String(formData.get("slug"));
+  revalidatePath(`/projects/${slug}/tasks/${taskId}`);
+  revalidatePath(`/projects/${slug}`);
+  revalidatePath("/");
+}
+
 export async function setTaskAgentReadyAction(formData: FormData) {
-  setTaskAgentReady(db(), Number(formData.get("taskId")), formData.get("ready") === "1");
-  revalidatePath(`/projects/${String(formData.get("slug"))}`);
+  const taskId = Number(formData.get("taskId"));
+  setTaskAgentReady(db(), taskId, formData.get("ready") === "1");
+  const slug = String(formData.get("slug"));
+  revalidatePath(`/projects/${slug}/tasks/${taskId}`);
+  revalidatePath(`/projects/${slug}`);
   revalidatePath("/");
 }
 
 export async function setTaskStatusAction(formData: FormData) {
-  updateTask(db(), Number(formData.get("taskId")), {
+  const taskId = Number(formData.get("taskId"));
+  updateTask(db(), taskId, {
     status: formData.get("status") as TaskStatus,
   });
-  revalidatePath(`/projects/${String(formData.get("slug"))}`);
+  const slug = String(formData.get("slug"));
+  revalidatePath(`/projects/${slug}/tasks/${taskId}`);
+  revalidatePath(`/projects/${slug}`);
   revalidatePath("/");
 }
 
 export async function deleteTaskAction(formData: FormData) {
   deleteTask(db(), Number(formData.get("taskId")));
-  revalidatePath(`/projects/${String(formData.get("slug"))}`);
+  // Redirecting also covers deletion from the task's own page.
+  redirect(`/projects/${String(formData.get("slug"))}`);
 }
 
 export async function restoreTaskAction(formData: FormData) {
