@@ -11,6 +11,8 @@ import {
   resolveWarning,
   restoreLink,
   restoreTask,
+  setProjectPinned,
+  setTaskAgentReady,
   syncAll,
   syncProject,
   updateProject,
@@ -70,8 +72,20 @@ export async function addTaskAction(formData: FormData) {
   const projectId = Number(formData.get("projectId"));
   const title = String(formData.get("title") ?? "").trim();
   const dueDate = String(formData.get("dueDate") ?? "").trim();
-  if (title) addTask(db(), projectId, title, { dueDate: dueDate || undefined, author: "user" });
+  if (title)
+    addTask(db(), projectId, title, {
+      dueDate: dueDate || undefined,
+      author: "user",
+      agentReady: formData.get("agentReady") === "on",
+    });
   revalidatePath(`/projects/${String(formData.get("slug"))}`);
+  revalidatePath("/");
+}
+
+export async function setTaskAgentReadyAction(formData: FormData) {
+  setTaskAgentReady(db(), Number(formData.get("taskId")), formData.get("ready") === "1");
+  revalidatePath(`/projects/${String(formData.get("slug"))}`);
+  revalidatePath("/");
 }
 
 export async function setTaskStatusAction(formData: FormData) {
@@ -124,6 +138,19 @@ export async function deleteLinkAction(formData: FormData) {
 export async function resolveWarningAction(formData: FormData) {
   resolveWarning(db(), Number(formData.get("warningId")), { resolvedBy: "user" });
   revalidatePath(`/projects/${String(formData.get("slug"))}`);
+  revalidatePath("/");
+}
+
+export async function setProjectPinnedAction(formData: FormData) {
+  setProjectPinned(db(), Number(formData.get("projectId")), formData.get("pinned") === "1");
+  revalidatePath("/");
+  revalidatePath(`/projects/${String(formData.get("slug"))}`);
+}
+
+/** Bring a shelved (done or archived) project back onto the active board. */
+export async function restoreProjectAction(formData: FormData) {
+  updateProject(db(), Number(formData.get("projectId")), { status: "active" });
+  revalidatePath("/archive");
   revalidatePath("/");
 }
 

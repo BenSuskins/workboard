@@ -143,6 +143,28 @@ export function getProject(db: Db, ref: number | string): Project | undefined {
   return db.select().from(projects).where(eq(projects.slug, ref)).get();
 }
 
+/** Star a project so its card leads the board. */
+export function setProjectPinned(db: Db, id: number, pinned: boolean): Project {
+  const updated = db
+    .update(projects)
+    .set({ pinned: pinned ? 1 : 0, updatedAt: now() })
+    .where(eq(projects.id, id))
+    .returning()
+    .get();
+  if (!updated) throw new Error(`Project ${id} not found`);
+  return updated;
+}
+
+/** Projects resting off the main board: finished (done) and archived. */
+export function listShelvedProjects(db: Db): Project[] {
+  return db
+    .select()
+    .from(projects)
+    .where(inArray(projects.status, ["done", "archived"]))
+    .orderBy(desc(projects.lastActivityAt))
+    .all();
+}
+
 export interface LinkWithStatus extends Link {
   snapshot: Snapshot | null;
   syncState: SyncState | null;
@@ -199,7 +221,7 @@ function touchProject(db: Db, projectId: number) {
 
 // ---------- tasks ----------
 
-export function addTask(db: Db, projectId: number, title: string, opts: { dueDate?: string; author?: string; status?: TaskStatus } = {}): Task {
+export function addTask(db: Db, projectId: number, title: string, opts: { dueDate?: string; author?: string; status?: TaskStatus; agentReady?: boolean } = {}): Task {
   const t = now();
   const task = db
     .insert(tasks)
@@ -209,6 +231,7 @@ export function addTask(db: Db, projectId: number, title: string, opts: { dueDat
       status: opts.status ?? "todo",
       dueDate: opts.dueDate ?? null,
       author: opts.author ?? "user",
+      agentReady: opts.agentReady ? 1 : 0,
       createdAt: t,
       updatedAt: t,
     })
@@ -219,9 +242,12 @@ export function addTask(db: Db, projectId: number, title: string, opts: { dueDat
 }
 
 export function updateTask(db: Db, id: number, input: { title?: string; status?: TaskStatus; dueDate?: string | null }): Task {
+  // Reverting a claimed task to todo releases the claim so it can be queued again;
+  // completing it keeps claimedBy for attribution.
+  const patch = { ...input, ...(input.status === "todo" ? { claimedBy: null, claimedAt: null } : {}), updatedAt: now() };
   const task = db
     .update(tasks)
-    .set({ ...input, updatedAt: now() })
+    .set(patch)
     .where(eq(tasks.id, id))
     .returning()
     .get();
@@ -240,6 +266,66 @@ export function restoreTask(db: Db, id: number): Task {
   if (!task) throw new Error(`Task ${id} not found`);
   touchProject(db, task.projectId);
   return task;
+}
+
+// ---------- agent task queue (shared pull queue — no named assignees) ----------
+
+/** Queue or un-queue a task. Un-queuing releases an active claim and reverts in_progress to todo. */
+export function setTaskAgentReady(db: Db, id: number, ready: boolean): Task {
+  const existing = db.select().from(tasks).where(eq(tasks.id, id)).get();
+  if (!existing) throw new Error(`Task ${id} not found`);
+  const release = !ready && existing.claimedBy ? { claimedBy: null, claimedAt: null } : {};
+  const revert = !ready && existing.status === "in_progress" ? { status: "todo" as TaskStatus } : {};
+  const task = db
+    .update(tasks)
+    .set({ agentReady: ready ? 1 : 0, ...release, ...revert, updatedAt: now() })
+    .where(eq(tasks.id, id))
+    .returning()
+    .get();
+  touchProject(db, task.projectId);
+  return task;
+}
+
+/** Tasks waiting for an agent: queued, still todo, unclaimed, not deleted. FIFO by creation. */
+export function listQueuedTasks(db: Db, opts: { projectId?: number } = {}): Task[] {
+  const conds = [eq(tasks.agentReady, 1), eq(tasks.status, "todo"), isNull(tasks.claimedAt), isNull(tasks.deletedAt)];
+  if (opts.projectId !== undefined) conds.push(eq(tasks.projectId, opts.projectId));
+  return db
+    .select()
+    .from(tasks)
+    .where(and(...conds))
+    .orderBy(tasks.createdAt, tasks.id)
+    .all();
+}
+
+/**
+ * Atomically claim a queued task: only wins when the task is still unclaimed.
+ * Logs an agent_update so the timeline shows who picked the work up.
+ */
+export function claimTask(db: Db, id: number, claimedBy: string): Task {
+  const claimed = db
+    .update(tasks)
+    .set({ status: "in_progress", claimedBy, claimedAt: now(), updatedAt: now() })
+    .where(and(eq(tasks.id, id), eq(tasks.agentReady, 1), eq(tasks.status, "todo"), isNull(tasks.claimedAt), isNull(tasks.deletedAt)))
+    .returning()
+    .get();
+  if (!claimed) {
+    const existing = db.select().from(tasks).where(eq(tasks.id, id)).get();
+    if (!existing || existing.deletedAt) throw new Error(`Task ${id} not found`);
+    if (!existing.agentReady) throw new Error(`Task ${id} is not queued for agents`);
+    throw new Error(`Task ${id} is already claimed by ${existing.claimedBy ?? "someone else"}`);
+  }
+  db.insert(updates)
+    .values({
+      projectId: claimed.projectId,
+      type: "agent_update",
+      body: `Claimed task **${claimed.title}**`,
+      author: claimedBy,
+      createdAt: now(),
+    })
+    .run();
+  touchProject(db, claimed.projectId);
+  return claimed;
 }
 
 // ---------- updates (activity) ----------
@@ -283,18 +369,18 @@ export function listSummaryHistory(db: Db, projectId: number, limit = 20): Summa
     .all();
 }
 
-export function saveReport(db: Db, kind: "digest" | "triage", body: string, generatedBy = "agent"): Summary {
+export function saveReport(db: Db, kind: "digest" | "triage" | "accomplishments", body: string, generatedBy = "agent"): Summary {
   return db.insert(summaries).values({ projectId: null, kind, body, generatedBy, createdAt: now() }).returning().get();
 }
 
-export function listReports(db: Db, kind?: "digest" | "triage", limit = 50): Summary[] {
+export function listReports(db: Db, kind?: "digest" | "triage" | "accomplishments", limit = 50): Summary[] {
   const cond = kind
     ? and(isNull(summaries.projectId), eq(summaries.kind, kind))
-    : and(isNull(summaries.projectId), inArray(summaries.kind, ["digest", "triage"]));
+    : and(isNull(summaries.projectId), inArray(summaries.kind, ["digest", "triage", "accomplishments"]));
   return db.select().from(summaries).where(cond).orderBy(desc(summaries.createdAt)).limit(limit).all();
 }
 
-export function latestReport(db: Db, kind: "digest" | "triage"): Summary | undefined {
+export function latestReport(db: Db, kind: "digest" | "triage" | "accomplishments"): Summary | undefined {
   return listReports(db, kind, 1)[0];
 }
 
@@ -627,6 +713,58 @@ export function getActivityCounts(db: Db, projectId: number, days = 14): number[
     if (bucket >= 0 && bucket < days) counts[bucket]++;
   }
   return counts;
+}
+
+// ---------- progress metrics (per-project reporting) ----------
+
+export interface ProjectMetrics {
+  tasksTotal: number;
+  tasksDone: number;
+  openPrs: number;
+  mergedRecently: number;
+  /** Whole days since the project last moved; 0 means today. */
+  daysSinceActivity: number;
+}
+
+const RECENT_PR_MS = 7 * 24 * 60 * 60 * 1000;
+
+interface PrLike {
+  state: "open" | "closed";
+  merged: boolean;
+  updatedAt: string;
+}
+
+function collectSnapshotPrs(data: unknown, into: PrLike[]): void {
+  if (!data || typeof data !== "object") return;
+  if ((data as { type?: string }).type === "pr") {
+    into.push(data as PrLike);
+  } else if ((data as { type?: string }).type === "repo") {
+    const prs = (data as { prs?: unknown }).prs;
+    if (Array.isArray(prs)) for (const pr of prs) if (pr && typeof pr === "object") into.push(pr as PrLike);
+  }
+}
+
+/** Task completion and PR throughput for a project — the reporting numbers. */
+export function getProjectMetrics(db: Db, ref: number | string): ProjectMetrics | undefined {
+  const detail = getProjectDetail(db, ref, { updatesLimit: 0 });
+  if (!detail) return undefined;
+  const tasksDone = detail.tasks.filter((t) => t.status === "done").length;
+  const prs: PrLike[] = [];
+  for (const link of detail.links) collectSnapshotPrs(link.snapshot?.data, prs);
+  const recentCutoff = Date.now() - RECENT_PR_MS;
+  let openPrs = 0;
+  let mergedRecently = 0;
+  for (const pr of prs) {
+    if (pr.state === "open") openPrs++;
+    else if (pr.merged && Date.parse(pr.updatedAt) > recentCutoff) mergedRecently++;
+  }
+  return {
+    tasksTotal: detail.tasks.length,
+    tasksDone,
+    openPrs,
+    mergedRecently,
+    daysSinceActivity: Math.floor((now() - detail.project.lastActivityAt) / (24 * 60 * 60 * 1000)),
+  };
 }
 
 // ---------- activity feed (digest raw material) ----------

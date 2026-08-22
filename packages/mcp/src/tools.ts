@@ -4,13 +4,16 @@ import {
   addLink,
   addTask,
   addUpdate,
+  claimTask,
   createProject,
   findProject,
   getActivity,
   getProjectDetail,
   getProject,
+  getProjectMetrics,
   integrationStatus,
   listProjects,
+  listQueuedTasks,
   listReports,
   listSummaryHistory,
   PROJECT_HEALTHS,
@@ -106,8 +109,17 @@ export function registerTools(server: McpServer, db: Db): void {
       const detail = getProjectDetail(db, typeof project === "string" && /^\d+$/.test(project) ? Number(project) : project);
       if (!detail) throw new Error(`No project found for "${project}". Use list_projects to see available projects.`);
       const history = listSummaryHistory(db, detail.project.id, 5);
+      const metrics = getProjectMetrics(db, detail.project.id);
       return json({
         ...projectCard(detail.project),
+        pinned: Boolean(detail.project.pinned),
+        metrics: metrics && {
+          tasksTotal: metrics.tasksTotal,
+          tasksDone: metrics.tasksDone,
+          openPrs: metrics.openPrs,
+          mergedRecently: metrics.mergedRecently,
+          daysSinceActivity: metrics.daysSinceActivity,
+        },
         openWarnings: detail.openWarnings.map(warningCard),
         latestSummary: detail.latestSummary
           ? { body: detail.latestSummary.body, generatedAt: new Date(detail.latestSummary.createdAt).toISOString() }
@@ -220,7 +232,7 @@ export function registerTools(server: McpServer, db: Db): void {
         "Append a progress note to a project's activity timeline — what you shipped, decided, or are blocked on. Markdown supported. This is the primary way agents log work.",
       inputSchema: {
         project: projectRef,
-        body: z.string().describe("The update, in markdown"),
+        body: z.string().describe("The update, in markdown — one or two sentences; details live in your repo/PR, not here"),
         agent_name: z.string().optional().describe("Your agent name, for attribution"),
       },
     },
@@ -243,13 +255,18 @@ export function registerTools(server: McpServer, db: Db): void {
         project: projectRef,
         title: z.string(),
         due_date: z.string().optional().describe("ISO date, e.g. 2026-07-15"),
+        agent_ready: z.boolean().optional().describe("Queue the task for agents to claim (list_queued_tasks / claim_task)"),
         agent_name: z.string().optional(),
       },
     },
-    async ({ project, title, due_date, agent_name }) => {
+    async ({ project, title, due_date, agent_ready, agent_name }) => {
       const target = resolveProject(db, project);
-      const task = addTask(db, target.id, title, { dueDate: due_date, author: agent_name ? `agent:${agent_name}` : "agent" });
-      return json({ created: { id: task.id, title: task.title, status: task.status, project: target.slug } });
+      const task = addTask(db, target.id, title, {
+        dueDate: due_date,
+        author: agent_name ? `agent:${agent_name}` : "agent",
+        agentReady: agent_ready,
+      });
+      return json({ created: { id: task.id, title: task.title, status: task.status, agent_ready: Boolean(task.agentReady), project: target.slug } });
     },
   );
 
@@ -268,6 +285,49 @@ export function registerTools(server: McpServer, db: Db): void {
     async ({ task_id, status, title, due_date }) => {
       const task = updateTask(db, task_id, { status, title, dueDate: due_date });
       return json({ updated: { id: task.id, title: task.title, status: task.status } });
+    },
+  );
+
+  server.registerTool(
+    "list_queued_tasks",
+    {
+      title: "List queued tasks",
+      description:
+        "List tasks queued for agents (the shared pull queue). Pass project to scope to one project; omit it to see the queue across all projects. Claim with claim_task before starting work.",
+      inputSchema: {
+        project: projectRef.optional().describe("Scope to one project (id or slug); omit for the global queue"),
+      },
+    },
+    async ({ project }) => {
+      const projectId = project !== undefined ? resolveProject(db, project).id : undefined;
+      const queued = listQueuedTasks(db, { projectId });
+      return json({
+        queued: queued.map((t) => ({
+          id: t.id,
+          project: t.projectId,
+          title: t.title,
+          status: t.status,
+          due_date: t.dueDate,
+          queued_at: new Date(t.createdAt).toISOString(),
+        })),
+      });
+    },
+  );
+
+  server.registerTool(
+    "claim_task",
+    {
+      title: "Claim a queued task",
+      description:
+        "Atomically claim a queued task: marks it in_progress, stamps you as the claimer, and logs to the project timeline. Fails if another agent claimed it first. Call this before starting the work.",
+      inputSchema: {
+        task_id: z.number(),
+        agent_name: z.string().describe("Your agent name, e.g. \"claude\" — shown on the board"),
+      },
+    },
+    async ({ task_id, agent_name }) => {
+      const task = claimTask(db, task_id, `agent:${agent_name}`);
+      return json({ claimed: { id: task.id, title: task.title, status: task.status, claimed_by: task.claimedBy } });
     },
   );
 
@@ -331,7 +391,7 @@ export function registerTools(server: McpServer, db: Db): void {
         project: projectRef,
         message: z.string().describe("One or two sentences: what is wrong and why it matters"),
         severity: z.enum(WARNING_SEVERITIES).optional().describe("Defaults to 'warning'"),
-        suggested_action: z.string().optional().describe("The concrete action that would resolve this"),
+        suggested_action: z.string().optional().describe("The concrete action that would resolve this, one sentence"),
         agent_name: z.string().optional().describe("Your agent name, for attribution"),
       },
     },
@@ -400,11 +460,11 @@ export function registerTools(server: McpServer, db: Db): void {
   server.registerTool(
     "save_report",
     {
-      title: "Save a digest or triage report",
+      title: "Save a report (digest, triage, or accomplishments)",
       description:
-        "Persist a cross-project report to the Workboard reports page. kind=digest for daily/weekly 'where everything stands' briefings; kind=triage for stale/blocked/risk analysis with suggested next actions. Markdown.",
+        "Persist a cross-project report to the Workboard reports page. kind=digest for daily/weekly 'where everything stands' briefings; kind=triage for stale/blocked/risk analysis with suggested next actions; kind=accomplishments for 'what shipped' summaries of the user's and agents' completed work. Markdown.",
       inputSchema: {
-        kind: z.enum(["digest", "triage"]),
+        kind: z.enum(["digest", "triage", "accomplishments"]),
         body: z.string().describe("The report, in markdown"),
         agent_name: z.string().optional(),
       },
@@ -418,10 +478,10 @@ export function registerTools(server: McpServer, db: Db): void {
   server.registerTool(
     "list_reports",
     {
-      title: "List past digests/triage reports",
-      description: "Recent digest and triage reports, newest first.",
+      title: "List past digest/triage/accomplishments reports",
+      description: "Recent cross-project reports, newest first.",
       inputSchema: {
-        kind: z.enum(["digest", "triage"]).optional(),
+        kind: z.enum(["digest", "triage", "accomplishments"]).optional(),
         limit: z.number().optional(),
       },
     },

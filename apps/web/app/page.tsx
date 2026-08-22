@@ -1,4 +1,5 @@
 import { TimeAgo } from "@/components/time-ago";
+import { cookies } from "next/headers";
 import Link from "next/link";
 import {
   getActivityCounts,
@@ -11,13 +12,16 @@ import {
   type ProjectHealth,
   type ProjectStatus,
 } from "@workboard/core";
+import { BoardKeynav } from "@/components/board-keynav";
 import { RefreshButton } from "@/components/refresh-button";
 import { refreshAllAction } from "@/lib/actions";
 import { FilterBar, type Filters } from "@/components/filter-bar";
 import { Markdown } from "@/components/markdown";
 import { ProjectCard } from "@/components/project-card";
-import { StatTile } from "@/components/stat-tile";
+import { ProjectRow } from "@/components/project-row";
+import { StatStrip } from "@/components/stat-strip";
 import { SyncBanner } from "@/components/sync-banner";
+import { ViewToggle } from "@/components/view-toggle";
 import { db } from "@/lib/db";
 import { prPipeline } from "@/lib/pipeline";
 
@@ -39,12 +43,45 @@ const SORTERS: Record<string, (a: ProjectDetail, b: ProjectDetail) => number> = 
   name: (a, b) => a.project.name.localeCompare(b.project.name),
 };
 
+/** Explicit ?view= wins; otherwise the wb-board-view cookie; otherwise cards. */
+async function resolveView(filters: Filters): Promise<"cards" | "list"> {
+  if (filters.view === "list" || filters.view === "cards") return filters.view;
+  const cookieStore = await cookies();
+  return cookieStore.get("wb-board-view")?.value === "list" ? "list" : "cards";
+}
+
+function CollapsedReport({ title, at, children, footer }: {
+  title: string;
+  at: number;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+}) {
+  return (
+    <details className="group rounded-[10px] border border-hairline bg-surface">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2.5 text-[13px] [&::-webkit-details-marker]:hidden">
+        <span className="flex items-center gap-1.5 font-medium text-ink">
+          <span aria-hidden className="text-muted transition-transform group-open:rotate-90">
+            ›
+          </span>
+          {title}
+        </span>
+        <span className="flex items-center gap-1.5 text-[11px] font-normal text-muted">
+          {<TimeAgo at={at} />}
+          {footer}
+        </span>
+      </summary>
+      <div className="border-t border-hairline px-3.5 py-3">{children}</div>
+    </details>
+  );
+}
+
 export default async function Dashboard({
   searchParams,
 }: {
-  searchParams: Promise<{ category?: string; status?: string; health?: string; sort?: string }>;
+  searchParams: Promise<{ category?: string; status?: string; health?: string; sort?: string; view?: string }>;
 }) {
   const filters: Filters = await searchParams;
+  const view = await resolveView(filters);
   const database = db();
 
   const all = listProjects(database, {});
@@ -94,45 +131,37 @@ export default async function Dashboard({
               no integrations configured
             </span>
           )}
+          <ViewToggle filters={filters} view={view} />
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <StatTile label="Active projects" value={active} />
-        <StatTile label="Blocked" value={blocked} tone={blocked > 0 ? "critical" : "default"} />
-        <StatTile label="Warnings" value={openWarnings} tone={openWarnings > 0 ? "warning" : "default"} />
-        <StatTile label="Stale (7d+ quiet)" value={stale} tone={stale > 0 ? "warning" : "default"} />
-        <StatTile label="Open PRs" value={openPrs} />
-        <StatTile label="CI failing" value={ciFailing} tone={ciFailing > 0 ? "critical" : "default"} />
-      </div>
+
+      <StatStrip
+        filters={filters}
+        stats={{ active, blocked, warnings: openWarnings, stale, openPrs, ciFailing }}
+      />
 
       {(digest || triage) && (
-        <div className="grid gap-3 lg:grid-cols-2">
+        <div className="grid gap-2 lg:grid-cols-2">
           {digest && (
-            <section className="rounded-[10px] border border-hairline bg-surface p-4">
-              <div className="mb-2 flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-ink">Latest digest</h2>
-                <span className="text-[11px] text-muted">
-                  {<TimeAgo at={digest.createdAt} />} ·{" "}
+            <CollapsedReport
+              title="Latest digest"
+              at={digest.createdAt}
+              footer={
+                <>
+                  ·{" "}
                   <Link href="/reports" className="text-accent hover:underline">
                     all reports
                   </Link>
-                </span>
-              </div>
-              <div className="line-clamp-[8]">
-                <Markdown>{digest.body}</Markdown>
-              </div>
-            </section>
+                </>
+              }
+            >
+              <Markdown>{digest.body}</Markdown>
+            </CollapsedReport>
           )}
           {triage && (
-            <section className="rounded-[10px] border border-hairline bg-surface p-4">
-              <div className="mb-2 flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-ink">Triage</h2>
-                <span className="text-[11px] text-muted">{<TimeAgo at={triage.createdAt} />}</span>
-              </div>
-              <div className="line-clamp-[8]">
-                <Markdown>{triage.body}</Markdown>
-              </div>
-            </section>
+            <CollapsedReport title="Triage" at={triage.createdAt}>
+              <Markdown>{triage.body}</Markdown>
+            </CollapsedReport>
           )}
         </div>
       )}
@@ -146,6 +175,14 @@ export default async function Dashboard({
             Create one
           </Link>{" "}
           or connect a coding agent to the MCP server.
+        </div>
+      ) : view === "list" ? (
+        <div className="overflow-hidden rounded-[10px] border border-hairline bg-surface">
+          <BoardKeynav>
+            {filtered.map((d) => (
+              <ProjectRow key={d.project.id} detail={d} />
+            ))}
+          </BoardKeynav>
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

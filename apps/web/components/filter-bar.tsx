@@ -15,6 +15,7 @@ export interface Filters {
   status?: string;
   health?: string;
   sort?: string;
+  view?: string;
 }
 
 function chip(href: string, label: string, active: boolean, key?: string) {
@@ -31,12 +32,14 @@ function chip(href: string, label: string, active: boolean, key?: string) {
   );
 }
 
-function qs(filters: Filters): string {
+/** Board URL for a filter combination; every defined key becomes a search param. */
+export function boardHref(filters: Filters): string {
   const params = new URLSearchParams();
   if (filters.category) params.set("category", filters.category);
   if (filters.status) params.set("status", filters.status);
   if (filters.health) params.set("health", filters.health);
   if (filters.sort && filters.sort !== "activity") params.set("sort", filters.sort);
+  if (filters.view) params.set("view", filters.view);
   const s = params.toString();
   return s ? `/?${s}` : "/";
 }
@@ -47,16 +50,16 @@ export function FilterBar({ filters, categories }: { filters: Filters; categorie
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <div className="flex flex-wrap items-center gap-1.5">
-          {chip(qs({ ...filters, category: undefined }), "All", !filters.category)}
+          {chip(boardHref({ ...filters, category: undefined }), "All", !filters.category)}
           {categories.map((c) =>
-            chip(qs({ ...filters, category: filters.category === c ? undefined : c }), c, filters.category === c, `cat-${c}`),
+            chip(boardHref({ ...filters, category: filters.category === c ? undefined : c }), c, filters.category === c, `cat-${c}`),
           )}
         </div>
         <div className="h-4 w-px bg-grid" aria-hidden />
         <div className="flex flex-wrap items-center gap-1.5">
           {(["active", "blocked", "on_hold", "done"] as const).map((s) =>
             chip(
-              qs({ ...filters, status: filters.status === s ? undefined : s }),
+              boardHref({ ...filters, status: filters.status === s ? undefined : s }),
               s.replace("_", " "),
               filters.status === s,
               `status-${s}`,
@@ -72,14 +75,14 @@ export function FilterBar({ filters, categories }: { filters: Filters; categorie
               ["red", "off track"],
             ] as const
           ).map(([h, label]) =>
-            chip(qs({ ...filters, health: filters.health === h ? undefined : h }), label, filters.health === h, `health-${h}`),
+            chip(boardHref({ ...filters, health: filters.health === h ? undefined : h }), label, filters.health === h, `health-${h}`),
           )}
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="text-[11px] uppercase tracking-wide text-muted">Sort</span>
         {SORT_OPTIONS.map(([key, label]) =>
-          chip(qs({ ...filters, sort: key }), label, sort === key, `sort-${key}`),
+          chip(boardHref({ ...filters, sort: key }), label, sort === key, `sort-${key}`),
         )}
       </div>
     </div>

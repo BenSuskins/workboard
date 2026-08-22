@@ -2,11 +2,14 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { openDb, type Db } from "./db/client.js";
 import { aggregateCheckRuns } from "./integrations/github.js";
 import {
+  claimTask,
   deleteLink,
   deleteTask,
   getActivityCounts,
   getSyncHealth,
   listDeleted,
+  listQueuedTasks,
+  listShelvedProjects,
   listSummaryHistory,
   listWarnings,
   raiseWarning,
@@ -14,6 +17,8 @@ import {
   resolveWarning,
   restoreLink,
   restoreTask,
+  setProjectPinned,
+  setTaskAgentReady,
 } from "./services.js";
 import {
   addLink,
@@ -23,6 +28,7 @@ import {
   findProject,
   getActivity,
   getProjectDetail,
+  getProjectMetrics,
   inferLink,
   latestReport,
   listProjects,
@@ -341,5 +347,163 @@ describe("sync health", () => {
     recordSyncResult(db, l.id, "boom");
     updateProject(db, p.id, { status: "archived" });
     expect(getSyncHealth(db).failing).toHaveLength(0);
+  });
+});
+
+describe("agent task queue", () => {
+  it("lists queued tasks FIFO, scoped and filtered", () => {
+    const p1 = createProject(db, { name: "Alpha" });
+    const p2 = createProject(db, { name: "Beta" });
+    const first = addTask(db, p1.id, "first", { agentReady: true });
+    const second = addTask(db, p1.id, "second", { agentReady: true });
+    addTask(db, p1.id, "not queued");
+    const other = addTask(db, p2.id, "other project", { agentReady: true });
+
+    expect(listQueuedTasks(db).map((t) => t.id)).toEqual([first.id, second.id, other.id]);
+    expect(listQueuedTasks(db, { projectId: p1.id })).toHaveLength(2);
+    expect(listQueuedTasks(db, { projectId: p2.id }).map((t) => t.title)).toEqual(["other project"]);
+  });
+
+  it("excludes done and soft-deleted tasks from the queue", () => {
+    const p = createProject(db, { name: "Alpha" });
+    const done = addTask(db, p.id, "done", { agentReady: true });
+    const gone = addTask(db, p.id, "gone", { agentReady: true });
+    updateTask(db, done.id, { status: "done" });
+    deleteTask(db, gone.id);
+    expect(listQueuedTasks(db)).toHaveLength(0);
+  });
+
+  it("claims atomically: stamps claimer, moves to in_progress, logs to the timeline", () => {
+    const p = createProject(db, { name: "Alpha" });
+    const first = addTask(db, p.id, "first", { agentReady: true });
+    addTask(db, p.id, "second", { agentReady: true });
+
+    const claimed = claimTask(db, first.id, "agent:claude");
+    expect(claimed.status).toBe("in_progress");
+    expect(claimed.claimedBy).toBe("agent:claude");
+    expect(claimed.claimedAt).not.toBeNull();
+
+    // claimed task leaves the queue
+    expect(listQueuedTasks(db).map((t) => t.title)).toEqual(["second"]);
+
+    const detail = getProjectDetail(db, p.id)!;
+    const claimUpdate = detail.updates.find((u) => u.body.includes("first"));
+    expect(claimUpdate?.type).toBe("agent_update");
+    expect(claimUpdate?.author).toBe("agent:claude");
+  });
+
+  it("rejects double claims and claims of non-queued tasks", () => {
+    const p = createProject(db, { name: "Alpha" });
+    const queued = addTask(db, p.id, "queued", { agentReady: true });
+    const plain = addTask(db, p.id, "plain");
+
+    claimTask(db, queued.id, "agent:one");
+    expect(() => claimTask(db, queued.id, "agent:two")).toThrow(/already claimed/);
+    expect(() => claimTask(db, plain.id, "agent:one")).toThrow(/not queued/);
+  });
+
+  it("un-queuing releases an active claim and reverts to todo", () => {
+    const p = createProject(db, { name: "Alpha" });
+    const task = addTask(db, p.id, "queued", { agentReady: true });
+    claimTask(db, task.id, "agent:claude");
+
+    setTaskAgentReady(db, task.id, false);
+    const after = getProjectDetail(db, p.id)!.tasks.find((t) => t.id === task.id)!;
+    expect(after.agentReady).toBe(0);
+    expect(after.claimedBy).toBeNull();
+    expect(after.claimedAt).toBeNull();
+    expect(after.status).toBe("todo");
+  });
+
+  it("reverting a claimed task to todo clears the claim", () => {
+    const p = createProject(db, { name: "Alpha" });
+    const task = addTask(db, p.id, "queued", { agentReady: true });
+    claimTask(db, task.id, "agent:claude");
+
+    updateTask(db, task.id, { status: "todo" });
+    expect(listQueuedTasks(db).map((t) => t.id)).toEqual([task.id]);
+    const fresh = getProjectDetail(db, p.id)!.tasks.find((t) => t.id === task.id)!;
+    expect(fresh.claimedBy).toBeNull();
+    expect(fresh.claimedAt).toBeNull();
+  });
+
+  it("completing a claimed task keeps the claim for attribution", () => {
+    const p = createProject(db, { name: "Alpha" });
+    const task = addTask(db, p.id, "queued", { agentReady: true });
+    claimTask(db, task.id, "agent:claude");
+    updateTask(db, task.id, { status: "done" });
+
+    const done = getProjectDetail(db, p.id)!.tasks.find((t) => t.id === task.id)!;
+    expect(done.status).toBe("done");
+    expect(done.claimedBy).toBe("agent:claude");
+  });
+});
+
+describe("pinning + shelved projects", () => {
+  it("pins and unpins a project", () => {
+    const p = createProject(db, { name: "Alpha" });
+    expect(setProjectPinned(db, p.id, true).pinned).toBe(1);
+    expect(setProjectPinned(db, p.id, false).pinned).toBe(0);
+  });
+
+  it("lists done and archived projects as shelved, excluding active ones", () => {
+    const finished = createProject(db, { name: "Finished" });
+    const parked = createProject(db, { name: "Parked" });
+    const current = createProject(db, { name: "Current" });
+    updateProject(db, finished.id, { status: "done" });
+    updateProject(db, parked.id, { status: "archived" });
+
+    const shelved = listShelvedProjects(db);
+    expect(shelved.map((p) => p.name).sort()).toEqual(["Finished", "Parked"]);
+    expect(listProjects(db, {}).map((p) => p.name)).toContain("Current");
+  });
+});
+
+describe("progress metrics + accomplishments", () => {
+  it("computes task completion and PR throughput from snapshots", () => {
+    const p = createProject(db, { name: "Alpha" });
+    addTask(db, p.id, "one");
+    addTask(db, p.id, "two");
+    const three = addTask(db, p.id, "three");
+    updateTask(db, three.id, { status: "done" });
+
+    const pr = addLink(db, p.id, { url: "https://github.com/acme/platform/pull/1" });
+    saveSnapshot(db, pr.id, {
+      type: "pr",
+      number: 1,
+      repo: "acme/platform",
+      state: "open",
+      merged: false,
+      updatedAt: new Date().toISOString(),
+    });
+    // merged PR via a scoped repo snapshot
+    const repo = addLink(db, p.id, { url: "https://github.com/acme/platform" });
+    saveSnapshot(db, repo.id, {
+      type: "repo",
+      repo: "acme/platform",
+      prs: [
+        { number: 2, repo: "acme/platform", state: "closed", merged: true, updatedAt: new Date().toISOString() },
+        { number: 3, repo: "acme/platform", state: "closed", merged: false, updatedAt: new Date().toISOString() },
+      ],
+    });
+
+    const m = getProjectMetrics(db, p.id)!;
+    expect(m.tasksTotal).toBe(3);
+    expect(m.tasksDone).toBe(1);
+    expect(m.openPrs).toBe(1);
+    expect(m.mergedRecently).toBe(1);
+    expect(m.daysSinceActivity).toBe(0);
+  });
+
+  it("returns undefined for unknown projects", () => {
+    expect(getProjectMetrics(db, "nope")).toBeUndefined();
+  });
+
+  it("stores and lists accomplishments reports", () => {
+    saveReport(db, "accomplishments", "Shipped X, Y, Z.");
+    saveReport(db, "digest", "Weekly digest");
+    expect(latestReport(db, "accomplishments")?.body).toBe("Shipped X, Y, Z.");
+    const all = listReports(db);
+    expect(all.map((r) => r.kind).sort()).toEqual(["accomplishments", "digest"]);
   });
 });

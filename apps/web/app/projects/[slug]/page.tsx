@@ -29,6 +29,7 @@ import {
   refreshProjectBySlug,
   restoreLinkAction,
   restoreTaskAction,
+  setTaskAgentReadyAction,
   setTaskStatusAction,
   updateProjectAction,
 } from "@/lib/actions";
@@ -290,13 +291,19 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
         <div className="flex flex-col gap-6">
           <section className="rounded-[10px] border border-hairline bg-surface p-4">
             <h2 className="mb-3 text-sm font-semibold text-ink">Tasks</h2>
-            <form action={addTaskAction} className="mb-3 flex gap-2">
-              <input type="hidden" name="projectId" value={project.id} />
-              <input type="hidden" name="slug" value={project.slug} />
-              <input name="title" placeholder="Add a task…" className={inputCls} />
-              <button type="submit" className={btnCls}>
-                Add
-              </button>
+            <form action={addTaskAction} className="mb-3 flex flex-col gap-2">
+              <div className="flex gap-2">
+                <input type="hidden" name="projectId" value={project.id} />
+                <input type="hidden" name="slug" value={project.slug} />
+                <input name="title" placeholder="Add a task…" className={inputCls} />
+                <button type="submit" className={btnCls}>
+                  Add
+                </button>
+              </div>
+              <label className="flex items-center gap-1.5 text-xs text-muted">
+                <input type="checkbox" name="agentReady" className="size-3 accent-accent" />
+                Queue for agents (claimable over MCP)
+              </label>
             </form>
             {tasks.length === 0 ? (
               <p className="text-sm text-muted">No tasks.</p>
@@ -324,7 +331,27 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
                     </form>
                     <span className={t.status === "done" ? "text-muted line-through" : "text-ink-2"}>{t.title}</span>
                     {t.dueDate && <span className="text-[11px] text-warning">due {t.dueDate}</span>}
-                    <form action={deleteTaskAction} className="ml-auto opacity-0 transition-opacity group-hover:opacity-100">
+                    {t.claimedBy && (
+                      <span className="rounded bg-accent/15 px-1.5 py-0.5 text-[10px] text-accent" title="Claimed via the agent queue">
+                        {t.claimedBy}
+                      </span>
+                    )}
+                    <form action={setTaskAgentReadyAction} className="ml-auto">
+                      <input type="hidden" name="taskId" value={t.id} />
+                      <input type="hidden" name="slug" value={project.slug} />
+                      <input type="hidden" name="ready" value={t.agentReady ? "0" : "1"} />
+                      <button
+                        type="submit"
+                        aria-label={t.agentReady ? "Remove from agent queue" : "Queue for agents"}
+                        title={t.agentReady ? "Remove from agent queue" : "Queue for agents"}
+                        className={`text-xs opacity-0 transition-opacity group-hover:opacity-100 ${
+                          t.agentReady ? "text-accent" : "text-muted hover:text-accent"
+                        }`}
+                      >
+                        {t.agentReady ? "⦿ queued" : "⦿"}
+                      </button>
+                    </form>
+                    <form action={deleteTaskAction} className="opacity-0 transition-opacity group-hover:opacity-100">
                       <input type="hidden" name="taskId" value={t.id} />
                       <input type="hidden" name="slug" value={project.slug} />
                       <button type="submit" aria-label="Delete task" className="text-muted hover:text-critical">

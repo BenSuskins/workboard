@@ -6,7 +6,7 @@ export const PROJECT_PRIORITIES = ["high", "medium", "low"] as const;
 export const CATEGORY_PRESETS = ["coding", "platform", "hiring", "process", "other"] as const;
 export const TASK_STATUSES = ["todo", "in_progress", "done"] as const;
 export const UPDATE_TYPES = ["note", "status_change", "agent_update"] as const;
-export const SUMMARY_KINDS = ["project_summary", "digest", "triage"] as const;
+export const SUMMARY_KINDS = ["project_summary", "digest", "triage", "accomplishments"] as const;
 export const LINK_PROVIDERS = ["github", "jira", "gdoc", "url"] as const;
 export const LINK_KINDS = ["repo", "pr", "issue", "jira_project", "jira_issue", "doc", "url"] as const;
 export const WARNING_SEVERITIES = ["info", "warning", "critical"] as const;
@@ -41,6 +41,8 @@ export const projects = sqliteTable(
     status: text("status").$type<ProjectStatus>().notNull().default("active"),
     priority: text("priority").$type<ProjectPriority>().notNull().default("medium"),
     health: text("health").$type<ProjectHealth>().notNull().default("green"),
+    /** Starred by the user; pinned projects lead the board. */
+    pinned: integer("pinned").notNull().default(0),
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
     lastActivityAt: integer("last_activity_at").notNull(),
@@ -57,6 +59,10 @@ export const tasks = sqliteTable(
       .references(() => projects.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     status: text("status").$type<TaskStatus>().notNull().default("todo"),
+    /** Queued for agents to claim over MCP (shared pull queue — no named assignees). */
+    agentReady: integer("agent_ready").notNull().default(0),
+    claimedBy: text("claimed_by"),
+    claimedAt: integer("claimed_at"),
     dueDate: text("due_date"),
     author: text("author").notNull().default("user"),
     createdAt: integer("created_at").notNull(),

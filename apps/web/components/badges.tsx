@@ -8,6 +8,12 @@ const STATUS_STYLES: Record<ProjectStatus, { label: string; text: string; dot: s
   archived: { label: "Archived", text: "text-muted", dot: "bg-muted" },
 };
 
+/** Dot-only status marker for dense contexts; label surfaces via tooltip. */
+export function StatusDot({ status }: { status: ProjectStatus }) {
+  const s = STATUS_STYLES[status];
+  return <span className={`size-2 shrink-0 rounded-full ${s.dot}`} title={s.label} aria-label={s.label} />;
+}
+
 /** Colored dot + label, no chrome — used wherever a project's lifecycle status is shown. */
 export function StatusBadge({ status }: { status: ProjectStatus }) {
   const s = STATUS_STYLES[status];

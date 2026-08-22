@@ -57,6 +57,7 @@ const expected = [
   "add_update", "add_task", "update_task", "add_link", "upsert_summary",
   "raise_warning", "resolve_warning",
   "get_activity", "save_report", "list_reports", "refresh_project",
+  "list_queued_tasks", "claim_task",
 ];
 
 await step("tools/list exposes all tools", async () => {
@@ -102,6 +103,26 @@ await step("add_update + add_task + update_task", async () => {
   if (updated.updated.status !== "done") throw new Error(JSON.stringify(updated));
 });
 
+await step("agent task queue: queue, list, claim, double-claim rejection", async () => {
+  const queued = await call("add_task", { project: "smoke-project", title: "Queued work", agent_ready: true });
+  if (queued.created.agent_ready !== true) throw new Error(JSON.stringify(queued));
+
+  const listed = await call("list_queued_tasks", { project: "smoke-project" });
+  if (!listed.queued.some((t: any) => t.id === queued.created.id)) throw new Error(JSON.stringify(listed));
+
+  const claimed = await call("claim_task", { task_id: queued.created.id, agent_name: "smoke-agent" });
+  if (claimed.claimed.status !== "in_progress") throw new Error(JSON.stringify(claimed));
+
+  // claimed tasks leave the queue
+  const after = await call("list_queued_tasks", {});
+  if (after.queued.some((t: any) => t.id === queued.created.id)) throw new Error(JSON.stringify(after));
+
+  const double = await client.callTool({ name: "claim_task", arguments: { task_id: queued.created.id, agent_name: "other-agent" } });
+  if (!(double as { isError?: boolean }).isError) throw new Error("double claim should error");
+
+  await call("update_task", { task_id: queued.created.id, status: "done" });
+});
+
 await step("upsert_summary + update_project status", async () => {
   await call("upsert_summary", { project: "smoke-project", body: "All smoke, no fire.", agent_name: "smoke-agent" });
   const res = await call("update_project", { project: "smoke-project", status: "blocked", agent_name: "smoke-agent" });
@@ -138,8 +159,11 @@ await step("get_activity + save_report + list_reports", async () => {
   const feed = await call("get_activity", {});
   if (feed.projects.length !== 1) throw new Error("expected 1 project in feed");
   await call("save_report", { kind: "digest", body: "# Digest\nEverything is smoke.", agent_name: "smoke-agent" });
+  await call("save_report", { kind: "accomplishments", body: "# Accomplishments\nShipped smoke.", agent_name: "smoke-agent" });
   const reports = await call("list_reports", {});
-  if (reports.length !== 1 || reports[0].kind !== "digest") throw new Error(JSON.stringify(reports));
+  if (reports.length !== 2) throw new Error(JSON.stringify(reports));
+  const acc = await call("list_reports", { kind: "accomplishments" });
+  if (acc[0]?.kind !== "accomplishments") throw new Error(JSON.stringify(acc));
 });
 
 await step("refresh_project skips gracefully without credentials", async () => {

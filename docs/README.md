@@ -25,12 +25,18 @@ flowchart LR
 
 - **Agent-authored updates** — progress notes, summaries, digests, and triage
   reports posted over MCP; the app never calls an LLM.
+- **Agent task queue** — queue tasks from the board; any agent session claims
+  work over MCP (`list_queued_tasks` / `claim_task`) with atomic claims and
+  attribution.
 - **Live read-only sync** — PR/review/CI state, Jira issue status, Google Doc
   titles and last-edited times, all degrading gracefully without credentials.
 - **Monorepo-aware** — projects ≠ repos; link individual PRs/issues or give a
   repo link a scope (labels, path prefixes, branch prefix) for auto-discovery.
 - **Agent warnings** — agents flag things they can't fix with a severity and a
   suggested action, surfaced on the project card and page.
+- **Focus over noise** — pin the projects you care about, demote done ones,
+  archive the rest; per-project progress metrics and accomplishments reports
+  for your own reporting.
 - **Trustworthy data** — visible sync health, soft deletes with restore, and
   full summary history.
 
@@ -49,7 +55,7 @@ workboard/
 ├── packages/core   # schema (SQLite/Drizzle), services, integration clients, sync engine
 ├── packages/mcp    # MCP server — streamable HTTP (:8787/mcp) + stdio
 ├── apps/web        # Next.js dashboard (server components + server actions)
-├── skills/         # Claude Code skills (status, digest, triage)
+├── skills/         # Claude Code skills (status, digest, triage, accomplishments)
 ├── scripts/        # seed, google-auth, install-skills, mcp-smoke
 ├── docs/           # documentation
 ├── data/           # workboard.db (created on first run; gitignored)
@@ -118,8 +124,10 @@ npm run skills:install
 | Skill | What it does |
 |-------|--------------|
 | `/workboard-status` | End-of-session: resolve the project, post what was done, link new PRs, refresh the AI summary |
+| `/workboard-queue` | Dispatcher: poll a project's queued tasks, plan + implement each in its own worktree via subagents, raise draft PRs |
 | `/workboard-digest` | Cross-project "where everything stands" briefing, saved to the Reports page |
 | `/workboard-triage` | Find stale projects, blockers, rotting PRs, overdue tasks; save a prioritized action list |
+| `/workboard-accomplishments` | "What shipped" recap of your work plus agent deliveries — for standups and reviews |
 
 Schedule digests however you run Claude — e.g. a cron entry like
 `0 8 * * 1-5 claude -p "/workboard-digest"`, or a Claude Code Routine.

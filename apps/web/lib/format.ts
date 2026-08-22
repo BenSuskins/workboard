@@ -27,3 +27,13 @@ export function fullDate(ms: number): string {
 export function authorLabel(author: string): string {
   return author.startsWith("agent:") ? `🤖 ${author.slice(6)}` : author === "agent" ? "🤖 agent" : author;
 }
+
+/** Reduce agent markdown to one line of plain text for dense contexts. */
+export function toPlainText(markdown: string): string {
+  return markdown
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/[#*_`>]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
