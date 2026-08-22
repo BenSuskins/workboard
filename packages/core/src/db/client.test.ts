@@ -96,6 +96,29 @@ describe("openDb migration", () => {
     reopened.close();
   });
 
+  it("upgrades a mid-vintage database (has soft-delete columns, no migration journal)", () => {
+    const mid = openRaw(dbPath);
+    // Original DDL plus the ensureColumn additions, i.e. the last raw-DDL shape.
+    mid.exec(`${LEGACY_DDL}
+      ALTER TABLE tasks ADD COLUMN deleted_at INTEGER;
+      ALTER TABLE links ADD COLUMN deleted_at INTEGER;`);
+    mid
+      .prepare(
+        "INSERT INTO projects (slug, name, created_at, updated_at, last_activity_at) VALUES (?, ?, ?, ?, ?)",
+      )
+      .run("mid-proj", "Mid", 1, 1, 1);
+    mid.close();
+
+    openDb(dbPath);
+
+    const raw = openRaw(dbPath);
+    const cols = (raw.pragma("table_info(tasks)") as { name: string }[]).map((c) => c.name);
+    expect(cols).toContain("agent_ready");
+    const count = raw.prepare("SELECT count(*) AS n FROM projects").get() as { n: number };
+    expect(count.n).toBe(1);
+    raw.close();
+  });
+
   it("initializes a fresh database through the same path", () => {
     openDb(dbPath);
     const raw = openRaw(dbPath);

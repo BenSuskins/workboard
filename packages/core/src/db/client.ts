@@ -8,6 +8,10 @@ import * as schema from "./schema.js";
 
 export type Db = BetterSQLite3Database<typeof schema>;
 
+function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
 // Resolved from this module's location (not cwd) so every workspace process finds
 // packages/core/drizzle regardless of where it was started. Built via join() rather
 // than new URL("...", import.meta.url) so bundlers don't treat it as an asset import.
@@ -63,7 +67,18 @@ export function openDb(path: string = defaultDbPath()): Db {
     .get();
   if (tasksTable) backfillLegacyColumns(sqlite);
   const db = drizzle(sqlite, { schema });
-  migrate(db, { migrationsFolder });
+  // Web and MCP processes cold-boot together (compose), so two migrators can race:
+  // the loser fails on an already-applied column. Retrying is safe — by then the
+  // winner has journaled the migrations and they are skipped.
+  for (let attempt = 1; ; attempt++) {
+    try {
+      migrate(db, { migrationsFolder });
+      break;
+    } catch (error) {
+      if (attempt >= 3) throw error;
+      sleepSync(250 * attempt);
+    }
+  }
   return db;
 }
 
