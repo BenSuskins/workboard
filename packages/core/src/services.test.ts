@@ -9,6 +9,7 @@ import {
   getSyncHealth,
   listDeleted,
   listQueuedTasks,
+  listShelvedProjects,
   listSummaryHistory,
   listWarnings,
   raiseWarning,
@@ -16,6 +17,7 @@ import {
   resolveWarning,
   restoreLink,
   restoreTask,
+  setProjectPinned,
   setTaskAgentReady,
 } from "./services.js";
 import {
@@ -433,5 +435,25 @@ describe("agent task queue", () => {
     const done = getProjectDetail(db, p.id)!.tasks.find((t) => t.id === task.id)!;
     expect(done.status).toBe("done");
     expect(done.claimedBy).toBe("agent:claude");
+  });
+});
+
+describe("pinning + shelved projects", () => {
+  it("pins and unpins a project", () => {
+    const p = createProject(db, { name: "Alpha" });
+    expect(setProjectPinned(db, p.id, true).pinned).toBe(1);
+    expect(setProjectPinned(db, p.id, false).pinned).toBe(0);
+  });
+
+  it("lists done and archived projects as shelved, excluding active ones", () => {
+    const finished = createProject(db, { name: "Finished" });
+    const parked = createProject(db, { name: "Parked" });
+    const current = createProject(db, { name: "Current" });
+    updateProject(db, finished.id, { status: "done" });
+    updateProject(db, parked.id, { status: "archived" });
+
+    const shelved = listShelvedProjects(db);
+    expect(shelved.map((p) => p.name).sort()).toEqual(["Finished", "Parked"]);
+    expect(listProjects(db, {}).map((p) => p.name)).toContain("Current");
   });
 });

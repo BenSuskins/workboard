@@ -41,6 +41,8 @@ export const projects = sqliteTable(
     status: text("status").$type<ProjectStatus>().notNull().default("active"),
     priority: text("priority").$type<ProjectPriority>().notNull().default("medium"),
     health: text("health").$type<ProjectHealth>().notNull().default("green"),
+    /** Starred by the user; pinned projects lead the board. */
+    pinned: integer("pinned").notNull().default(0),
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
     lastActivityAt: integer("last_activity_at").notNull(),

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ProjectDetail } from "@workboard/core";
+import { setProjectPinnedAction } from "@/lib/actions";
 import { hasPipeline, prPipeline } from "@/lib/pipeline";
 import { ProjectMeta, StatusBadge } from "./badges";
 import { DocChips, JiraChips, PipelineChip } from "./chips";
@@ -25,7 +26,24 @@ export function ProjectCard({ detail, activityCounts }: { detail: ProjectDetail;
             {project.name}
           </Link>
         </h3>
-        <StatusBadge status={project.status} />
+        <div className="flex items-center gap-1.5">
+          <form action={setProjectPinnedAction}>
+            <input type="hidden" name="projectId" value={project.id} />
+            <input type="hidden" name="slug" value={project.slug} />
+            <input type="hidden" name="pinned" value={project.pinned ? "0" : "1"} />
+            <button
+              type="submit"
+              aria-label={project.pinned ? "Unpin project" : "Pin project"}
+              title={project.pinned ? "Unpin" : "Pin to top of board"}
+              className={`relative z-10 text-sm leading-none transition-colors ${
+                project.pinned ? "text-warning" : "text-muted/40 hover:text-muted"
+              }`}
+            >
+              ★
+            </button>
+          </form>
+          <StatusBadge status={project.status} />
+        </div>
       </div>
       <ProjectMeta category={project.category} health={project.health} priority={project.priority} />
       <WarningStrip warnings={openWarnings} />

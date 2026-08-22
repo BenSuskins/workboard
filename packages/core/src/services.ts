@@ -143,6 +143,28 @@ export function getProject(db: Db, ref: number | string): Project | undefined {
   return db.select().from(projects).where(eq(projects.slug, ref)).get();
 }
 
+/** Star a project so its card leads the board. */
+export function setProjectPinned(db: Db, id: number, pinned: boolean): Project {
+  const updated = db
+    .update(projects)
+    .set({ pinned: pinned ? 1 : 0, updatedAt: now() })
+    .where(eq(projects.id, id))
+    .returning()
+    .get();
+  if (!updated) throw new Error(`Project ${id} not found`);
+  return updated;
+}
+
+/** Projects resting off the main board: finished (done) and archived. */
+export function listShelvedProjects(db: Db): Project[] {
+  return db
+    .select()
+    .from(projects)
+    .where(inArray(projects.status, ["done", "archived"]))
+    .orderBy(desc(projects.lastActivityAt))
+    .all();
+}
+
 export interface LinkWithStatus extends Link {
   snapshot: Snapshot | null;
   syncState: SyncState | null;

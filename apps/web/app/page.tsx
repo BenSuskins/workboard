@@ -55,11 +55,20 @@ export default async function Dashboard({
   const filtered = details
     .filter(({ project }) => {
       if (filters.category && project.category !== filters.category) return false;
-      if (filters.status && project.status !== (filters.status as ProjectStatus)) return false;
+      // Explicit status filter wins; otherwise the board is a noise floor —
+      // finished (done) and archived projects live in /archive.
+      if (filters.status) {
+        if (project.status !== (filters.status as ProjectStatus)) return false;
+      } else if (project.status === "done" || project.status === "archived") {
+        return false;
+      }
       if (filters.health && project.health !== (filters.health as ProjectHealth)) return false;
       return true;
     })
-    .sort(SORTERS[filters.sort ?? "activity"] ?? SORTERS.activity);
+    .sort((a, b) => Number(b.project.pinned) - Number(a.project.pinned) || (SORTERS[filters.sort ?? "activity"] ?? SORTERS.activity)(a, b));
+
+  const pinned = filtered.filter(({ project }) => project.pinned);
+  const rest = filtered.filter(({ project }) => !project.pinned);
 
   const categories = [...new Set(all.map((p) => p.category))].sort();
   const active = all.filter((p) => p.status === "active").length;
@@ -86,6 +95,9 @@ export default async function Dashboard({
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-lg font-semibold tracking-tight text-ink">Board</h1>
         <div className="flex items-center gap-2.5">
+          <Link href="/archive" className="text-xs text-muted transition-colors hover:text-accent">
+            Archive
+          </Link>
           {lastSyncAt && <span className="text-[11px] text-muted">data synced {<TimeAgo at={lastSyncAt} />}</span>}
           {anyConfigured ? (
             <RefreshButton action={refreshAllAction} label="Refresh data" />
@@ -139,7 +151,17 @@ export default async function Dashboard({
 
       <FilterBar filters={filters} categories={categories} />
 
-      {filtered.length === 0 ? (
+      {pinned.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-[11px] uppercase tracking-wide text-muted">Pinned</h2>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {pinned.map((d) => (
+              <ProjectCard key={d.project.id} detail={d} activityCounts={getActivityCounts(database, d.project.id)} />
+            ))}
+          </div>
+        </section>
+      )}
+      {rest.length === 0 && pinned.length === 0 ? (
         <div className="rounded-[10px] border border-dashed border-grid px-6 py-16 text-center text-sm text-muted">
           No projects match.{" "}
           <Link href="/projects/new" className="text-accent hover:underline">
@@ -148,11 +170,13 @@ export default async function Dashboard({
           or connect a coding agent to the MCP server.
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((d) => (
-            <ProjectCard key={d.project.id} detail={d} activityCounts={getActivityCounts(database, d.project.id)} />
-          ))}
-        </div>
+        rest.length > 0 && (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {rest.map((d) => (
+              <ProjectCard key={d.project.id} detail={d} activityCounts={getActivityCounts(database, d.project.id)} />
+            ))}
+          </div>
+        )
       )}
     </div>
   );

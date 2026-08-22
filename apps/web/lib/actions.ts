@@ -11,6 +11,7 @@ import {
   resolveWarning,
   restoreLink,
   restoreTask,
+  setProjectPinned,
   setTaskAgentReady,
   syncAll,
   syncProject,
@@ -137,6 +138,19 @@ export async function deleteLinkAction(formData: FormData) {
 export async function resolveWarningAction(formData: FormData) {
   resolveWarning(db(), Number(formData.get("warningId")), { resolvedBy: "user" });
   revalidatePath(`/projects/${String(formData.get("slug"))}`);
+  revalidatePath("/");
+}
+
+export async function setProjectPinnedAction(formData: FormData) {
+  setProjectPinned(db(), Number(formData.get("projectId")), formData.get("pinned") === "1");
+  revalidatePath("/");
+  revalidatePath(`/projects/${String(formData.get("slug"))}`);
+}
+
+/** Bring a shelved (done or archived) project back onto the active board. */
+export async function restoreProjectAction(formData: FormData) {
+  updateProject(db(), Number(formData.get("projectId")), { status: "active" });
+  revalidatePath("/archive");
   revalidatePath("/");
 }
 
