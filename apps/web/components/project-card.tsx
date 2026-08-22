@@ -50,7 +50,7 @@ export function ProjectCard({ detail, activityCounts }: { detail: ProjectDetail;
       <ProjectMeta category={project.category} health={project.health} priority={project.priority} />
       <WarningStrip warnings={openWarnings} />
       {latestSummary ? (
-        <div className="line-clamp-3">
+        <div className="line-clamp-2">
           <Markdown>{latestSummary.body}</Markdown>
         </div>
       ) : (

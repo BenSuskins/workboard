@@ -123,7 +123,8 @@ npm run skills:install
 
 | Skill | What it does |
 |-------|--------------|
-| `/workboard-status` | End-of-session: resolve the project, post what was done, link new PRs, refresh the AI summary. At session start, also check the agent queue and claim queued tasks. |
+| `/workboard-status` | End-of-session: resolve the project, post what was done, link new PRs, refresh the AI summary |
+| `/workboard-queue` | Dispatcher: poll a project's queued tasks, plan + implement each in its own worktree via subagents, raise draft PRs |
 | `/workboard-digest` | Cross-project "where everything stands" briefing, saved to the Reports page |
 | `/workboard-triage` | Find stale projects, blockers, rotting PRs, overdue tasks; save a prioritized action list |
 | `/workboard-accomplishments` | "What shipped" recap of your work plus agent deliveries — for standups and reviews |
@@ -148,9 +149,9 @@ its MCP server (server name: `workboard`). Workboard is the source of truth for
   current project, post what you did, link any new PRs, and refresh the summary.
 - Before starting, you may call the `find_project` / `get_project` MCP tools to
   load existing context for the repo you're in.
-- At **session start**, check `list_queued_tasks` for the project you're working
-  in. If a task is queued and you take it on, `claim_task` it first (this marks
-  it in_progress under your name), then `update_task` to done when finished.
+- Queued tasks are drained by the `/workboard-queue` dispatcher skill — don't
+  pull queue work ad hoc; run the skill (it claims tasks, plans and implements
+  them in worktrees, and raises draft PRs).
 - If you hit something you can't fix (blocked, needs a human, external outage),
   raise it with the `raise_warning` MCP tool instead of silently moving on.
 - Do **not** create a new project for work that already maps to an existing one

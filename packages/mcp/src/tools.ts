@@ -232,7 +232,7 @@ export function registerTools(server: McpServer, db: Db): void {
         "Append a progress note to a project's activity timeline — what you shipped, decided, or are blocked on. Markdown supported. This is the primary way agents log work.",
       inputSchema: {
         project: projectRef,
-        body: z.string().describe("The update, in markdown"),
+        body: z.string().describe("The update, in markdown — one or two sentences; details live in your repo/PR, not here"),
         agent_name: z.string().optional().describe("Your agent name, for attribution"),
       },
     },
@@ -391,7 +391,7 @@ export function registerTools(server: McpServer, db: Db): void {
         project: projectRef,
         message: z.string().describe("One or two sentences: what is wrong and why it matters"),
         severity: z.enum(WARNING_SEVERITIES).optional().describe("Defaults to 'warning'"),
-        suggested_action: z.string().optional().describe("The concrete action that would resolve this"),
+        suggested_action: z.string().optional().describe("The concrete action that would resolve this, one sentence"),
         agent_name: z.string().optional().describe("Your agent name, for attribution"),
       },
     },

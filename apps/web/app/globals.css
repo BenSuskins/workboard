@@ -107,3 +107,8 @@ body {
   padding-left: 0.75rem;
   color: var(--wb-muted);
 }
+
+/* Keyboard-navigated row highlight (BoardKeynav); unlayered so it wins over utility backgrounds */
+.keynav-active {
+  background: color-mix(in srgb, var(--wb-surface-2) 55%, transparent);
+}

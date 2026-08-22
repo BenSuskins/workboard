@@ -18,7 +18,7 @@ export function WarningStrip({ warnings }: { warnings: Warning[] }) {
   return (
     <div className={`flex items-start gap-1.5 rounded-lg border px-2 py-1.5 text-[12px] leading-snug ${s.cls}`}>
       <span aria-hidden>{s.icon}</span>
-      <span className="min-w-0">
+      <span className="min-w-0 line-clamp-2" title={top.message}>
         <span className="font-semibold">{s.label}: </span>
         <span className="text-ink-2">{top.message}</span>
         {warnings.length > 1 && <span className="text-muted"> · +{warnings.length - 1} more</span>}
