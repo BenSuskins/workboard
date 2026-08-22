@@ -40,7 +40,7 @@ flowchart TB
 | Component | Responsibility | Location |
 |-----------|---------------|----------|
 | Schema | Drizzle SQLite tables + domain enums | `packages/core/src/db/schema.ts` |
-| DB client | Opens SQLite, WAL, migrations | `packages/core/src/db/client.ts` |
+| DB client | Opens SQLite, WAL, runs drizzle-kit migrations (`packages/core/drizzle`) | `packages/core/src/db/client.ts` |
 | Services | Domain operations (projects, tasks, updates, summaries, links, warnings, reports) | `packages/core/src/services.ts` |
 | Integration clients | GitHub / Jira / Google Docs read-only fetchers | `packages/core/src/integrations/{github,jira,gdrive}.ts` |
 | Sync engine | Refreshes links into snapshots, records sync health | `packages/core/src/integrations/sync.ts` |
@@ -54,7 +54,8 @@ flowchart TB
 The agent-facing API, defined in `packages/mcp/src/tools.ts`:
 
 `list_projects` · `get_project` · `find_project` · `create_project` ·
-`update_project` · `add_update` · `add_task` · `update_task` · `add_link` ·
+`update_project` · `add_update` · `add_task` · `update_task` ·
+`list_queued_tasks` · `claim_task` · `add_link` ·
 `upsert_summary` · `raise_warning` · `resolve_warning` · `get_activity` ·
 `save_report` · `list_reports` · `refresh_project`
 
