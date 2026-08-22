@@ -149,9 +149,6 @@ its MCP server (server name: `workboard`). Workboard is the source of truth for
   current project, post what you did, link any new PRs, and refresh the summary.
 - Before starting, you may call the `find_project` / `get_project` MCP tools to
   load existing context for the repo you're in.
-- Queued tasks are drained by the `/workboard-queue` dispatcher skill — don't
-  pull queue work ad hoc; run the skill (it claims tasks, plans and implements
-  them in worktrees, and raises draft PRs).
 - If you hit something you can't fix (blocked, needs a human, external outage),
   raise it with the `raise_warning` MCP tool instead of silently moving on.
 - Do **not** create a new project for work that already maps to an existing one
