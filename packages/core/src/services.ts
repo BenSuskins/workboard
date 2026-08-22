@@ -199,7 +199,7 @@ function touchProject(db: Db, projectId: number) {
 
 // ---------- tasks ----------
 
-export function addTask(db: Db, projectId: number, title: string, opts: { dueDate?: string; author?: string; status?: TaskStatus } = {}): Task {
+export function addTask(db: Db, projectId: number, title: string, opts: { dueDate?: string; author?: string; status?: TaskStatus; agentReady?: boolean } = {}): Task {
   const t = now();
   const task = db
     .insert(tasks)
@@ -209,6 +209,7 @@ export function addTask(db: Db, projectId: number, title: string, opts: { dueDat
       status: opts.status ?? "todo",
       dueDate: opts.dueDate ?? null,
       author: opts.author ?? "user",
+      agentReady: opts.agentReady ? 1 : 0,
       createdAt: t,
       updatedAt: t,
     })
@@ -219,9 +220,12 @@ export function addTask(db: Db, projectId: number, title: string, opts: { dueDat
 }
 
 export function updateTask(db: Db, id: number, input: { title?: string; status?: TaskStatus; dueDate?: string | null }): Task {
+  // Reverting a claimed task to todo releases the claim so it can be queued again;
+  // completing it keeps claimedBy for attribution.
+  const patch = { ...input, ...(input.status === "todo" ? { claimedBy: null, claimedAt: null } : {}), updatedAt: now() };
   const task = db
     .update(tasks)
-    .set({ ...input, updatedAt: now() })
+    .set(patch)
     .where(eq(tasks.id, id))
     .returning()
     .get();
@@ -240,6 +244,66 @@ export function restoreTask(db: Db, id: number): Task {
   if (!task) throw new Error(`Task ${id} not found`);
   touchProject(db, task.projectId);
   return task;
+}
+
+// ---------- agent task queue (shared pull queue — no named assignees) ----------
+
+/** Queue or un-queue a task. Un-queuing releases an active claim and reverts in_progress to todo. */
+export function setTaskAgentReady(db: Db, id: number, ready: boolean): Task {
+  const existing = db.select().from(tasks).where(eq(tasks.id, id)).get();
+  if (!existing) throw new Error(`Task ${id} not found`);
+  const release = !ready && existing.claimedBy ? { claimedBy: null, claimedAt: null } : {};
+  const revert = !ready && existing.status === "in_progress" ? { status: "todo" as TaskStatus } : {};
+  const task = db
+    .update(tasks)
+    .set({ agentReady: ready ? 1 : 0, ...release, ...revert, updatedAt: now() })
+    .where(eq(tasks.id, id))
+    .returning()
+    .get();
+  touchProject(db, task.projectId);
+  return task;
+}
+
+/** Tasks waiting for an agent: queued, still todo, unclaimed, not deleted. FIFO by creation. */
+export function listQueuedTasks(db: Db, opts: { projectId?: number } = {}): Task[] {
+  const conds = [eq(tasks.agentReady, 1), eq(tasks.status, "todo"), isNull(tasks.claimedAt), isNull(tasks.deletedAt)];
+  if (opts.projectId !== undefined) conds.push(eq(tasks.projectId, opts.projectId));
+  return db
+    .select()
+    .from(tasks)
+    .where(and(...conds))
+    .orderBy(tasks.createdAt, tasks.id)
+    .all();
+}
+
+/**
+ * Atomically claim a queued task: only wins when the task is still unclaimed.
+ * Logs an agent_update so the timeline shows who picked the work up.
+ */
+export function claimTask(db: Db, id: number, claimedBy: string): Task {
+  const claimed = db
+    .update(tasks)
+    .set({ status: "in_progress", claimedBy, claimedAt: now(), updatedAt: now() })
+    .where(and(eq(tasks.id, id), eq(tasks.agentReady, 1), eq(tasks.status, "todo"), isNull(tasks.claimedAt), isNull(tasks.deletedAt)))
+    .returning()
+    .get();
+  if (!claimed) {
+    const existing = db.select().from(tasks).where(eq(tasks.id, id)).get();
+    if (!existing || existing.deletedAt) throw new Error(`Task ${id} not found`);
+    if (!existing.agentReady) throw new Error(`Task ${id} is not queued for agents`);
+    throw new Error(`Task ${id} is already claimed by ${existing.claimedBy ?? "someone else"}`);
+  }
+  db.insert(updates)
+    .values({
+      projectId: claimed.projectId,
+      type: "agent_update",
+      body: `Claimed task **${claimed.title}**`,
+      author: claimedBy,
+      createdAt: now(),
+    })
+    .run();
+  touchProject(db, claimed.projectId);
+  return claimed;
 }
 
 // ---------- updates (activity) ----------

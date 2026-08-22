@@ -2,11 +2,13 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { openDb, type Db } from "./db/client.js";
 import { aggregateCheckRuns } from "./integrations/github.js";
 import {
+  claimTask,
   deleteLink,
   deleteTask,
   getActivityCounts,
   getSyncHealth,
   listDeleted,
+  listQueuedTasks,
   listSummaryHistory,
   listWarnings,
   raiseWarning,
@@ -14,6 +16,7 @@ import {
   resolveWarning,
   restoreLink,
   restoreTask,
+  setTaskAgentReady,
 } from "./services.js";
 import {
   addLink,
@@ -341,5 +344,94 @@ describe("sync health", () => {
     recordSyncResult(db, l.id, "boom");
     updateProject(db, p.id, { status: "archived" });
     expect(getSyncHealth(db).failing).toHaveLength(0);
+  });
+});
+
+describe("agent task queue", () => {
+  it("lists queued tasks FIFO, scoped and filtered", () => {
+    const p1 = createProject(db, { name: "Alpha" });
+    const p2 = createProject(db, { name: "Beta" });
+    const first = addTask(db, p1.id, "first", { agentReady: true });
+    const second = addTask(db, p1.id, "second", { agentReady: true });
+    addTask(db, p1.id, "not queued");
+    const other = addTask(db, p2.id, "other project", { agentReady: true });
+
+    expect(listQueuedTasks(db).map((t) => t.id)).toEqual([first.id, second.id, other.id]);
+    expect(listQueuedTasks(db, { projectId: p1.id })).toHaveLength(2);
+    expect(listQueuedTasks(db, { projectId: p2.id }).map((t) => t.title)).toEqual(["other project"]);
+  });
+
+  it("excludes done and soft-deleted tasks from the queue", () => {
+    const p = createProject(db, { name: "Alpha" });
+    const done = addTask(db, p.id, "done", { agentReady: true });
+    const gone = addTask(db, p.id, "gone", { agentReady: true });
+    updateTask(db, done.id, { status: "done" });
+    deleteTask(db, gone.id);
+    expect(listQueuedTasks(db)).toHaveLength(0);
+  });
+
+  it("claims atomically: stamps claimer, moves to in_progress, logs to the timeline", () => {
+    const p = createProject(db, { name: "Alpha" });
+    const first = addTask(db, p.id, "first", { agentReady: true });
+    addTask(db, p.id, "second", { agentReady: true });
+
+    const claimed = claimTask(db, first.id, "agent:claude");
+    expect(claimed.status).toBe("in_progress");
+    expect(claimed.claimedBy).toBe("agent:claude");
+    expect(claimed.claimedAt).not.toBeNull();
+
+    // claimed task leaves the queue
+    expect(listQueuedTasks(db).map((t) => t.title)).toEqual(["second"]);
+
+    const detail = getProjectDetail(db, p.id)!;
+    const claimUpdate = detail.updates.find((u) => u.body.includes("first"));
+    expect(claimUpdate?.type).toBe("agent_update");
+    expect(claimUpdate?.author).toBe("agent:claude");
+  });
+
+  it("rejects double claims and claims of non-queued tasks", () => {
+    const p = createProject(db, { name: "Alpha" });
+    const queued = addTask(db, p.id, "queued", { agentReady: true });
+    const plain = addTask(db, p.id, "plain");
+
+    claimTask(db, queued.id, "agent:one");
+    expect(() => claimTask(db, queued.id, "agent:two")).toThrow(/already claimed/);
+    expect(() => claimTask(db, plain.id, "agent:one")).toThrow(/not queued/);
+  });
+
+  it("un-queuing releases an active claim and reverts to todo", () => {
+    const p = createProject(db, { name: "Alpha" });
+    const task = addTask(db, p.id, "queued", { agentReady: true });
+    claimTask(db, task.id, "agent:claude");
+
+    setTaskAgentReady(db, task.id, false);
+    const after = getProjectDetail(db, p.id)!.tasks.find((t) => t.id === task.id)!;
+    expect(after.agentReady).toBe(0);
+    expect(after.claimedBy).toBeNull();
+    expect(after.claimedAt).toBeNull();
+    expect(after.status).toBe("todo");
+  });
+
+  it("reverting a claimed task to todo clears the claim", () => {
+    const p = createProject(db, { name: "Alpha" });
+    const task = addTask(db, p.id, "queued", { agentReady: true });
+    claimTask(db, task.id, "agent:claude");
+
+    updateTask(db, task.id, { status: "todo" });
+    expect(listQueuedTasks(db).map((t) => t.id)).toEqual([task.id]);
+    const fresh = getProjectDetail(db, p.id)!.tasks.find((t) => t.id === task.id)!;
+    expect(fresh.claimedBy).toBeNull();
+    expect(fresh.claimedAt).toBeNull();
+  });
+
+  it("completing a claimed task keeps the claim for attribution", () => {
+    const p = createProject(db, { name: "Alpha" });
+    const task = addTask(db, p.id, "queued", { agentReady: true });
+    claimTask(db, task.id, "agent:claude");
+    updateTask(db, task.id, { status: "done" });
+
+    const done = getProjectDetail(db, p.id)!.tasks.find((t) => t.id === task.id)!;
+    expect(done.status).toBe("done");
+    expect(done.claimedBy).toBe("agent:claude");
   });
 });

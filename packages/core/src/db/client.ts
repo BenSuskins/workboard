@@ -9,8 +9,9 @@ import * as schema from "./schema.js";
 export type Db = BetterSQLite3Database<typeof schema>;
 
 // Resolved from this module's location (not cwd) so every workspace process finds
-// packages/core/drizzle regardless of where it was started.
-const migrationsFolder = fileURLToPath(new URL("../../drizzle", import.meta.url));
+// packages/core/drizzle regardless of where it was started. Built via join() rather
+// than new URL("...", import.meta.url) so bundlers don't treat it as an asset import.
+const migrationsFolder = join(fileURLToPath(import.meta.url), "../../../drizzle");
 
 /**
  * Workspace processes run with different cwds (repo root, apps/web, packages/mcp),

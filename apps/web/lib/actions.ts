@@ -11,6 +11,7 @@ import {
   resolveWarning,
   restoreLink,
   restoreTask,
+  setTaskAgentReady,
   syncAll,
   syncProject,
   updateProject,
@@ -70,8 +71,20 @@ export async function addTaskAction(formData: FormData) {
   const projectId = Number(formData.get("projectId"));
   const title = String(formData.get("title") ?? "").trim();
   const dueDate = String(formData.get("dueDate") ?? "").trim();
-  if (title) addTask(db(), projectId, title, { dueDate: dueDate || undefined, author: "user" });
+  if (title)
+    addTask(db(), projectId, title, {
+      dueDate: dueDate || undefined,
+      author: "user",
+      agentReady: formData.get("agentReady") === "on",
+    });
   revalidatePath(`/projects/${String(formData.get("slug"))}`);
+  revalidatePath("/");
+}
+
+export async function setTaskAgentReadyAction(formData: FormData) {
+  setTaskAgentReady(db(), Number(formData.get("taskId")), formData.get("ready") === "1");
+  revalidatePath(`/projects/${String(formData.get("slug"))}`);
+  revalidatePath("/");
 }
 
 export async function setTaskStatusAction(formData: FormData) {

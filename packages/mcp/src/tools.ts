@@ -4,6 +4,7 @@ import {
   addLink,
   addTask,
   addUpdate,
+  claimTask,
   createProject,
   findProject,
   getActivity,
@@ -11,6 +12,7 @@ import {
   getProject,
   integrationStatus,
   listProjects,
+  listQueuedTasks,
   listReports,
   listSummaryHistory,
   PROJECT_HEALTHS,
@@ -243,13 +245,18 @@ export function registerTools(server: McpServer, db: Db): void {
         project: projectRef,
         title: z.string(),
         due_date: z.string().optional().describe("ISO date, e.g. 2026-07-15"),
+        agent_ready: z.boolean().optional().describe("Queue the task for agents to claim (list_queued_tasks / claim_task)"),
         agent_name: z.string().optional(),
       },
     },
-    async ({ project, title, due_date, agent_name }) => {
+    async ({ project, title, due_date, agent_ready, agent_name }) => {
       const target = resolveProject(db, project);
-      const task = addTask(db, target.id, title, { dueDate: due_date, author: agent_name ? `agent:${agent_name}` : "agent" });
-      return json({ created: { id: task.id, title: task.title, status: task.status, project: target.slug } });
+      const task = addTask(db, target.id, title, {
+        dueDate: due_date,
+        author: agent_name ? `agent:${agent_name}` : "agent",
+        agentReady: agent_ready,
+      });
+      return json({ created: { id: task.id, title: task.title, status: task.status, agent_ready: Boolean(task.agentReady), project: target.slug } });
     },
   );
 
@@ -268,6 +275,49 @@ export function registerTools(server: McpServer, db: Db): void {
     async ({ task_id, status, title, due_date }) => {
       const task = updateTask(db, task_id, { status, title, dueDate: due_date });
       return json({ updated: { id: task.id, title: task.title, status: task.status } });
+    },
+  );
+
+  server.registerTool(
+    "list_queued_tasks",
+    {
+      title: "List queued tasks",
+      description:
+        "List tasks queued for agents (the shared pull queue). Pass project to scope to one project; omit it to see the queue across all projects. Claim with claim_task before starting work.",
+      inputSchema: {
+        project: projectRef.optional().describe("Scope to one project (id or slug); omit for the global queue"),
+      },
+    },
+    async ({ project }) => {
+      const projectId = project !== undefined ? resolveProject(db, project).id : undefined;
+      const queued = listQueuedTasks(db, { projectId });
+      return json({
+        queued: queued.map((t) => ({
+          id: t.id,
+          project: t.projectId,
+          title: t.title,
+          status: t.status,
+          due_date: t.dueDate,
+          queued_at: new Date(t.createdAt).toISOString(),
+        })),
+      });
+    },
+  );
+
+  server.registerTool(
+    "claim_task",
+    {
+      title: "Claim a queued task",
+      description:
+        "Atomically claim a queued task: marks it in_progress, stamps you as the claimer, and logs to the project timeline. Fails if another agent claimed it first. Call this before starting the work.",
+      inputSchema: {
+        task_id: z.number(),
+        agent_name: z.string().describe("Your agent name, e.g. \"claude\" — shown on the board"),
+      },
+    },
+    async ({ task_id, agent_name }) => {
+      const task = claimTask(db, task_id, `agent:${agent_name}`);
+      return json({ claimed: { id: task.id, title: task.title, status: task.status, claimed_by: task.claimedBy } });
     },
   );
 

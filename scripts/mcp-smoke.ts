@@ -57,6 +57,7 @@ const expected = [
   "add_update", "add_task", "update_task", "add_link", "upsert_summary",
   "raise_warning", "resolve_warning",
   "get_activity", "save_report", "list_reports", "refresh_project",
+  "list_queued_tasks", "claim_task",
 ];
 
 await step("tools/list exposes all tools", async () => {
@@ -100,6 +101,26 @@ await step("add_update + add_task + update_task", async () => {
   const task = await call("add_task", { project: "smoke-project", title: "Follow-up", agent_name: "smoke-agent" });
   const updated = await call("update_task", { task_id: task.created.id, status: "done" });
   if (updated.updated.status !== "done") throw new Error(JSON.stringify(updated));
+});
+
+await step("agent task queue: queue, list, claim, double-claim rejection", async () => {
+  const queued = await call("add_task", { project: "smoke-project", title: "Queued work", agent_ready: true });
+  if (queued.created.agent_ready !== true) throw new Error(JSON.stringify(queued));
+
+  const listed = await call("list_queued_tasks", { project: "smoke-project" });
+  if (!listed.queued.some((t: any) => t.id === queued.created.id)) throw new Error(JSON.stringify(listed));
+
+  const claimed = await call("claim_task", { task_id: queued.created.id, agent_name: "smoke-agent" });
+  if (claimed.claimed.status !== "in_progress") throw new Error(JSON.stringify(claimed));
+
+  // claimed tasks leave the queue
+  const after = await call("list_queued_tasks", {});
+  if (after.queued.some((t: any) => t.id === queued.created.id)) throw new Error(JSON.stringify(after));
+
+  const double = await client.callTool({ name: "claim_task", arguments: { task_id: queued.created.id, agent_name: "other-agent" } });
+  if (!(double as { isError?: boolean }).isError) throw new Error("double claim should error");
+
+  await call("update_task", { task_id: queued.created.id, status: "done" });
 });
 
 await step("upsert_summary + update_project status", async () => {

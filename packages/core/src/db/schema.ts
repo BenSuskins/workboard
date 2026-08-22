@@ -57,6 +57,10 @@ export const tasks = sqliteTable(
       .references(() => projects.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     status: text("status").$type<TaskStatus>().notNull().default("todo"),
+    /** Queued for agents to claim over MCP (shared pull queue — no named assignees). */
+    agentReady: integer("agent_ready").notNull().default(0),
+    claimedBy: text("claimed_by"),
+    claimedAt: integer("claimed_at"),
     dueDate: text("due_date"),
     author: text("author").notNull().default("user"),
     createdAt: integer("created_at").notNull(),
