@@ -5,6 +5,8 @@ export const PROJECT_HEALTHS = ["green", "amber", "red"] as const;
 export const PROJECT_PRIORITIES = ["high", "medium", "low"] as const;
 export const CATEGORY_PRESETS = ["coding", "platform", "hiring", "process", "other"] as const;
 export const TASK_STATUSES = ["todo", "in_progress", "done"] as const;
+/** Null priority sorts last — unprioritized work trails prioritized work in the queue. */
+export const TASK_PRIORITIES = ["high", "medium", "low"] as const;
 export const UPDATE_TYPES = ["note", "status_change", "agent_update"] as const;
 export const SUMMARY_KINDS = ["project_summary", "digest", "triage", "accomplishments"] as const;
 export const LINK_PROVIDERS = ["github", "jira", "gdoc", "url"] as const;
@@ -16,6 +18,7 @@ export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 export type ProjectHealth = (typeof PROJECT_HEALTHS)[number];
 export type ProjectPriority = (typeof PROJECT_PRIORITIES)[number];
 export type TaskStatus = (typeof TASK_STATUSES)[number];
+export type TaskPriority = (typeof TASK_PRIORITIES)[number];
 export type UpdateType = (typeof UPDATE_TYPES)[number];
 export type SummaryKind = (typeof SUMMARY_KINDS)[number];
 export type LinkProvider = (typeof LINK_PROVIDERS)[number];
@@ -58,7 +61,10 @@ export const tasks = sqliteTable(
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
+    /** The spec: problem, constraints, acceptance criteria (markdown). */
+    description: text("description").notNull().default(""),
     status: text("status").$type<TaskStatus>().notNull().default("todo"),
+    priority: text("priority").$type<TaskPriority>(),
     /** Queued for agents to claim over MCP (shared pull queue — no named assignees). */
     agentReady: integer("agent_ready").notNull().default(0),
     claimedBy: text("claimed_by"),

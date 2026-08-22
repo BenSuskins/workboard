@@ -1,4 +1,4 @@
-import type { ProjectHealth, ProjectPriority, ProjectStatus } from "@workboard/core";
+import type { ProjectHealth, ProjectPriority, ProjectStatus, TaskPriority } from "@workboard/core";
 
 const STATUS_STYLES: Record<ProjectStatus, { label: string; text: string; dot: string }> = {
   active: { label: "Active", text: "text-good", dot: "bg-good" },
@@ -30,6 +30,25 @@ const HEALTH_LABEL: Record<ProjectHealth, string> = {
   amber: "At risk",
   red: "Off track",
 };
+
+/** Dot-only task priority marker; unprioritized tasks render nothing. */
+export function TaskPriorityDot({ priority }: { priority: TaskPriority | null }) {
+  if (!priority) return null;
+  const cls = priority === "high" ? "bg-critical" : priority === "medium" ? "bg-serious" : "bg-muted";
+  return <span className={`size-2 shrink-0 rounded-full ${cls}`} title={`${priority} priority`} aria-label={`${priority} priority`} />;
+}
+
+/** Labeled badge for the task detail page. */
+export function TaskPriorityBadge({ priority }: { priority: TaskPriority | null }) {
+  if (!priority) return <span className="text-[11px] text-muted">no priority</span>;
+  const text = priority === "high" ? "text-critical" : priority === "medium" ? "text-serious" : "text-muted";
+  return (
+    <span className={`inline-flex items-center gap-1.5 text-[11px] font-medium capitalize ${text}`}>
+      <span className={`size-1.5 rounded-full ${priority === "high" ? "bg-critical" : priority === "medium" ? "bg-serious" : "bg-muted"}`} aria-hidden />
+      {priority} priority
+    </span>
+  );
+}
 
 /** Plain-text "category · health · priority" meta line shared by the board card and project page. */
 export function ProjectMeta({

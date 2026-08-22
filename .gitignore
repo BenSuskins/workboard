@@ -7,3 +7,4 @@ data/google-token.json
 .env
 .env.local
 *.tsbuildinfo
+plans/

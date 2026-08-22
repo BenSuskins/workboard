@@ -14,12 +14,12 @@ import {
   type PrSnapshot,
   type RepoScopeSnapshot,
 } from "@workboard/core";
-import { ProjectMeta, StatusBadge } from "@/components/badges";
+import { ProjectMeta, StatusBadge, TaskPriorityDot } from "@/components/badges";
 import { ciLabel, GitHubMark, JiraMark, DocMark } from "@/components/chips";
 import { Markdown } from "@/components/markdown";
 import { WarningsPanel } from "@/components/warnings";
 import { db } from "@/lib/db";
-import { authorLabel, fullDate, relativeTime } from "@/lib/format";
+import { authorLabel, fullDate, relativeTime, toPlainText } from "@/lib/format";
 import {
   addLinkAction,
   addTaskAction,
@@ -295,23 +295,44 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
               <div className="flex gap-2">
                 <input type="hidden" name="projectId" value={project.id} />
                 <input type="hidden" name="slug" value={project.slug} />
-                <input name="title" placeholder="Add a task…" className={inputCls} />
+                <input name="title" placeholder="Add a task…" className={inputCls} required />
                 <button type="submit" className={btnCls}>
                   Add
                 </button>
               </div>
-              <label className="flex items-center gap-1.5 text-xs text-muted">
-                <input type="checkbox" name="agentReady" className="size-3 accent-accent" />
-                Queue for agents (claimable over MCP)
-              </label>
+              <details>
+                <summary className="cursor-pointer select-none text-xs text-muted hover:text-ink">Description &amp; priority (optional)</summary>
+                <div className="mt-2 flex flex-col gap-2">
+                  <textarea
+                    name="description"
+                    rows={3}
+                    placeholder="Spec for whoever picks this up — problem, constraints, acceptance criteria (markdown)…"
+                    className={inputCls}
+                  />
+                  <div className="flex items-center justify-between gap-2">
+                    <select name="priority" defaultValue="" className={`${inputCls} w-auto`}>
+                      <option value="">no priority</option>
+                      {["high", "medium", "low"].map((p) => (
+                        <option key={p} value={p}>
+                          {p}
+                        </option>
+                      ))}
+                    </select>
+                    <label className="flex items-center gap-1.5 whitespace-nowrap text-xs text-muted">
+                      <input type="checkbox" name="agentReady" className="size-3 accent-accent" />
+                      Queue for agents
+                    </label>
+                  </div>
+                </div>
+              </details>
             </form>
             {tasks.length === 0 ? (
               <p className="text-sm text-muted">No tasks.</p>
             ) : (
               <ul className="flex flex-col gap-1.5">
                 {tasks.map((t) => (
-                  <li key={t.id} className="group flex items-center gap-2 text-sm">
-                    <form action={setTaskStatusAction}>
+                  <li key={t.id} className="group flex items-start gap-2 text-sm">
+                    <form action={setTaskStatusAction} className="pt-0.5">
                       <input type="hidden" name="taskId" value={t.id} />
                       <input type="hidden" name="slug" value={project.slug} />
                       <input type="hidden" name="status" value={t.status === "done" ? "todo" : "done"} />
@@ -329,14 +350,27 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
                         {t.status === "done" ? "✓" : t.status === "in_progress" ? "◐" : "✓"}
                       </button>
                     </form>
-                    <span className={t.status === "done" ? "text-muted line-through" : "text-ink-2"}>{t.title}</span>
-                    {t.dueDate && <span className="text-[11px] text-warning">due {t.dueDate}</span>}
-                    {t.claimedBy && (
-                      <span className="rounded bg-accent/15 px-1.5 py-0.5 text-[10px] text-accent" title="Claimed via the agent queue">
-                        {t.claimedBy}
-                      </span>
-                    )}
-                    <form action={setTaskAgentReadyAction} className="ml-auto">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <TaskPriorityDot priority={t.priority} />
+                        <Link
+                          href={`/projects/${project.slug}/tasks/${t.id}`}
+                          className={`truncate hover:text-accent hover:underline ${t.status === "done" ? "text-muted line-through" : "text-ink-2"}`}
+                        >
+                          {t.title}
+                        </Link>
+                        {t.dueDate && <span className="shrink-0 text-[11px] text-warning">due {t.dueDate}</span>}
+                        {t.claimedBy && (
+                          <span className="shrink-0 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] text-accent" title="Claimed via the agent queue">
+                            {t.claimedBy}
+                          </span>
+                        )}
+                      </div>
+                      {t.description && (
+                        <p className="mt-0.5 truncate pl-3.5 text-xs text-muted">{toPlainText(t.description)}</p>
+                      )}
+                    </div>
+                    <form action={setTaskAgentReadyAction} className="ml-auto pt-0.5">
                       <input type="hidden" name="taskId" value={t.id} />
                       <input type="hidden" name="slug" value={project.slug} />
                       <input type="hidden" name="ready" value={t.agentReady ? "0" : "1"} />

@@ -21,6 +21,7 @@ import {
   syncState,
   type SyncState,
   type Task,
+  type TaskPriority,
   type TaskStatus,
   type Update,
   type UpdateType,
@@ -186,7 +187,11 @@ export function getProjectDetail(db: Db, ref: number | string, opts: { updatesLi
     .select()
     .from(tasks)
     .where(and(eq(tasks.projectId, project.id), isNull(tasks.deletedAt)))
-    .orderBy(sql`CASE ${tasks.status} WHEN 'in_progress' THEN 0 WHEN 'todo' THEN 1 ELSE 2 END`, desc(tasks.updatedAt))
+    .orderBy(
+      sql`CASE ${tasks.status} WHEN 'in_progress' THEN 0 WHEN 'todo' THEN 1 ELSE 2 END`,
+      TASK_PRIORITY_RANK,
+      desc(tasks.updatedAt),
+    )
     .all();
   const projectUpdates = db
     .select()
@@ -221,13 +226,24 @@ function touchProject(db: Db, projectId: number) {
 
 // ---------- tasks ----------
 
-export function addTask(db: Db, projectId: number, title: string, opts: { dueDate?: string; author?: string; status?: TaskStatus; agentReady?: boolean } = {}): Task {
+export interface AddTaskOptions {
+  description?: string;
+  priority?: TaskPriority | null;
+  dueDate?: string;
+  author?: string;
+  status?: TaskStatus;
+  agentReady?: boolean;
+}
+
+export function addTask(db: Db, projectId: number, title: string, opts: AddTaskOptions = {}): Task {
   const t = now();
   const task = db
     .insert(tasks)
     .values({
       projectId,
       title,
+      description: opts.description ?? "",
+      priority: opts.priority ?? null,
       status: opts.status ?? "todo",
       dueDate: opts.dueDate ?? null,
       author: opts.author ?? "user",
@@ -241,7 +257,18 @@ export function addTask(db: Db, projectId: number, title: string, opts: { dueDat
   return task;
 }
 
-export function updateTask(db: Db, id: number, input: { title?: string; status?: TaskStatus; dueDate?: string | null }): Task {
+/** Unprioritized tasks sort after prioritized ones in the queue and on the board. */
+const TASK_PRIORITY_RANK = sql`CASE ${tasks.priority} WHEN 'high' THEN 0 WHEN 'medium' THEN 1 WHEN 'low' THEN 2 ELSE 3 END`;
+
+export interface UpdateTaskInput {
+  title?: string;
+  description?: string;
+  status?: TaskStatus;
+  priority?: TaskPriority | null;
+  dueDate?: string | null;
+}
+
+export function updateTask(db: Db, id: number, input: UpdateTaskInput): Task {
   // Reverting a claimed task to todo releases the claim so it can be queued again;
   // completing it keeps claimedBy for attribution.
   const patch = { ...input, ...(input.status === "todo" ? { claimedBy: null, claimedAt: null } : {}), updatedAt: now() };
@@ -286,7 +313,7 @@ export function setTaskAgentReady(db: Db, id: number, ready: boolean): Task {
   return task;
 }
 
-/** Tasks waiting for an agent: queued, still todo, unclaimed, not deleted. FIFO by creation. */
+/** Tasks waiting for an agent: queued, still todo, unclaimed, not deleted. Priority first (null last), FIFO within each. */
 export function listQueuedTasks(db: Db, opts: { projectId?: number } = {}): Task[] {
   const conds = [eq(tasks.agentReady, 1), eq(tasks.status, "todo"), isNull(tasks.claimedAt), isNull(tasks.deletedAt)];
   if (opts.projectId !== undefined) conds.push(eq(tasks.projectId, opts.projectId));
@@ -294,8 +321,17 @@ export function listQueuedTasks(db: Db, opts: { projectId?: number } = {}): Task
     .select()
     .from(tasks)
     .where(and(...conds))
-    .orderBy(tasks.createdAt, tasks.id)
+    .orderBy(TASK_PRIORITY_RANK, tasks.createdAt, tasks.id)
     .all();
+}
+
+/** One task plus its project — the task detail page's data. */
+export function getTaskDetail(db: Db, id: number): { task: Task; project: Project } | undefined {
+  const task = db.select().from(tasks).where(eq(tasks.id, id)).get();
+  if (!task) return undefined;
+  const project = db.select().from(projects).where(eq(projects.id, task.projectId)).get();
+  if (!project) return undefined;
+  return { task, project };
 }
 
 /**
