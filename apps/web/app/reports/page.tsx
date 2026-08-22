@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ kind?: string }> }) {
   const { kind } = await searchParams;
-  const filter = kind === "digest" || kind === "triage" ? kind : undefined;
+  const filter = kind === "digest" || kind === "triage" || kind === "accomplishments" ? kind : undefined;
   const reports = listReports(db(), filter);
 
   const tab = (href: string, label: string, active: boolean) => (
@@ -28,12 +28,13 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           {tab("/reports", "All", !filter)}
           {tab("/reports?kind=digest", "Digests", filter === "digest")}
           {tab("/reports?kind=triage", "Triage", filter === "triage")}
+          {tab("/reports?kind=accomplishments", "Accomplishments", filter === "accomplishments")}
         </div>
       </div>
       {reports.length === 0 ? (
         <div className="rounded-[10px] border border-dashed border-grid px-6 py-16 text-center text-sm text-muted">
-          No reports yet. Run the <code>workboard-digest</code> or <code>workboard-triage</code> skill from a coding agent to
-          generate one.
+          No reports yet. Run the <code>workboard-digest</code>, <code>workboard-triage</code>, or{" "}
+          <code>workboard-accomplishments</code> skill from a coding agent to generate one.
         </div>
       ) : (
         reports.map((r) => (
@@ -41,7 +42,11 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
             <div className="mb-3 flex items-center gap-2 text-[11px] text-muted">
               <span
                 className={`rounded-full border px-2 py-0.5 font-medium ${
-                  r.kind === "digest" ? "border-accent/40 bg-accent/10 text-accent" : "border-warning/40 bg-warning/10 text-warning"
+                  r.kind === "digest"
+                    ? "border-accent/40 bg-accent/10 text-accent"
+                    : r.kind === "accomplishments"
+                      ? "border-good/40 bg-good/10 text-good"
+                      : "border-warning/40 bg-warning/10 text-warning"
                 }`}
               >
                 {r.kind}

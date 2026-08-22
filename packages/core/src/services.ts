@@ -369,18 +369,18 @@ export function listSummaryHistory(db: Db, projectId: number, limit = 20): Summa
     .all();
 }
 
-export function saveReport(db: Db, kind: "digest" | "triage", body: string, generatedBy = "agent"): Summary {
+export function saveReport(db: Db, kind: "digest" | "triage" | "accomplishments", body: string, generatedBy = "agent"): Summary {
   return db.insert(summaries).values({ projectId: null, kind, body, generatedBy, createdAt: now() }).returning().get();
 }
 
-export function listReports(db: Db, kind?: "digest" | "triage", limit = 50): Summary[] {
+export function listReports(db: Db, kind?: "digest" | "triage" | "accomplishments", limit = 50): Summary[] {
   const cond = kind
     ? and(isNull(summaries.projectId), eq(summaries.kind, kind))
-    : and(isNull(summaries.projectId), inArray(summaries.kind, ["digest", "triage"]));
+    : and(isNull(summaries.projectId), inArray(summaries.kind, ["digest", "triage", "accomplishments"]));
   return db.select().from(summaries).where(cond).orderBy(desc(summaries.createdAt)).limit(limit).all();
 }
 
-export function latestReport(db: Db, kind: "digest" | "triage"): Summary | undefined {
+export function latestReport(db: Db, kind: "digest" | "triage" | "accomplishments"): Summary | undefined {
   return listReports(db, kind, 1)[0];
 }
 
@@ -713,6 +713,58 @@ export function getActivityCounts(db: Db, projectId: number, days = 14): number[
     if (bucket >= 0 && bucket < days) counts[bucket]++;
   }
   return counts;
+}
+
+// ---------- progress metrics (per-project reporting) ----------
+
+export interface ProjectMetrics {
+  tasksTotal: number;
+  tasksDone: number;
+  openPrs: number;
+  mergedRecently: number;
+  /** Whole days since the project last moved; 0 means today. */
+  daysSinceActivity: number;
+}
+
+const RECENT_PR_MS = 7 * 24 * 60 * 60 * 1000;
+
+interface PrLike {
+  state: "open" | "closed";
+  merged: boolean;
+  updatedAt: string;
+}
+
+function collectSnapshotPrs(data: unknown, into: PrLike[]): void {
+  if (!data || typeof data !== "object") return;
+  if ((data as { type?: string }).type === "pr") {
+    into.push(data as PrLike);
+  } else if ((data as { type?: string }).type === "repo") {
+    const prs = (data as { prs?: unknown }).prs;
+    if (Array.isArray(prs)) for (const pr of prs) if (pr && typeof pr === "object") into.push(pr as PrLike);
+  }
+}
+
+/** Task completion and PR throughput for a project — the reporting numbers. */
+export function getProjectMetrics(db: Db, ref: number | string): ProjectMetrics | undefined {
+  const detail = getProjectDetail(db, ref, { updatesLimit: 0 });
+  if (!detail) return undefined;
+  const tasksDone = detail.tasks.filter((t) => t.status === "done").length;
+  const prs: PrLike[] = [];
+  for (const link of detail.links) collectSnapshotPrs(link.snapshot?.data, prs);
+  const recentCutoff = Date.now() - RECENT_PR_MS;
+  let openPrs = 0;
+  let mergedRecently = 0;
+  for (const pr of prs) {
+    if (pr.state === "open") openPrs++;
+    else if (pr.merged && Date.parse(pr.updatedAt) > recentCutoff) mergedRecently++;
+  }
+  return {
+    tasksTotal: detail.tasks.length,
+    tasksDone,
+    openPrs,
+    mergedRecently,
+    daysSinceActivity: Math.floor((now() - detail.project.lastActivityAt) / (24 * 60 * 60 * 1000)),
+  };
 }
 
 // ---------- activity feed (digest raw material) ----------

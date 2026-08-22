@@ -28,6 +28,7 @@ import {
   findProject,
   getActivity,
   getProjectDetail,
+  getProjectMetrics,
   inferLink,
   latestReport,
   listProjects,
@@ -455,5 +456,54 @@ describe("pinning + shelved projects", () => {
     const shelved = listShelvedProjects(db);
     expect(shelved.map((p) => p.name).sort()).toEqual(["Finished", "Parked"]);
     expect(listProjects(db, {}).map((p) => p.name)).toContain("Current");
+  });
+});
+
+describe("progress metrics + accomplishments", () => {
+  it("computes task completion and PR throughput from snapshots", () => {
+    const p = createProject(db, { name: "Alpha" });
+    addTask(db, p.id, "one");
+    addTask(db, p.id, "two");
+    const three = addTask(db, p.id, "three");
+    updateTask(db, three.id, { status: "done" });
+
+    const pr = addLink(db, p.id, { url: "https://github.com/acme/platform/pull/1" });
+    saveSnapshot(db, pr.id, {
+      type: "pr",
+      number: 1,
+      repo: "acme/platform",
+      state: "open",
+      merged: false,
+      updatedAt: new Date().toISOString(),
+    });
+    // merged PR via a scoped repo snapshot
+    const repo = addLink(db, p.id, { url: "https://github.com/acme/platform" });
+    saveSnapshot(db, repo.id, {
+      type: "repo",
+      repo: "acme/platform",
+      prs: [
+        { number: 2, repo: "acme/platform", state: "closed", merged: true, updatedAt: new Date().toISOString() },
+        { number: 3, repo: "acme/platform", state: "closed", merged: false, updatedAt: new Date().toISOString() },
+      ],
+    });
+
+    const m = getProjectMetrics(db, p.id)!;
+    expect(m.tasksTotal).toBe(3);
+    expect(m.tasksDone).toBe(1);
+    expect(m.openPrs).toBe(1);
+    expect(m.mergedRecently).toBe(1);
+    expect(m.daysSinceActivity).toBe(0);
+  });
+
+  it("returns undefined for unknown projects", () => {
+    expect(getProjectMetrics(db, "nope")).toBeUndefined();
+  });
+
+  it("stores and lists accomplishments reports", () => {
+    saveReport(db, "accomplishments", "Shipped X, Y, Z.");
+    saveReport(db, "digest", "Weekly digest");
+    expect(latestReport(db, "accomplishments")?.body).toBe("Shipped X, Y, Z.");
+    const all = listReports(db);
+    expect(all.map((r) => r.kind).sort()).toEqual(["accomplishments", "digest"]);
   });
 });

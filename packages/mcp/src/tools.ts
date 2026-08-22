@@ -10,6 +10,7 @@ import {
   getActivity,
   getProjectDetail,
   getProject,
+  getProjectMetrics,
   integrationStatus,
   listProjects,
   listQueuedTasks,
@@ -108,8 +109,17 @@ export function registerTools(server: McpServer, db: Db): void {
       const detail = getProjectDetail(db, typeof project === "string" && /^\d+$/.test(project) ? Number(project) : project);
       if (!detail) throw new Error(`No project found for "${project}". Use list_projects to see available projects.`);
       const history = listSummaryHistory(db, detail.project.id, 5);
+      const metrics = getProjectMetrics(db, detail.project.id);
       return json({
         ...projectCard(detail.project),
+        pinned: Boolean(detail.project.pinned),
+        metrics: metrics && {
+          tasksTotal: metrics.tasksTotal,
+          tasksDone: metrics.tasksDone,
+          openPrs: metrics.openPrs,
+          mergedRecently: metrics.mergedRecently,
+          daysSinceActivity: metrics.daysSinceActivity,
+        },
         openWarnings: detail.openWarnings.map(warningCard),
         latestSummary: detail.latestSummary
           ? { body: detail.latestSummary.body, generatedAt: new Date(detail.latestSummary.createdAt).toISOString() }
@@ -450,11 +460,11 @@ export function registerTools(server: McpServer, db: Db): void {
   server.registerTool(
     "save_report",
     {
-      title: "Save a digest or triage report",
+      title: "Save a report (digest, triage, or accomplishments)",
       description:
-        "Persist a cross-project report to the Workboard reports page. kind=digest for daily/weekly 'where everything stands' briefings; kind=triage for stale/blocked/risk analysis with suggested next actions. Markdown.",
+        "Persist a cross-project report to the Workboard reports page. kind=digest for daily/weekly 'where everything stands' briefings; kind=triage for stale/blocked/risk analysis with suggested next actions; kind=accomplishments for 'what shipped' summaries of the user's and agents' completed work. Markdown.",
       inputSchema: {
-        kind: z.enum(["digest", "triage"]),
+        kind: z.enum(["digest", "triage", "accomplishments"]),
         body: z.string().describe("The report, in markdown"),
         agent_name: z.string().optional(),
       },
@@ -468,10 +478,10 @@ export function registerTools(server: McpServer, db: Db): void {
   server.registerTool(
     "list_reports",
     {
-      title: "List past digests/triage reports",
-      description: "Recent digest and triage reports, newest first.",
+      title: "List past digest/triage/accomplishments reports",
+      description: "Recent cross-project reports, newest first.",
       inputSchema: {
-        kind: z.enum(["digest", "triage"]).optional(),
+        kind: z.enum(["digest", "triage", "accomplishments"]).optional(),
         limit: z.number().optional(),
       },
     },

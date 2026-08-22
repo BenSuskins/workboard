@@ -18,6 +18,8 @@ export function ProjectCard({ detail, activityCounts }: { detail: ProjectDetail;
   const pipeline = prPipeline(links);
   const openTasks = tasks.filter((t) => t.status !== "done").length;
   const queuedTasks = tasks.filter((t) => t.agentReady && t.status === "todo" && !t.claimedAt).length;
+  const donePct =
+    tasks.length > 0 ? Math.round((tasks.filter((t) => t.status === "done").length / tasks.length) * 100) : null;
   return (
     <div className="relative flex flex-col gap-2 rounded-[10px] border border-hairline bg-surface p-3.5 transition-colors hover:border-accent/50">
       <div className="flex items-start justify-between gap-2">
@@ -67,6 +69,7 @@ export function ProjectCard({ detail, activityCounts }: { detail: ProjectDetail;
         <span>
           {openTasks > 0 ? `${openTasks} open task${openTasks === 1 ? "" : "s"}` : "no open tasks"}
           {queuedTasks > 0 && <span className="ml-1.5 text-accent">· {queuedTasks} queued for agents</span>}
+          {donePct !== null && <span>· {donePct}% done</span>}
         </span>
         {activityCounts && <Sparkline counts={activityCounts} />}
         <span>

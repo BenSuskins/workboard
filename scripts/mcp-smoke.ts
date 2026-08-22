@@ -159,8 +159,11 @@ await step("get_activity + save_report + list_reports", async () => {
   const feed = await call("get_activity", {});
   if (feed.projects.length !== 1) throw new Error("expected 1 project in feed");
   await call("save_report", { kind: "digest", body: "# Digest\nEverything is smoke.", agent_name: "smoke-agent" });
+  await call("save_report", { kind: "accomplishments", body: "# Accomplishments\nShipped smoke.", agent_name: "smoke-agent" });
   const reports = await call("list_reports", {});
-  if (reports.length !== 1 || reports[0].kind !== "digest") throw new Error(JSON.stringify(reports));
+  if (reports.length !== 2) throw new Error(JSON.stringify(reports));
+  const acc = await call("list_reports", { kind: "accomplishments" });
+  if (acc[0]?.kind !== "accomplishments") throw new Error(JSON.stringify(acc));
 });
 
 await step("refresh_project skips gracefully without credentials", async () => {
