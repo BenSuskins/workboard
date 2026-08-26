@@ -108,7 +108,8 @@ sequenceDiagram
 - **The board is markdown you can read without the app** — one file per entity,
   frontmatter plus prose. The cost is that transactions, joins, and a race-safe
   `UPDATE ... WHERE` are no longer free; see Concurrency below for what replaces
-  them.
+  them. Nothing native runs at runtime; `better-sqlite3` survives only as a dev
+  dependency of the one-off migration script.
 - **Questions are distinct from warnings** — a warning reports something broken;
   a question asks for a decision and blocks the asking agent until answered.
   Answers travel back through `list_answers`.
