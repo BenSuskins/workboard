@@ -483,6 +483,13 @@ describe("pinning + shelved projects", () => {
     expect(setProjectPinned(db, p.id, false).pinned).toBe(0);
   });
 
+  it("leads the list with pinned projects, regardless of recency", () => {
+    const older = createProject(db, { name: "Older" });
+    createProject(db, { name: "Newer" });
+    setProjectPinned(db, older.id, true);
+    expect(listProjects(db).map((p) => p.name)).toEqual(["Older", "Newer"]);
+  });
+
   it("lists done and archived projects as shelved, excluding active ones", () => {
     const finished = createProject(db, { name: "Finished" });
     const parked = createProject(db, { name: "Parked" });

@@ -32,6 +32,11 @@ const STALE_MS = 7 * 24 * 60 * 60 * 1000;
 const PRIORITY_RANK = { high: 0, medium: 1, low: 2 } as const;
 const HEALTH_RANK = { red: 0, amber: 1, green: 2 } as const;
 
+/** Pinned projects lead the board whichever sort is active; the chosen sort orders within each group. */
+function pinnedFirst(sorter: (a: ProjectDetail, b: ProjectDetail) => number) {
+  return (a: ProjectDetail, b: ProjectDetail) => b.project.pinned - a.project.pinned || sorter(a, b);
+}
+
 const SORTERS: Record<string, (a: ProjectDetail, b: ProjectDetail) => number> = {
   activity: (a, b) => b.project.lastActivityAt - a.project.lastActivityAt,
   priority: (a, b) =>
@@ -89,6 +94,7 @@ export default async function Dashboard({
     .map((p) => getProjectDetail(database, p.id, { updatesLimit: 1 }))
     .filter((d): d is ProjectDetail => d !== undefined);
 
+  const sorter = SORTERS[filters.sort ?? "activity"] ?? SORTERS.activity;
   const filtered = details
     .filter(({ project }) => {
       if (filters.category && project.category !== filters.category) return false;
@@ -96,7 +102,7 @@ export default async function Dashboard({
       if (filters.health && project.health !== (filters.health as ProjectHealth)) return false;
       return true;
     })
-    .sort(SORTERS[filters.sort ?? "activity"] ?? SORTERS.activity);
+    .sort(pinnedFirst(sorter));
 
   const categories = [...new Set(all.map((p) => p.category))].sort();
   const active = all.filter((p) => p.status === "active").length;

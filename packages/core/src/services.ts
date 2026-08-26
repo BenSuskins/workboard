@@ -1,34 +1,27 @@
 import { and, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import type { Db } from "./db/client.js";
-import {
-  links,
-  projects,
-  snapshots,
-  summaries,
-  tasks,
-  updates,
-  type Link,
-  type LinkKind,
-  type LinkProvider,
-  type Project,
-  type ProjectHealth,
-  type ProjectPriority,
-  type ProjectStatus,
-  type RepoScope,
-  type Snapshot,
-  type Summary,
-  type SummaryKind,
-  syncState,
-  type SyncState,
-  type Task,
-  type TaskPriority,
-  type TaskStatus,
-  type Update,
-  type UpdateType,
-  type Warning,
-  type WarningSeverity,
-  warnings,
-} from "./db/schema.js";
+import { links, projects, snapshots, summaries, syncState, tasks, updates, warnings } from "./db/schema.js";
+import type {
+  Link,
+  LinkKind,
+  LinkProvider,
+  Project,
+  ProjectHealth,
+  ProjectPriority,
+  ProjectStatus,
+  RepoScope,
+  Snapshot,
+  Summary,
+  SummaryKind,
+  SyncState,
+  Task,
+  TaskPriority,
+  TaskStatus,
+  Update,
+  UpdateType,
+  Warning,
+  WarningSeverity,
+} from "./domain.js";
 
 const now = () => Date.now();
 
@@ -133,7 +126,7 @@ export function listProjects(db: Db, filter: ListProjectsFilter = {}): Project[]
     .select()
     .from(projects)
     .where(conds.length ? and(...conds) : undefined)
-    .orderBy(desc(projects.lastActivityAt))
+    .orderBy(desc(projects.pinned), desc(projects.lastActivityAt))
     .all();
 }
 

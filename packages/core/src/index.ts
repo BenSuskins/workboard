@@ -1,3 +1,4 @@
+export * from "./domain.js";
 export * from "./db/schema.js";
 export * from "./db/client.js";
 export * from "./services.js";

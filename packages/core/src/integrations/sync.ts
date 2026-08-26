@@ -1,6 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import type { Db } from "../db/client.js";
-import { links, type Link } from "../db/schema.js";
+import { links } from "../db/schema.js";
+import type { Link } from "../domain.js";
 import { recordSyncResult, saveSnapshot } from "../services.js";
 import { fetchGdoc, googleConfigured } from "./gdrive.js";
 import { fetchIssue, fetchPr, fetchScopedRepo, githubConfigured } from "./github.js";

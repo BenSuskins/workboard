@@ -1,37 +1,18 @@
 import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
-
-export const PROJECT_STATUSES = ["active", "blocked", "on_hold", "done", "archived"] as const;
-export const PROJECT_HEALTHS = ["green", "amber", "red"] as const;
-export const PROJECT_PRIORITIES = ["high", "medium", "low"] as const;
-export const CATEGORY_PRESETS = ["coding", "platform", "hiring", "process", "other"] as const;
-export const TASK_STATUSES = ["todo", "in_progress", "done"] as const;
-/** Null priority sorts last — unprioritized work trails prioritized work in the queue. */
-export const TASK_PRIORITIES = ["high", "medium", "low"] as const;
-export const UPDATE_TYPES = ["note", "status_change", "agent_update"] as const;
-export const SUMMARY_KINDS = ["project_summary", "digest", "triage", "accomplishments"] as const;
-export const LINK_PROVIDERS = ["github", "jira", "gdoc", "url"] as const;
-export const LINK_KINDS = ["repo", "pr", "issue", "jira_project", "jira_issue", "doc", "url"] as const;
-export const WARNING_SEVERITIES = ["info", "warning", "critical"] as const;
-export const WARNING_STATUSES = ["open", "resolved"] as const;
-
-export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
-export type ProjectHealth = (typeof PROJECT_HEALTHS)[number];
-export type ProjectPriority = (typeof PROJECT_PRIORITIES)[number];
-export type TaskStatus = (typeof TASK_STATUSES)[number];
-export type TaskPriority = (typeof TASK_PRIORITIES)[number];
-export type UpdateType = (typeof UPDATE_TYPES)[number];
-export type SummaryKind = (typeof SUMMARY_KINDS)[number];
-export type LinkProvider = (typeof LINK_PROVIDERS)[number];
-export type LinkKind = (typeof LINK_KINDS)[number];
-export type WarningSeverity = (typeof WARNING_SEVERITIES)[number];
-export type WarningStatus = (typeof WARNING_STATUSES)[number];
-
-/** Narrows a monorepo link to one project's slice of it. */
-export interface RepoScope {
-  labels?: string[];
-  pathPrefixes?: string[];
-  branchPrefix?: string;
-}
+import type {
+  LinkKind,
+  LinkProvider,
+  ProjectHealth,
+  ProjectPriority,
+  ProjectStatus,
+  RepoScope,
+  SummaryKind,
+  TaskPriority,
+  TaskStatus,
+  UpdateType,
+  WarningSeverity,
+  WarningStatus,
+} from "../domain.js";
 
 export const projects = sqliteTable(
   "projects",
@@ -170,12 +151,21 @@ export const snapshots = sqliteTable(
   },
 );
 
-export type Project = typeof projects.$inferSelect;
 export type NewProject = typeof projects.$inferInsert;
-export type Task = typeof tasks.$inferSelect;
-export type Update = typeof updates.$inferSelect;
-export type Summary = typeof summaries.$inferSelect;
-export type Link = typeof links.$inferSelect;
-export type Snapshot = typeof snapshots.$inferSelect;
-export type Warning = typeof warnings.$inferSelect;
-export type SyncState = typeof syncState.$inferSelect;
+
+/**
+ * The domain owns the entity shapes; these tables must keep producing exactly
+ * those shapes while SQLite is still the store. Mutual assignability fails the
+ * build if a column and its domain field ever drift apart.
+ */
+type Exact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
+type _RowsMatchDomain = [
+  Exact<typeof projects.$inferSelect, import("../domain.js").Project>,
+  Exact<typeof tasks.$inferSelect, import("../domain.js").Task>,
+  Exact<typeof updates.$inferSelect, import("../domain.js").Update>,
+  Exact<typeof summaries.$inferSelect, import("../domain.js").Summary>,
+  Exact<typeof links.$inferSelect, import("../domain.js").Link>,
+  Exact<typeof warnings.$inferSelect, import("../domain.js").Warning>,
+  Exact<typeof syncState.$inferSelect, import("../domain.js").SyncState>,
+  Exact<typeof snapshots.$inferSelect, import("../domain.js").Snapshot>,
+];

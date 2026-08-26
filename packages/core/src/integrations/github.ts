@@ -1,4 +1,4 @@
-import type { RepoScope } from "../db/schema.js";
+import type { RepoScope } from "../domain.js";
 
 /** CI aggregate for a PR's head commit. Only computed for open PRs — closed/merged carry null. */
 export type CiStatus = "passing" | "failing" | "pending" | null;
