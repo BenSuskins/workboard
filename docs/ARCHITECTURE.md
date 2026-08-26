@@ -4,14 +4,14 @@
 
 ## Overview
 
-Workboard is a TypeScript monorepo (npm workspaces) built around a single SQLite
-database. A Next.js App Router app renders the dashboard with server components
-and server actions; a Model Context Protocol server exposes the same domain to
-coding agents over streamable HTTP and stdio. Both processes share one SQLite
-file. Integration clients (GitHub, Jira, Google Docs) sync external state
-read-only into a snapshot table; the app and agents only ever read that cached
-state. Workboard holds no LLM API key — all AI-authored content arrives through
-MCP tool calls.
+Workboard is a TypeScript monorepo (npm workspaces) built around a tree of
+markdown files. A Next.js App Router app renders the dashboard with server
+components and server actions; a Model Context Protocol server exposes the same
+domain to coding agents over streamable HTTP and stdio. Both processes read and
+write the same directory. Integration clients (GitHub, Jira, Google Docs) sync
+external state read-only into a JSON cache; the app and agents only ever read
+that cached state. Workboard holds no LLM API key — all AI-authored content
+arrives through MCP tool calls.
 
 ## Diagram
 
@@ -27,7 +27,7 @@ flowchart TB
 
     MCP --> Core["packages/core<br/>services"]
     Web --> Core
-    Core --> DB[("SQLite<br/>data/workboard.db")]
+    Core --> Store[("markdown tree<br/>data/workboard/")]
 
     Sync["sync engine"] --> Core
     Sync -->|read-only| GitHub["GitHub API"]
@@ -39,9 +39,9 @@ flowchart TB
 
 | Component | Responsibility | Location |
 |-----------|---------------|----------|
-| Schema | Drizzle SQLite tables + domain enums | `packages/core/src/db/schema.ts` |
-| DB client | Opens SQLite, WAL, runs drizzle-kit migrations (`packages/core/drizzle`) | `packages/core/src/db/client.ts` |
-| Services | Domain operations (projects, tasks, updates, summaries, links, warnings, reports) | `packages/core/src/services.ts` |
+| Domain | Entity shapes + enums, storage-independent | `packages/core/src/domain.ts` |
+| Store | Tree layout, frontmatter, atomic writes, id allocation, locks | `packages/core/src/store/` |
+| Services | Domain operations (projects, tasks, posts, comments, summaries, links, warnings, reports) | `packages/core/src/services.ts` |
 | Integration clients | GitHub / Jira / Google Docs read-only fetchers | `packages/core/src/integrations/{github,jira,gdrive}.ts` |
 | Sync engine | Refreshes links into snapshots, records sync health | `packages/core/src/integrations/sync.ts` |
 | MCP server | Tool surface over streamable HTTP + stdio | `packages/mcp/src/{http,stdio,server,tools}.ts` |
@@ -54,10 +54,11 @@ flowchart TB
 The agent-facing API, defined in `packages/mcp/src/tools.ts`:
 
 `list_projects` · `get_project` · `find_project` · `create_project` ·
-`update_project` · `add_update` · `add_task` · `update_task` ·
+`update_project` · `add_post` · `add_task` · `update_task` ·
 `list_queued_tasks` · `claim_task` · `add_link` ·
 `upsert_summary` · `raise_warning` · `resolve_warning` · `get_activity` ·
-`save_report` · `list_reports` · `refresh_project`
+`save_report` · `list_reports` · `refresh_project` ·
+`ask_question` · `add_comment` · `list_answers` · `list_open_questions`
 
 ## Request Flow
 
@@ -68,7 +69,7 @@ sequenceDiagram
     participant A as Claude Code
     participant M as MCP server
     participant S as Services
-    participant D as SQLite
+    participant D as markdown tree
     participant X as GitHub/Jira/GDocs
     A->>M: find_project (PR / branch / paths)
     M->>S: rank candidates
@@ -76,9 +77,9 @@ sequenceDiagram
     D-->>S: candidates
     S-->>M: ranked matches
     M-->>A: project (or ask to confirm)
-    A->>M: add_update / add_link / upsert_summary
+    A->>M: add_post / add_link / upsert_summary
     M->>S: persist
-    S->>D: write rows (summary history kept)
+    S->>D: write files (summary history kept)
     A->>M: refresh_project
     M->>S: sync links
     S->>X: read-only fetch
@@ -101,52 +102,75 @@ sequenceDiagram
 - **Visible sync health** — every attempt is recorded per link in `sync_state`;
   a dashboard banner surfaces failing or stale syncs, and GitHub rate limits
   trigger a cooldown rather than hammering the API.
-- **Soft deletes + summary history** — deleted tasks/links keep their row
-  (`deleted_at`) for restore; every `upsert_summary` is retained so the story's
+- **Soft deletes + summary history** — deleted tasks/links move to a `.deleted/`
+  directory and can be restored; every `upsert_summary` is kept so the story's
   evolution is visible.
+- **The board is markdown you can read without the app** — one file per entity,
+  frontmatter plus prose. The cost is that transactions, joins, and a race-safe
+  `UPDATE ... WHERE` are no longer free; see Concurrency below for what replaces
+  them.
+- **Questions are distinct from warnings** — a warning reports something broken;
+  a question asks for a decision and blocks the asking agent until answered.
+  Answers travel back through `list_answers`.
 
 ## Data Model
 
-`projects` is the aggregate root. Tasks, updates, summaries, links, and warnings
-hang off it (cascade delete). Each link has at most one `sync_state` and one
-`snapshot` row holding its last fetched external state. Summaries with a null
-`project_id` are cross-project digests / triage reports.
+The tree under `data/workboard/` (override with `WORKBOARD_DATA_DIR`). Every
+entity is one markdown file: frontmatter holds the fields as `key: value` with
+JSON-encoded values, and the body holds the one long field — a project's
+description, a task's spec, a post's document.
 
-```mermaid
-erDiagram
-    PROJECT ||--o{ TASK : has
-    PROJECT ||--o{ UPDATE : has
-    PROJECT ||--o{ SUMMARY : has
-    PROJECT ||--o{ LINK : has
-    PROJECT ||--o{ WARNING : has
-    LINK ||--o| SYNC_STATE : tracks
-    LINK ||--o| SNAPSHOT : caches
-    PROJECT {
-        int id
-        string slug
-        string status
-        string health
-        string priority
-    }
-    LINK {
-        int id
-        string provider
-        string kind
-        string external_id
-        json scope
-        int deleted_at
-    }
-    SNAPSHOT {
-        int link_id
-        json data
-        int fetched_at
-    }
-    SYNC_STATE {
-        int link_id
-        int last_success_at
-        string last_error
-    }
 ```
+data/workboard/
+  projects/<slug>/
+    project.md                  # fields in frontmatter, description in the body
+    posts/<id>/
+      post.md                   # title, type, author; body is the document
+      comments/<id>.md          # the reply thread
+    tasks/<id>-<slug>.md        # body is the spec an agent works from
+    tasks/.claims/<id>          # claim marker — see Concurrency
+    tasks/.deleted/…            # soft-deleted, restorable
+    summaries/<stamp>-<id>.md   # every upsert kept, newest wins
+    links/<id>.md · links/.deleted/…
+    warnings/<id>.md
+  reports/<stamp>-<kind>-<id>.md   # cross-project digest / triage / accomplishments
+  .cache/                          # derived, safe to delete
+    snapshots/<linkId>.json        # last fetched external state
+    sync-state/<linkId>.json       # outcome of the last sync attempt
+  .seq/<entity>/<n>                # id ledger
+```
+
+Ids are integers and globally unique per entity type, so a post or task is
+addressable by id alone. The slug in a filename is for hand-browsing only and
+may go stale after a rename; lookups match the `<id>-` prefix.
+
+External state lives under `.cache/` as JSON rather than markdown: it is a
+ten-minute cache of GitHub/Jira/Docs, not prose, and rebuilding it is one sync.
+
+## Concurrency
+
+The web and MCP servers are separate processes writing one tree, so the store
+(`packages/core/src/store/atomic.ts`) leans on two POSIX guarantees:
+
+| Need | Mechanism |
+|------|-----------|
+| A reader never sees a half-written file | Write a temp file, `fsync`, `rename` — atomic within a filesystem |
+| Two agents never claim one task | `open(claim, "wx")` — `O_CREAT\|O_EXCL` succeeds for exactly one caller |
+| Two writers never get the same id | Same exclusive create against `.seq/<entity>/<n>`, retrying upward |
+| Two creators never take one slug | `mkdir` without `recursive` fails with `EEXIST` |
+| Concurrent edits to one file don't lose each other | A `<file>.lock`, broken after 10s so a crashed writer can't wedge the board |
+
+The claim marker is why the pull queue is still exactly-once: claiming creates a
+file rather than mutating one, so the winner is decided by the kernel. The lock
+narrows the read-modify-write window but does not close it — two processes
+editing the same project in the same instant can still lose an edit, which is the
+real cost of dropping the database.
+
+Reads walk the whole tree per request. `openStore()` returns a fresh handle that
+memoizes for one request and is then discarded, because a second process writes
+the same files and any longer-lived cache would serve stale data. At tens of
+projects this is well under a millisecond; past a couple of thousand posts it
+wants an mtime-keyed cache.
 
 ## External Dependencies
 
