@@ -1,6 +1,6 @@
 /**
  * End-to-end smoke test of the MCP server over stdio: spawns the real server
- * against a throwaway database and walks the full agent flow.
+ * against a throwaway board and walks the full agent flow.
  * Run: npm run mcp:smoke
  */
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -9,7 +9,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-const dbPath = join(mkdtempSync(join(tmpdir(), "workboard-smoke-")), "smoke.db");
+const dataDir = join(mkdtempSync(join(tmpdir(), "workboard-smoke-")), "board");
 
 // Strip integration credentials so the no-credentials paths are exercised deterministically.
 const cleanEnv = Object.fromEntries(
@@ -21,7 +21,7 @@ const cleanEnv = Object.fromEntries(
 const transport = new StdioClientTransport({
   command: "npx",
   args: ["tsx", resolve(import.meta.dirname, "../packages/mcp/src/stdio.ts")],
-  env: { ...cleanEnv, WORKBOARD_DB_PATH: dbPath },
+  env: { ...cleanEnv, WORKBOARD_DATA_DIR: dataDir },
 });
 const client = new Client({ name: "smoke", version: "0.0.1" });
 await client.connect(transport);
@@ -54,10 +54,11 @@ async function call(name: string, args: Record<string, unknown>) {
 
 const expected = [
   "list_projects", "get_project", "find_project", "create_project", "update_project",
-  "add_update", "add_task", "update_task", "add_link", "upsert_summary",
+  "add_post", "add_task", "update_task", "add_link", "upsert_summary",
   "raise_warning", "resolve_warning",
   "get_activity", "save_report", "list_reports", "refresh_project",
   "list_queued_tasks", "claim_task",
+  "ask_question", "add_comment", "list_answers", "list_open_questions",
 ];
 
 await step("tools/list exposes all tools", async () => {
@@ -96,8 +97,13 @@ await step("find_project resolves by branch prefix", async () => {
   if (res.matches[0]?.confidence !== "scoped") throw new Error(JSON.stringify(res));
 });
 
-await step("add_update + add_task + update_task", async () => {
-  await call("add_update", { project: "smoke-project", body: "Shipped the thing.", agent_name: "smoke-agent" });
+await step("add_post + add_task + update_task", async () => {
+  await call("add_post", {
+    project: "smoke-project",
+    title: "Wave 1 shipped",
+    body: "## What landed\n\n| thing | state |\n| --- | --- |\n| splice | done |\n\n```mermaid\nflowchart LR\n  A-->B\n```\n",
+    agent_name: "smoke-agent",
+  });
   const task = await call("add_task", { project: "smoke-project", title: "Follow-up", agent_name: "smoke-agent" });
   const updated = await call("update_task", { task_id: task.created.id, status: "done" });
   if (updated.updated.status !== "done") throw new Error(JSON.stringify(updated));
@@ -143,6 +149,40 @@ await step("agent task queue: queue, list, claim, double-claim rejection", async
   await call("update_task", { task_id: queued.created.id, status: "done" });
 });
 
+await step("ask_question, answer it, and read the answer back", async () => {
+  const asked = await call("ask_question", {
+    project: "smoke-project",
+    title: "Postgres or SQLite?",
+    body: "Recommendation: Postgres.",
+    agent_name: "smoke-agent",
+  });
+  const open = await call("list_open_questions", { project: "smoke-project" });
+  if (!open.questions.some((q: any) => q.id === asked.asked.id)) throw new Error(JSON.stringify(open));
+
+  // The asker commenting on their own question must not close it.
+  await call("add_comment", { post_id: asked.asked.id, body: "bumping", agent_name: "smoke-agent" });
+  const still = await call("list_open_questions", { project: "smoke-project" });
+  if (!still.questions.some((q: any) => q.id === asked.asked.id)) throw new Error("own comment closed the question");
+
+  await call("add_comment", { post_id: asked.asked.id, body: "Postgres.", agent_name: "reviewer" });
+  const closed = await call("list_open_questions", { project: "smoke-project" });
+  if (closed.questions.some((q: any) => q.id === asked.asked.id)) throw new Error("question stayed open after an answer");
+
+  const answers = await call("list_answers", { agent_name: "smoke-agent" });
+  const mine = answers.answers.filter((a: any) => a.postId === asked.asked.id);
+  if (mine.length !== 1 || mine[0].reply !== "Postgres.") throw new Error(JSON.stringify(answers));
+  if (mine[0].from !== "agent:reviewer") throw new Error(JSON.stringify(mine));
+});
+
+await step("get_project carries posts, their threads, and open questions", async () => {
+  const res = await call("get_project", { project: "smoke-project" });
+  const post = res.posts.find((p: any) => p.title === "Wave 1 shipped");
+  if (!post) throw new Error(JSON.stringify(res.posts));
+  const question = res.posts.find((p: any) => p.type === "question");
+  if (!question || question.comments.length !== 2) throw new Error(JSON.stringify(question));
+  if (!Array.isArray(res.openQuestions)) throw new Error("openQuestions missing");
+});
+
 await step("upsert_summary + update_project status", async () => {
   await call("upsert_summary", { project: "smoke-project", body: "All smoke, no fire.", agent_name: "smoke-agent" });
   const res = await call("update_project", { project: "smoke-project", status: "blocked", agent_name: "smoke-agent" });
@@ -152,7 +192,7 @@ await step("upsert_summary + update_project status", async () => {
 await step("get_project reflects everything", async () => {
   const res = await call("get_project", { project: "smoke-project" });
   if (res.latestSummary?.body !== "All smoke, no fire.") throw new Error("missing summary");
-  if (!res.updates.some((u: any) => u.type === "status_change")) throw new Error("missing status_change update");
+  if (!res.posts.some((post: any) => post.type === "status_change")) throw new Error("missing status_change update");
   if (res.links.length !== 2) throw new Error(`expected 2 links, got ${res.links.length}`);
 });
 
@@ -172,7 +212,7 @@ await step("raise_warning appears in get_project, resolve clears it", async () =
   await call("resolve_warning", { warning_id: raised.raised.id, note: "token rotated", agent_name: "smoke-agent" });
   proj = await call("get_project", { project: "smoke-project" });
   if (proj.openWarnings?.length !== 0) throw new Error("warning not cleared after resolve");
-  if (!proj.updates.some((u: any) => u.body.includes("Resolved warning"))) throw new Error("resolution not logged");
+  if (!proj.posts.some((post: any) => post.body.includes("Resolved warning"))) throw new Error("resolution not logged");
 });
 
 await step("get_activity + save_report + list_reports", async () => {

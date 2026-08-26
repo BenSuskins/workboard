@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { listReports } from "@workboard/core";
 import { Markdown } from "@/components/markdown";
+import { Mermaid } from "@/components/mermaid";
 import { db } from "@/lib/db";
 import { authorLabel, fullDate } from "@/lib/format";
 
@@ -22,6 +23,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4">
+      <Mermaid />
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight text-ink">Reports</h1>
         <div className="flex gap-1.5">

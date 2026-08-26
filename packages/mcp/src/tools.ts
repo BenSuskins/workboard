@@ -3,16 +3,20 @@ import { z } from "zod";
 import {
   addLink,
   addTask,
-  addUpdate,
+  addComment,
+  addPost,
   claimTask,
   createProject,
   findProject,
   getActivity,
+  getPost,
   getProjectDetail,
   getProject,
   getProjectMetrics,
   integrationStatus,
   listProjects,
+  listAnswers,
+  listOpenQuestions,
   listQueuedTasks,
   listReports,
   listSummaryHistory,
@@ -29,7 +33,7 @@ import {
   updateTask,
   upsertSummary,
   WARNING_SEVERITIES,
-  type Db,
+  type Store,
   type Project,
   type Warning,
 } from "@workboard/core";
@@ -48,7 +52,7 @@ function json(data: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
 }
 
-function resolveProject(db: Db, ref: number | string): Project {
+function resolveProject(db: Store, ref: number | string): Project {
   const project = getProject(db, typeof ref === "string" && /^\d+$/.test(ref) ? Number(ref) : ref);
   if (!project) throw new Error(`No project found for "${ref}". Use list_projects to see available projects.`);
   return project;
@@ -79,7 +83,7 @@ function projectCard(p: Project) {
   };
 }
 
-export function registerTools(server: McpServer, db: Db): void {
+export function registerTools(server: McpServer, db: Store): void {
   server.registerTool(
     "list_projects",
     {
@@ -132,11 +136,23 @@ export function registerTools(server: McpServer, db: Db): void {
           at: new Date(s.createdAt).toISOString(),
         })),
         tasks: detail.tasks.map((t) => ({ id: t.id, title: t.title, description: t.description, status: t.status, priority: t.priority, dueDate: t.dueDate })),
-        updates: detail.updates.slice(0, 20).map((u) => ({
-          type: u.type,
-          author: u.author,
-          body: u.body,
-          at: new Date(u.createdAt).toISOString(),
+        posts: detail.posts.slice(0, 20).map((post) => ({
+          id: post.id,
+          type: post.type,
+          title: post.title,
+          author: post.author,
+          body: post.body,
+          at: new Date(post.createdAt).toISOString(),
+          answeredAt: post.answeredAt ? new Date(post.answeredAt).toISOString() : null,
+          comments: detail.comments
+            .filter((comment) => comment.postId === post.id)
+            .map((comment) => ({ id: comment.id, author: comment.author, body: comment.body, at: new Date(comment.createdAt).toISOString() })),
+        })),
+        openQuestions: listOpenQuestions(db, { projectId: detail.project.id }).map((q) => ({
+          id: q.id,
+          title: q.title || q.body.slice(0, 80),
+          askedBy: q.author,
+          at: new Date(q.createdAt).toISOString(),
         })),
         links: detail.links.map((l) => ({
           id: l.id,
@@ -227,24 +243,129 @@ export function registerTools(server: McpServer, db: Db): void {
   );
 
   server.registerTool(
-    "add_update",
+    "add_post",
     {
       title: "Post a progress update",
       description:
-        "Append a progress note to a project's activity timeline — what you shipped, decided, or are blocked on. Markdown supported. This is the primary way agents log work.",
+        "Post to a project's timeline — what you shipped, decided, or are blocked on. This is the primary way agents log work. " +
+        "Write a real document, not a commit log: a headline title, then markdown with sections, tables, and ```mermaid diagrams where they " +
+        "make the state clearer than prose. The board shows the title and an excerpt; the full post has its own page.",
       inputSchema: {
         project: projectRef,
-        body: z.string().describe("The update, in markdown — one or two sentences; details live in your repo/PR, not here"),
+        title: z.string().describe("Headline — what a reader should take away at a glance"),
+        body: z.string().describe("The post, in markdown. Tables, fenced code, and ```mermaid diagrams all render."),
         agent_name: z.string().optional().describe("Your agent name, for attribution"),
       },
     },
-    async ({ project, body, agent_name }) => {
+    async ({ project, title, body, agent_name }) => {
       const target = resolveProject(db, project);
-      const update = addUpdate(db, target.id, body, {
+      const post = addPost(db, target.id, body, {
         type: "agent_update",
+        title,
         author: agent_name ? `agent:${agent_name}` : "agent",
       });
-      return json({ posted: { id: update.id, project: target.slug, at: new Date(update.createdAt).toISOString() } });
+      return json({ posted: { id: post.id, project: target.slug, at: new Date(post.createdAt).toISOString() } });
+    },
+  );
+
+  server.registerTool(
+    "ask_question",
+    {
+      title: "Ask the user a question",
+      description:
+        "Ask something only the user can answer — a decision, a missing credential, a judgement call. The question shows on the board until " +
+        "answered, and their reply comes back to you through list_answers. Use this instead of raise_warning when you need a decision rather " +
+        "than reporting a problem. State the options and your recommendation so a one-word reply is enough.",
+      inputSchema: {
+        project: projectRef,
+        title: z.string().describe("The question itself, in one line"),
+        body: z.string().describe("Context, the options you see, and your recommendation — markdown"),
+        agent_name: z.string().optional().describe("Your agent name, so the answer reaches you"),
+      },
+    },
+    async ({ project, title, body, agent_name }) => {
+      const target = resolveProject(db, project);
+      const post = addPost(db, target.id, body, {
+        type: "question",
+        title,
+        author: agent_name ? `agent:${agent_name}` : "agent",
+      });
+      return json({ asked: { id: post.id, project: target.slug, at: new Date(post.createdAt).toISOString() } });
+    },
+  );
+
+  server.registerTool(
+    "add_comment",
+    {
+      title: "Reply to a post",
+      description:
+        "Reply in a post's thread — answer a question another agent asked, or follow up on your own post. Replying to a question from someone " +
+        "else marks it answered.",
+      inputSchema: {
+        post_id: z.number().describe("The post to reply to (from get_project or list_answers)"),
+        body: z.string().describe("Your reply, in markdown"),
+        agent_name: z.string().optional().describe("Your agent name, for attribution"),
+      },
+    },
+    async ({ post_id, body, agent_name }) => {
+      const comment = addComment(db, post_id, body, agent_name ? `agent:${agent_name}` : "agent");
+      const post = getPost(db, post_id);
+      return json({
+        replied: { id: comment.id, postId: post_id, at: new Date(comment.createdAt).toISOString(), answeredQuestion: Boolean(post?.answeredAt) },
+      });
+    },
+  );
+
+  server.registerTool(
+    "list_answers",
+    {
+      title: "Read replies waiting for you",
+      description:
+        "Replies other people left on your posts and questions. Call this at the start of a session, before starting new work: it is how the " +
+        "user's feedback reaches you. Pass `since` with the timestamp you last checked to see only what is new.",
+      inputSchema: {
+        agent_name: z.string().optional().describe("Your agent name. Omit to see every reply across the board."),
+        since: z.string().optional().describe("ISO timestamp; only replies after it are returned"),
+      },
+    },
+    async ({ agent_name, since }) => {
+      const answers = listAnswers(db, {
+        agentName: agent_name ? `agent:${agent_name}` : undefined,
+        since: since ? Date.parse(since) : undefined,
+      });
+      return json({
+        answers: answers.map(({ comment, post, projectSlug }) => ({
+          project: projectSlug,
+          postId: post.id,
+          postTitle: post.title || post.body.slice(0, 80),
+          postType: post.type,
+          from: comment.author,
+          reply: comment.body,
+          at: new Date(comment.createdAt).toISOString(),
+        })),
+      });
+    },
+  );
+
+  server.registerTool(
+    "list_open_questions",
+    {
+      title: "List unanswered questions",
+      description: "Questions still waiting on the user, oldest first — work that is blocked until they reply.",
+      inputSchema: { project: projectRef.optional() },
+    },
+    async ({ project }) => {
+      const target = project === undefined ? undefined : resolveProject(db, project);
+      return json({
+        questions: listOpenQuestions(db, { projectId: target?.id }).map((q) => ({
+          id: q.id,
+          project: target?.slug,
+          title: q.title || q.body.slice(0, 80),
+          body: q.body,
+          askedBy: q.author,
+          at: new Date(q.createdAt).toISOString(),
+        })),
+      });
     },
   );
 
@@ -479,7 +600,7 @@ export function registerTools(server: McpServer, db: Db): void {
           ...projectCard(p.project),
           latestSummary: p.latestSummary,
           openWarnings: p.openWarnings.map(warningCard),
-          updates: p.updates.map((u) => ({ type: u.type, author: u.author, body: u.body, at: new Date(u.createdAt).toISOString() })),
+          posts: p.posts.map((post) => ({ type: post.type, title: post.title, author: post.author, body: post.body, at: new Date(post.createdAt).toISOString() })),
           openTasks: p.openTasks.map((t) => ({ title: t.title, status: t.status, dueDate: t.dueDate })),
           links: p.links,
         })),

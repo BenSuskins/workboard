@@ -7,6 +7,7 @@ import {
   getSyncHealth,
   integrationStatus,
   latestReport,
+  listOpenQuestions,
   listProjects,
   type ProjectDetail,
   type ProjectHealth,
@@ -17,6 +18,7 @@ import { RefreshButton } from "@/components/refresh-button";
 import { refreshAllAction } from "@/lib/actions";
 import { FilterBar, type Filters } from "@/components/filter-bar";
 import { Markdown } from "@/components/markdown";
+import { Mermaid } from "@/components/mermaid";
 import { ProjectCard } from "@/components/project-card";
 import { ProjectRow } from "@/components/project-row";
 import { StatStrip } from "@/components/stat-strip";
@@ -31,6 +33,11 @@ const STALE_MS = 7 * 24 * 60 * 60 * 1000;
 
 const PRIORITY_RANK = { high: 0, medium: 1, low: 2 } as const;
 const HEALTH_RANK = { red: 0, amber: 1, green: 2 } as const;
+
+/** Pinned projects lead the board whichever sort is active; the chosen sort orders within each group. */
+function pinnedFirst(sorter: (a: ProjectDetail, b: ProjectDetail) => number) {
+  return (a: ProjectDetail, b: ProjectDetail) => b.project.pinned - a.project.pinned || sorter(a, b);
+}
 
 const SORTERS: Record<string, (a: ProjectDetail, b: ProjectDetail) => number> = {
   activity: (a, b) => b.project.lastActivityAt - a.project.lastActivityAt,
@@ -86,9 +93,10 @@ export default async function Dashboard({
 
   const all = listProjects(database, {});
   const details = all
-    .map((p) => getProjectDetail(database, p.id, { updatesLimit: 1 }))
+    .map((p) => getProjectDetail(database, p.id, { postsLimit: 1 }))
     .filter((d): d is ProjectDetail => d !== undefined);
 
+  const sorter = SORTERS[filters.sort ?? "activity"] ?? SORTERS.activity;
   const filtered = details
     .filter(({ project }) => {
       if (filters.category && project.category !== filters.category) return false;
@@ -96,7 +104,7 @@ export default async function Dashboard({
       if (filters.health && project.health !== (filters.health as ProjectHealth)) return false;
       return true;
     })
-    .sort(SORTERS[filters.sort ?? "activity"] ?? SORTERS.activity);
+    .sort(pinnedFirst(sorter));
 
   const categories = [...new Set(all.map((p) => p.category))].sort();
   const active = all.filter((p) => p.status === "active").length;
@@ -110,6 +118,7 @@ export default async function Dashboard({
     ciFailing += pipe.ciFailing;
   }
   const openWarnings = details.reduce((n, d) => n + d.openWarnings.length, 0);
+  const openQuestions = listOpenQuestions(database).length;
 
   const digest = latestReport(database, "digest");
   const triage = latestReport(database, "triage");
@@ -137,7 +146,7 @@ export default async function Dashboard({
 
       <StatStrip
         filters={filters}
-        stats={{ active, blocked, warnings: openWarnings, stale, openPrs, ciFailing }}
+        stats={{ active, blocked, questions: openQuestions, warnings: openWarnings, stale, openPrs, ciFailing }}
       />
 
       {(digest || triage) && (

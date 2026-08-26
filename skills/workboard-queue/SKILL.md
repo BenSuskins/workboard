@@ -11,7 +11,8 @@ implement → draft PR → bookkeeping. Tasks are independent; run several pipel
 at once. Your own context stays small: never implement anything yourself.
 
 Requires the `workboard` MCP server (`find_project`, `get_project`,
-`list_queued_tasks`, `claim_task`, `add_link`, `add_update`, `update_task`,
+`list_queued_tasks`, `claim_task`, `add_link`, `add_post`, `update_task`,
+`ask_question`,
 `raise_warning`) plus the Task tool for subagents. If unavailable, tell the
 user to connect it: `claude mcp add --transport http workboard http://localhost:8787/mcp`
 
@@ -48,8 +49,9 @@ Never let the loop die on a single pipeline's failure — catch, record, continu
 
 **1. Plan (subagent, main checkout, read-only).** Dispatch a research/explore
 subagent with: the task title **and description** (the description is the spec —
-if it is empty or too thin to act on, post an `add_update` asking the user to
-flesh it out and skip the task), plus the project goal/summary, and instruction
+if it is empty or too thin to act on, `ask_question` asking the user what the
+task should cover, and skip it — their answer reaches you through
+`list_answers` on a later run), plus the project goal/summary, and instruction
 to produce an implementation plan — approach, files to touch, test strategy,
 risks. It must not edit files. Return the plan as text.
 
@@ -81,14 +83,15 @@ test status, `Part of <project> queue`. Base: the repo's default branch.
 
 **5. Bookkeeping (workboard).**
 - `add_link` with the PR URL (kind inferred).
-- `add_update` — the check-in: task done, PR number, one-line what-changed,
-  test status. Author = your agent name.
+- `add_post` — the check-in. Title carries the outcome ("Task 42: dual-write
+  shipped, in review"); body covers what changed, the PR, and test status.
+  Author = your agent name.
 - `update_task` → `done`.
 - Leave the worktree in place for review; it merges like any PR branch.
 
 ## Failure handling
 
-- Implementer fails or tests stay red: do not mark done. Post an `add_update`
+- Implementer fails or tests stay red: do not mark done. Post with `add_post`
   describing the failure, remove the worktree, delete the pushed branch if any,
   set the task back to `todo` (this releases your claim), and move on. If the
   same task fails twice, `raise_warning` with the error instead of retrying again.

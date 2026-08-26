@@ -17,13 +17,14 @@ import {
 import { ProjectMeta, StatusBadge, TaskPriorityDot } from "@/components/badges";
 import { ciLabel, GitHubMark, JiraMark, DocMark } from "@/components/chips";
 import { Markdown } from "@/components/markdown";
+import { Mermaid } from "@/components/mermaid";
 import { WarningsPanel } from "@/components/warnings";
 import { db } from "@/lib/db";
 import { authorLabel, fullDate, relativeTime, toPlainText } from "@/lib/format";
 import {
   addLinkAction,
   addTaskAction,
-  addUpdateAction,
+  addPostAction,
   deleteLinkAction,
   deleteTaskAction,
   refreshProjectBySlug,
@@ -115,7 +116,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
   const { slug } = await params;
   const detail = getProjectDetail(db(), slug);
   if (!detail) notFound();
-  const { project, tasks, updates, links, latestSummary, openWarnings } = detail;
+  const { project, tasks, posts, comments, links, latestSummary, openWarnings } = detail;
   const integrations = integrationStatus();
   const anyConfigured = integrations.github || integrations.jira || integrations.google;
   const summaryHistory = listSummaryHistory(db(), project.id, 11).slice(1);
@@ -124,6 +125,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
 
   return (
     <div className="flex flex-col gap-6">
+      <Mermaid />
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-2 text-xs text-muted">
           <Link href="/" className="hover:text-ink">
@@ -253,36 +255,60 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
 
           <section className="rounded-[10px] border border-hairline bg-surface p-4">
             <h2 className="mb-3 text-sm font-semibold text-ink">Activity</h2>
-            <form action={addUpdateAction} className="mb-4 flex flex-col gap-2">
+            <form action={addPostAction} className="mb-4 flex flex-col gap-2">
               <input type="hidden" name="projectId" value={project.id} />
               <input type="hidden" name="slug" value={project.slug} />
-              <textarea name="body" rows={2} placeholder="Add a note (markdown)…" className={inputCls} />
+              <input name="title" placeholder="Title (optional)" className={inputCls} />
+              <textarea name="body" rows={2} placeholder="Write a post (markdown, mermaid)…" className={inputCls} />
               <div>
                 <button type="submit" className={btnCls}>
                   Post
                 </button>
               </div>
             </form>
-            {updates.length === 0 ? (
+            {posts.length === 0 ? (
               <p className="text-sm text-muted">No activity yet.</p>
             ) : (
               <ol className="flex flex-col">
-                {updates.map((u) => (
-                  <li key={u.id} className="border-l border-grid py-2 pl-4 relative">
-                    <span
-                      className={`absolute -left-[4.5px] top-4 size-2 rounded-full ${
-                        u.type === "agent_update" ? "bg-accent" : u.type === "status_change" ? "bg-warning" : "bg-muted"
-                      }`}
-                      aria-hidden
-                    />
-                    <div className="mb-1 flex items-center gap-2 text-[11px] text-muted">
-                      <span className="font-medium text-ink-2">{authorLabel(u.author)}</span>
-                      <span>{u.type.replace("_", " ")}</span>
-                      <span>· {<TimeAgo at={u.createdAt} />}</span>
-                    </div>
-                    <Markdown>{u.body}</Markdown>
-                  </li>
-                ))}
+                {posts.map((post) => {
+                  const threadSize = comments.filter((comment) => comment.postId === post.id).length;
+                  return (
+                    <li key={post.id} className="relative border-l border-grid py-2 pl-4">
+                      <span
+                        className={`absolute -left-[4.5px] top-4 size-2 rounded-full ${
+                          post.type === "question"
+                            ? post.answeredAt
+                              ? "bg-good"
+                              : "bg-serious"
+                            : post.type === "agent_update"
+                              ? "bg-accent"
+                              : post.type === "status_change"
+                                ? "bg-warning"
+                                : "bg-muted"
+                        }`}
+                        aria-hidden
+                      />
+                      <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px] text-muted">
+                        <span className="font-medium text-ink-2">{authorLabel(post.author)}</span>
+                        {post.type === "question" ? (
+                          <span className={post.answeredAt ? "text-good" : "font-medium text-serious"}>
+                            {post.answeredAt ? "answered" : "open question"}
+                          </span>
+                        ) : (
+                          <span>{post.type.replace("_", " ")}</span>
+                        )}
+                        <span>· {<TimeAgo at={post.createdAt} />}</span>
+                        {threadSize > 0 && <span>· {threadSize} repl{threadSize === 1 ? "y" : "ies"}</span>}
+                      </div>
+                      <Link href={`/projects/${project.slug}/posts/${post.id}`} className="group block">
+                        {post.title && (
+                          <span className="text-[13.5px] font-medium text-ink group-hover:text-accent">{post.title}</span>
+                        )}
+                        <p className="line-clamp-2 text-[13px] text-ink-2">{toPlainText(post.body)}</p>
+                      </Link>
+                    </li>
+                  );
+                })}
               </ol>
             )}
           </section>

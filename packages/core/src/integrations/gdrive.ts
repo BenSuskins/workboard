@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { defaultDbPath } from "../db/client.js";
+import { defaultDataDir } from "../store/store.js";
 
 export interface GdocSnapshot {
   type: "gdoc";
@@ -12,7 +12,7 @@ export interface GdocSnapshot {
 }
 
 export function googleTokenPath(): string {
-  return process.env.GOOGLE_TOKEN_PATH ?? join(dirname(defaultDbPath()), "google-token.json");
+  return process.env.GOOGLE_TOKEN_PATH ?? join(dirname(defaultDataDir()), "google-token.json");
 }
 
 export function googleConfigured(): boolean {

@@ -1,6 +1,7 @@
-export * from "./db/schema.js";
-export * from "./db/client.js";
+export * from "./domain.js";
 export * from "./services.js";
+export * from "./store/store.js";
+export { convertLegacyDb, legacyDbPath } from "./store/migrate.js";
 export * from "./integrations/sync.js";
 export {
   aggregateCheckRuns,

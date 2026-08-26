@@ -82,11 +82,12 @@ Cause: the OAuth flow needs a browser on localhost, which the container lacks.
 Fix: run `npm run google:auth` on the host, then copy the token into the volume:
 `docker compose cp data/google-token.json web:/data/google-token.json`.
 
-**Need to back up the database**
+**Need to back up the board**
 
-Cause: all state lives in the SQLite file on the `data` volume.
-Fix: `docker compose cp web:/data/workboard.db ./backup.db` — WAL checkpoints on
-open, so the copied file is usable as-is.
+Cause: all state lives in the markdown tree on the `data` volume.
+Fix: `docker compose cp web:/data/workboard ./backup`. Every file is written by
+rename, so a copy taken while the servers run is consistent per file. `.cache/`
+is derived and can be dropped from a backup — the next sync rebuilds it.
 
 ---
 

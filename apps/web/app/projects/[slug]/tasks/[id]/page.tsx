@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getTaskDetail } from "@workboard/core";
 import { TaskPriorityBadge } from "@/components/badges";
 import { Markdown } from "@/components/markdown";
+import { Mermaid } from "@/components/mermaid";
 import { TimeAgo } from "@/components/time-ago";
 import { db } from "@/lib/db";
 import { authorLabel } from "@/lib/format";
@@ -27,6 +28,7 @@ export default async function TaskPage({ params }: { params: Promise<{ slug: str
 
   return (
     <div className="flex max-w-3xl flex-col gap-5">
+      <Mermaid />
       <div className="flex items-center gap-2 text-xs text-muted">
         <Link href="/" className="hover:text-ink">
           Board

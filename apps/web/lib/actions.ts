@@ -3,7 +3,8 @@
 import {
   addLink,
   addTask,
-  addUpdate,
+  addComment,
+  addPost,
   createProject,
   deleteLink,
   deleteTask,
@@ -62,11 +63,22 @@ export async function updateProjectAction(formData: FormData) {
   revalidatePath(`/projects/${String(formData.get("slug"))}`);
 }
 
-export async function addUpdateAction(formData: FormData) {
+export async function addPostAction(formData: FormData) {
   const projectId = Number(formData.get("projectId"));
+  const title = String(formData.get("title") ?? "").trim();
   const body = String(formData.get("body") ?? "").trim();
-  if (body) addUpdate(db(), projectId, body, { type: "note", author: "user" });
+  if (body || title) addPost(db(), projectId, body, { type: "note", title, author: "user" });
   revalidatePath(`/projects/${String(formData.get("slug"))}`);
+  revalidatePath("/");
+}
+
+export async function addCommentAction(formData: FormData) {
+  const postId = Number(formData.get("postId"));
+  const body = String(formData.get("body") ?? "").trim();
+  if (body) addComment(db(), postId, body, "user");
+  const slug = String(formData.get("slug"));
+  revalidatePath(`/projects/${slug}/posts/${postId}`);
+  revalidatePath(`/projects/${slug}`);
   revalidatePath("/");
 }
 

@@ -1,43 +1,75 @@
-import { and, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
-import type { Db } from "./db/client.js";
+/**
+ * Domain operations over the markdown store. Reads come from a per-handle
+ * snapshot of the tree; writes go through the store's atomic helpers and drop
+ * that snapshot. Function names, arguments and return shapes match the SQLite
+ * implementation this replaces, so the MCP tools and web app are unaffected.
+ */
+import type {
+  Link,
+  LinkKind,
+  LinkProvider,
+  Project,
+  ProjectHealth,
+  ProjectPriority,
+  ProjectStatus,
+  RepoScope,
+  Snapshot,
+  Summary,
+  SummaryKind,
+  SyncState,
+  Task,
+  TaskPriority,
+  TaskStatus,
+  Comment,
+  Post,
+  PostType,
+  Warning,
+  WarningSeverity,
+} from "./domain.js";
+import { rmSync } from "node:fs";
+import { createExclusive, mkdirExclusive, readFileSyncSafe, withFileLock } from "./store/atomic.js";
+import * as p from "./store/paths.js";
 import {
-  links,
-  projects,
-  snapshots,
-  summaries,
-  tasks,
-  updates,
-  type Link,
-  type LinkKind,
-  type LinkProvider,
-  type Project,
-  type ProjectHealth,
-  type ProjectPriority,
-  type ProjectStatus,
-  type RepoScope,
-  type Snapshot,
-  type Summary,
-  type SummaryKind,
-  syncState,
-  type SyncState,
-  type Task,
-  type TaskPriority,
-  type TaskStatus,
-  type Update,
-  type UpdateType,
-  type Warning,
-  type WarningSeverity,
-  warnings,
-} from "./db/schema.js";
+  board,
+  invalidate,
+  nextId,
+  slugify,
+  writeJson,
+  writeLink,
+  writeComment,
+  writePost,
+  writeProject,
+  writeSummary,
+  writeTask,
+  writeWarning,
+  type Store,
+} from "./store/store.js";
+
+export { slugify };
+export type { Store };
 
 const now = () => Date.now();
 
-export function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 64) || "project";
+/**
+ * Drop keys explicitly set to undefined. Callers build patches with every
+ * optional field present, and a bare spread would blank the fields they left
+ * out — the SQL builder this replaced ignored them.
+ */
+function defined<T extends object>(patch: T): Partial<T> {
+  return Object.fromEntries(Object.entries(patch).filter(([, value]) => value !== undefined)) as Partial<T>;
+}
+const byNewest = <T extends { createdAt: number; id: number }>(a: T, b: T) => b.createdAt - a.createdAt || b.id - a.id;
+
+function projectSlug(store: Store, projectId: number): string {
+  const project = board(store).projects.find((candidate) => candidate.id === projectId);
+  if (!project) throw new Error(`Project ${projectId} not found`);
+  return project.slug;
+}
+
+/** Every write that represents work on a project bumps its activity clock. */
+function touchProject(store: Store, projectId: number): void {
+  const project = board(store).projects.find((candidate) => candidate.id === projectId);
+  if (project) writeProject(store, { ...project, lastActivityAt: now() });
 }
 
 // ---------- projects ----------
@@ -51,32 +83,25 @@ export interface CreateProjectInput {
   health?: ProjectHealth;
 }
 
-export function createProject(db: Db, input: CreateProjectInput): Project {
-  const t = now();
+export function createProject(store: Store, input: CreateProjectInput): Project {
+  // mkdir is atomic, so racing creators of the same name land on different slugs.
   let slug = slugify(input.name);
-  const taken = db.select({ slug: projects.slug }).from(projects).all();
-  const takenSet = new Set(taken.map((r) => r.slug));
-  if (takenSet.has(slug)) {
-    let i = 2;
-    while (takenSet.has(`${slug}-${i}`)) i++;
-    slug = `${slug}-${i}`;
-  }
-  return db
-    .insert(projects)
-    .values({
-      slug,
-      name: input.name,
-      description: input.description ?? "",
-      category: input.category ?? "coding",
-      status: input.status ?? "active",
-      priority: input.priority ?? "medium",
-      health: input.health ?? "green",
-      createdAt: t,
-      updatedAt: t,
-      lastActivityAt: t,
-    })
-    .returning()
-    .get();
+  for (let i = 2; !mkdirExclusive(p.projectDir(store.root, slug)); i++) slug = `${slugify(input.name)}-${i}`;
+  const t = now();
+  return writeProject(store, {
+    id: nextId(store, "projects"),
+    slug,
+    name: input.name,
+    description: input.description ?? "",
+    category: input.category ?? "coding",
+    status: input.status ?? "active",
+    priority: input.priority ?? "medium",
+    health: input.health ?? "green",
+    pinned: 0,
+    createdAt: t,
+    updatedAt: t,
+    lastActivityAt: t,
+  });
 }
 
 export interface UpdateProjectInput {
@@ -88,26 +113,16 @@ export interface UpdateProjectInput {
   health?: ProjectHealth;
 }
 
-export function updateProject(db: Db, id: number, input: UpdateProjectInput, author = "user"): Project {
-  const existing = db.select().from(projects).where(eq(projects.id, id)).get();
+export function updateProject(store: Store, id: number, input: UpdateProjectInput, author = "user"): Project {
+  const existing = getProject(store, id);
   if (!existing) throw new Error(`Project ${id} not found`);
   const t = now();
-  const updated = db
-    .update(projects)
-    .set({ ...input, updatedAt: t, lastActivityAt: t })
-    .where(eq(projects.id, id))
-    .returning()
-    .get();
+  const updated = writeProject(store, { ...existing, ...defined(input), updatedAt: t, lastActivityAt: t });
   if (input.status && input.status !== existing.status) {
-    db.insert(updates)
-      .values({
-        projectId: id,
-        type: "status_change",
-        body: `Status changed from **${existing.status}** to **${input.status}**`,
-        author,
-        createdAt: t,
-      })
-      .run();
+    addPost(store, id, `Status changed from **${existing.status}** to **${input.status}**`, {
+      type: "status_change",
+      author,
+    });
   }
   return updated;
 }
@@ -119,51 +134,36 @@ export interface ListProjectsFilter {
   includeArchived?: boolean;
 }
 
-export function listProjects(db: Db, filter: ListProjectsFilter = {}): Project[] {
-  const conds = [];
-  if (filter.status) {
-    const statuses = Array.isArray(filter.status) ? filter.status : [filter.status];
-    conds.push(inArray(projects.status, statuses));
-  } else if (!filter.includeArchived) {
-    conds.push(sql`${projects.status} != 'archived'`);
-  }
-  if (filter.category) conds.push(eq(projects.category, filter.category));
-  if (filter.health) conds.push(eq(projects.health, filter.health));
-  return db
-    .select()
-    .from(projects)
-    .where(conds.length ? and(...conds) : undefined)
-    .orderBy(desc(projects.lastActivityAt))
-    .all();
+/** Pinned projects lead the board; recency orders within each group. */
+export function listProjects(store: Store, filter: ListProjectsFilter = {}): Project[] {
+  const statuses = filter.status ? (Array.isArray(filter.status) ? filter.status : [filter.status]) : undefined;
+  return board(store)
+    .projects.filter((project) => {
+      if (statuses) {
+        if (!statuses.includes(project.status)) return false;
+      } else if (!filter.includeArchived && project.status === "archived") return false;
+      if (filter.category && project.category !== filter.category) return false;
+      if (filter.health && project.health !== filter.health) return false;
+      return true;
+    })
+    .sort((a, b) => b.pinned - a.pinned || b.lastActivityAt - a.lastActivityAt);
 }
 
-export function getProject(db: Db, ref: number | string): Project | undefined {
-  if (typeof ref === "number") {
-    return db.select().from(projects).where(eq(projects.id, ref)).get();
-  }
-  return db.select().from(projects).where(eq(projects.slug, ref)).get();
+export function getProject(store: Store, ref: number | string): Project | undefined {
+  return board(store).projects.find((project) => (typeof ref === "number" ? project.id === ref : project.slug === ref));
 }
 
-/** Star a project so its card leads the board. */
-export function setProjectPinned(db: Db, id: number, pinned: boolean): Project {
-  const updated = db
-    .update(projects)
-    .set({ pinned: pinned ? 1 : 0, updatedAt: now() })
-    .where(eq(projects.id, id))
-    .returning()
-    .get();
-  if (!updated) throw new Error(`Project ${id} not found`);
-  return updated;
+export function setProjectPinned(store: Store, id: number, pinned: boolean): Project {
+  const project = getProject(store, id);
+  if (!project) throw new Error(`Project ${id} not found`);
+  return writeProject(store, { ...project, pinned: pinned ? 1 : 0, updatedAt: now() });
 }
 
 /** Projects resting off the main board: finished (done) and archived. */
-export function listShelvedProjects(db: Db): Project[] {
-  return db
-    .select()
-    .from(projects)
-    .where(inArray(projects.status, ["done", "archived"]))
-    .orderBy(desc(projects.lastActivityAt))
-    .all();
+export function listShelvedProjects(store: Store): Project[] {
+  return board(store)
+    .projects.filter((project) => project.status === "done" || project.status === "archived")
+    .sort((a, b) => b.lastActivityAt - a.lastActivityAt);
 }
 
 export interface LinkWithStatus extends Link {
@@ -174,54 +174,59 @@ export interface LinkWithStatus extends Link {
 export interface ProjectDetail {
   project: Project;
   tasks: Task[];
-  updates: Update[];
+  posts: Post[];
+  comments: Comment[];
   links: LinkWithStatus[];
   latestSummary: Summary | null;
   openWarnings: Warning[];
 }
 
-export function getProjectDetail(db: Db, ref: number | string, opts: { updatesLimit?: number } = {}): ProjectDetail | undefined {
-  const project = getProject(db, ref);
-  if (!project) return undefined;
-  const projectTasks = db
-    .select()
-    .from(tasks)
-    .where(and(eq(tasks.projectId, project.id), isNull(tasks.deletedAt)))
-    .orderBy(
-      sql`CASE ${tasks.status} WHEN 'in_progress' THEN 0 WHEN 'todo' THEN 1 ELSE 2 END`,
-      TASK_PRIORITY_RANK,
-      desc(tasks.updatedAt),
-    )
-    .all();
-  const projectUpdates = db
-    .select()
-    .from(updates)
-    .where(eq(updates.projectId, project.id))
-    .orderBy(desc(updates.createdAt))
-    .limit(opts.updatesLimit ?? 50)
-    .all();
-  const projectLinks = db
-    .select()
-    .from(links)
-    .leftJoin(snapshots, eq(snapshots.linkId, links.id))
-    .leftJoin(syncState, eq(syncState.linkId, links.id))
-    .where(and(eq(links.projectId, project.id), isNull(links.deletedAt)))
-    .all()
-    .map((row) => ({ ...row.links, snapshot: row.snapshots, syncState: row.sync_state }));
-  const latestSummary =
-    db
-      .select()
-      .from(summaries)
-      .where(and(eq(summaries.projectId, project.id), eq(summaries.kind, "project_summary")))
-      .orderBy(desc(summaries.createdAt), desc(summaries.id))
-      .limit(1)
-      .get() ?? null;
-  const openWarnings = listWarnings(db, { projectId: project.id });
-  return { project, tasks: projectTasks, updates: projectUpdates, links: projectLinks, latestSummary, openWarnings };
-}
+const TASK_STATUS_RANK = { in_progress: 0, todo: 1, done: 2 } as const;
+/** Unprioritized tasks sort after prioritized ones in the queue and on the board. */
+const TASK_PRIORITY_RANK = { high: 0, medium: 1, low: 2 } as const;
+const taskPriorityRank = (priority: TaskPriority | null) => (priority ? TASK_PRIORITY_RANK[priority] : 3);
 
-function touchProject(db: Db, projectId: number) {
-  db.update(projects).set({ lastActivityAt: now() }).where(eq(projects.id, projectId)).run();
+export function getProjectDetail(store: Store, ref: number | string, opts: { postsLimit?: number } = {}): ProjectDetail | undefined {
+  const project = getProject(store, ref);
+  if (!project) return undefined;
+  const data = board(store);
+
+  const projectTasks = data.tasks
+    .filter((task) => task.projectId === project.id && !task.deletedAt)
+    .sort(
+      (a, b) =>
+        TASK_STATUS_RANK[a.status] - TASK_STATUS_RANK[b.status] ||
+        taskPriorityRank(a.priority) - taskPriorityRank(b.priority) ||
+        b.updatedAt - a.updatedAt,
+    );
+
+  const projectPosts = data.posts
+    .filter((post) => post.projectId === project.id)
+    .sort(byNewest)
+    .slice(0, opts.postsLimit ?? 50);
+  const postIds = new Set(projectPosts.map((post) => post.id));
+  const projectComments = data.comments.filter((comment) => postIds.has(comment.postId)).sort((a, b) => a.createdAt - b.createdAt);
+
+  const projectLinks = data.links
+    .filter((link) => link.projectId === project.id && !link.deletedAt)
+    .map((link) => ({
+      ...link,
+      snapshot: data.snapshots.find((snapshot) => snapshot.linkId === link.id) ?? null,
+      syncState: data.syncState.find((state) => state.linkId === link.id) ?? null,
+    }));
+
+  const latestSummary =
+    data.summaries.filter((s) => s.projectId === project.id && s.kind === "project_summary").sort(byNewest)[0] ?? null;
+
+  return {
+    project,
+    tasks: projectTasks,
+    posts: projectPosts,
+    comments: projectComments,
+    links: projectLinks,
+    latestSummary,
+    openWarnings: listWarnings(store, { projectId: project.id }),
+  };
 }
 
 // ---------- tasks ----------
@@ -235,30 +240,45 @@ export interface AddTaskOptions {
   agentReady?: boolean;
 }
 
-export function addTask(db: Db, projectId: number, title: string, opts: AddTaskOptions = {}): Task {
+export function addTask(store: Store, projectId: number, title: string, opts: AddTaskOptions = {}): Task {
   const t = now();
-  const task = db
-    .insert(tasks)
-    .values({
-      projectId,
-      title,
-      description: opts.description ?? "",
-      priority: opts.priority ?? null,
-      status: opts.status ?? "todo",
-      dueDate: opts.dueDate ?? null,
-      author: opts.author ?? "user",
-      agentReady: opts.agentReady ? 1 : 0,
-      createdAt: t,
-      updatedAt: t,
-    })
-    .returning()
-    .get();
-  touchProject(db, projectId);
+  const task: Task = {
+    id: nextId(store, "tasks"),
+    projectId,
+    title,
+    description: opts.description ?? "",
+    status: opts.status ?? "todo",
+    priority: opts.priority ?? null,
+    agentReady: opts.agentReady ? 1 : 0,
+    claimedBy: null,
+    claimedAt: null,
+    dueDate: opts.dueDate ?? null,
+    author: opts.author ?? "user",
+    createdAt: t,
+    updatedAt: t,
+    deletedAt: null,
+  };
+  writeTask(store, projectSlug(store, projectId), task);
+  touchProject(store, projectId);
   return task;
 }
 
-/** Unprioritized tasks sort after prioritized ones in the queue and on the board. */
-const TASK_PRIORITY_RANK = sql`CASE ${tasks.priority} WHEN 'high' THEN 0 WHEN 'medium' THEN 1 WHEN 'low' THEN 2 ELSE 3 END`;
+function getTask(store: Store, id: number): Task | undefined {
+  return board(store).tasks.find((task) => task.id === id);
+}
+
+/** Read-modify-write a task under a lock so two processes cannot lose one another's edit. */
+function mutateTask(store: Store, id: number, patch: (task: Task) => Task): Task {
+  const existing = getTask(store, id);
+  if (!existing) throw new Error(`Task ${id} not found`);
+  const slug = projectSlug(store, existing.projectId);
+  return withFileLock(p.tasksDir(store.root, slug), () => {
+    invalidate(store);
+    const current = getTask(store, id);
+    if (!current) throw new Error(`Task ${id} not found`);
+    return writeTask(store, slug, patch(current));
+  });
+}
 
 export interface UpdateTaskInput {
   title?: string;
@@ -268,156 +288,248 @@ export interface UpdateTaskInput {
   dueDate?: string | null;
 }
 
-export function updateTask(db: Db, id: number, input: UpdateTaskInput): Task {
+export function updateTask(store: Store, id: number, input: UpdateTaskInput): Task {
   // Reverting a claimed task to todo releases the claim so it can be queued again;
   // completing it keeps claimedBy for attribution.
-  const patch = { ...input, ...(input.status === "todo" ? { claimedBy: null, claimedAt: null } : {}), updatedAt: now() };
-  const task = db
-    .update(tasks)
-    .set(patch)
-    .where(eq(tasks.id, id))
-    .returning()
-    .get();
-  if (!task) throw new Error(`Task ${id} not found`);
-  touchProject(db, task.projectId);
+  const task = mutateTask(store, id, (current) => {
+    if (input.status === "todo") releaseClaim(store, projectSlug(store, current.projectId), id);
+    return {
+      ...current,
+      ...defined(input),
+      ...(input.status === "todo" ? { claimedBy: null, claimedAt: null } : {}),
+      updatedAt: now(),
+    };
+  });
+  touchProject(store, task.projectId);
   return task;
 }
 
-/** Soft delete: the row is kept and can be restored from the project's "recently deleted" list. */
-export function deleteTask(db: Db, id: number): void {
-  db.update(tasks).set({ deletedAt: now() }).where(eq(tasks.id, id)).run();
+/** Soft delete: the file moves to `.deleted/` and can be restored from the project page. */
+export function deleteTask(store: Store, id: number): void {
+  const task = getTask(store, id);
+  if (!task) return;
+  mutateTask(store, id, (current) => ({ ...current, deletedAt: now() }));
 }
 
-export function restoreTask(db: Db, id: number): Task {
-  const task = db.update(tasks).set({ deletedAt: null, updatedAt: now() }).where(eq(tasks.id, id)).returning().get();
-  if (!task) throw new Error(`Task ${id} not found`);
-  touchProject(db, task.projectId);
+export function restoreTask(store: Store, id: number): Task {
+  const task = mutateTask(store, id, (current) => ({ ...current, deletedAt: null, updatedAt: now() }));
+  touchProject(store, task.projectId);
   return task;
 }
 
 // ---------- agent task queue (shared pull queue — no named assignees) ----------
 
+/** Drop the claim marker so the task can be queued and claimed again. */
+function releaseClaim(store: Store, slug: string, id: number): void {
+  rmSync(p.claimFile(store.root, slug, id), { force: true });
+  invalidate(store);
+}
+
 /** Queue or un-queue a task. Un-queuing releases an active claim and reverts in_progress to todo. */
-export function setTaskAgentReady(db: Db, id: number, ready: boolean): Task {
-  const existing = db.select().from(tasks).where(eq(tasks.id, id)).get();
-  if (!existing) throw new Error(`Task ${id} not found`);
-  const release = !ready && existing.claimedBy ? { claimedBy: null, claimedAt: null } : {};
-  const revert = !ready && existing.status === "in_progress" ? { status: "todo" as TaskStatus } : {};
-  const task = db
-    .update(tasks)
-    .set({ agentReady: ready ? 1 : 0, ...release, ...revert, updatedAt: now() })
-    .where(eq(tasks.id, id))
-    .returning()
-    .get();
-  touchProject(db, task.projectId);
+export function setTaskAgentReady(store: Store, id: number, ready: boolean): Task {
+  const task = mutateTask(store, id, (current) => {
+    if (!ready && current.claimedBy) releaseClaim(store, projectSlug(store, current.projectId), id);
+    return {
+      ...current,
+      agentReady: ready ? 1 : 0,
+      ...(!ready && current.claimedBy ? { claimedBy: null, claimedAt: null } : {}),
+      ...(!ready && current.status === "in_progress" ? { status: "todo" as TaskStatus } : {}),
+      updatedAt: now(),
+    };
+  });
+  touchProject(store, task.projectId);
   return task;
 }
 
 /** Tasks waiting for an agent: queued, still todo, unclaimed, not deleted. Priority first (null last), FIFO within each. */
-export function listQueuedTasks(db: Db, opts: { projectId?: number } = {}): Task[] {
-  const conds = [eq(tasks.agentReady, 1), eq(tasks.status, "todo"), isNull(tasks.claimedAt), isNull(tasks.deletedAt)];
-  if (opts.projectId !== undefined) conds.push(eq(tasks.projectId, opts.projectId));
-  return db
-    .select()
-    .from(tasks)
-    .where(and(...conds))
-    .orderBy(TASK_PRIORITY_RANK, tasks.createdAt, tasks.id)
-    .all();
+export function listQueuedTasks(store: Store, opts: { projectId?: number } = {}): Task[] {
+  return board(store)
+    .tasks.filter(
+      (task) =>
+        task.agentReady === 1 &&
+        task.status === "todo" &&
+        task.claimedAt === null &&
+        !task.deletedAt &&
+        (opts.projectId === undefined || task.projectId === opts.projectId),
+    )
+    .sort((a, b) => taskPriorityRank(a.priority) - taskPriorityRank(b.priority) || a.createdAt - b.createdAt || a.id - b.id);
 }
 
 /** One task plus its project — the task detail page's data. */
-export function getTaskDetail(db: Db, id: number): { task: Task; project: Project } | undefined {
-  const task = db.select().from(tasks).where(eq(tasks.id, id)).get();
+export function getTaskDetail(store: Store, id: number): { task: Task; project: Project } | undefined {
+  const task = getTask(store, id);
   if (!task) return undefined;
-  const project = db.select().from(projects).where(eq(projects.id, task.projectId)).get();
-  if (!project) return undefined;
-  return { task, project };
+  const project = getProject(store, task.projectId);
+  return project ? { task, project } : undefined;
 }
 
 /**
- * Atomically claim a queued task: only wins when the task is still unclaimed.
- * Logs an agent_update so the timeline shows who picked the work up.
+ * Atomically claim a queued task. The claim marker is created with O_EXCL, so
+ * exactly one caller wins even across processes; everyone else fails loudly
+ * rather than starting duplicate work.
  */
-export function claimTask(db: Db, id: number, claimedBy: string): Task {
-  const claimed = db
-    .update(tasks)
-    .set({ status: "in_progress", claimedBy, claimedAt: now(), updatedAt: now() })
-    .where(and(eq(tasks.id, id), eq(tasks.agentReady, 1), eq(tasks.status, "todo"), isNull(tasks.claimedAt), isNull(tasks.deletedAt)))
-    .returning()
-    .get();
-  if (!claimed) {
-    const existing = db.select().from(tasks).where(eq(tasks.id, id)).get();
-    if (!existing || existing.deletedAt) throw new Error(`Task ${id} not found`);
-    if (!existing.agentReady) throw new Error(`Task ${id} is not queued for agents`);
+export function claimTask(store: Store, id: number, claimedBy: string): Task {
+  const existing = getTask(store, id);
+  if (!existing || existing.deletedAt) throw new Error(`Task ${id} not found`);
+  if (!existing.agentReady) throw new Error(`Task ${id} is not queued for agents`);
+  const slug = projectSlug(store, existing.projectId);
+
+  if (!createExclusive(p.claimFile(store.root, slug, id), claimedBy)) {
+    const holder = readFileSyncSafe(p.claimFile(store.root, slug, id));
+    throw new Error(`Task ${id} is already claimed by ${holder || "someone else"}`);
+  }
+  if (existing.status !== "todo") {
+    rmSync(p.claimFile(store.root, slug, id), { force: true });
     throw new Error(`Task ${id} is already claimed by ${existing.claimedBy ?? "someone else"}`);
   }
-  db.insert(updates)
-    .values({
-      projectId: claimed.projectId,
-      type: "agent_update",
-      body: `Claimed task **${claimed.title}**`,
-      author: claimedBy,
-      createdAt: now(),
-    })
-    .run();
-  touchProject(db, claimed.projectId);
+
+  invalidate(store);
+  const t = now();
+  const claimed = writeTask(store, slug, { ...existing, status: "in_progress", claimedBy, claimedAt: t, updatedAt: t });
+  addPost(store, claimed.projectId, `Claimed task **${claimed.title}**`, { type: "agent_update", author: claimedBy });
   return claimed;
 }
 
-// ---------- updates (activity) ----------
+// ---------- posts, comments, questions ----------
 
-export function addUpdate(db: Db, projectId: number, body: string, opts: { type?: UpdateType; author?: string } = {}): Update {
-  const update = db
-    .insert(updates)
-    .values({
-      projectId,
-      type: opts.type ?? "note",
-      body,
-      author: opts.author ?? "user",
-      createdAt: now(),
+export interface AddPostOptions {
+  type?: PostType;
+  title?: string;
+  author?: string;
+}
+
+export function addPost(store: Store, projectId: number, body: string, opts: AddPostOptions = {}): Post {
+  const post: Post = {
+    id: nextId(store, "posts"),
+    projectId,
+    type: opts.type ?? "note",
+    title: opts.title ?? "",
+    body,
+    author: opts.author ?? "user",
+    createdAt: now(),
+    answeredAt: null,
+  };
+  writePost(store, projectSlug(store, projectId), post);
+  touchProject(store, projectId);
+  return post;
+}
+
+export function getPost(store: Store, id: number): Post | undefined {
+  return board(store).posts.find((post) => post.id === id);
+}
+
+export function listComments(store: Store, postId: number): Comment[] {
+  return board(store)
+    .comments.filter((comment) => comment.postId === postId)
+    .sort((a, b) => a.createdAt - b.createdAt || a.id - b.id);
+}
+
+/**
+ * Reply to a post. A reply from anyone but the asker marks a question answered,
+ * which is what takes it off the board's open-questions count.
+ */
+export function addComment(store: Store, postId: number, body: string, author = "user"): Comment {
+  const post = getPost(store, postId);
+  if (!post) throw new Error(`Post ${postId} not found`);
+  const slug = projectSlug(store, post.projectId);
+  const comment: Comment = {
+    id: nextId(store, "comments"),
+    postId,
+    projectId: post.projectId,
+    body,
+    author,
+    createdAt: now(),
+  };
+  writeComment(store, slug, comment);
+  if (post.type === "question" && !post.answeredAt && author !== post.author) {
+    writePost(store, slug, { ...post, answeredAt: comment.createdAt });
+  }
+  touchProject(store, post.projectId);
+  return comment;
+}
+
+/** Questions still waiting on the user, oldest first — the ones blocking an agent. */
+export function listOpenQuestions(store: Store, opts: { projectId?: number } = {}): Post[] {
+  const live = new Set(listProjects(store, {}).map((project) => project.id));
+  return board(store)
+    .posts.filter(
+      (post) =>
+        post.type === "question" &&
+        !post.answeredAt &&
+        live.has(post.projectId) &&
+        (opts.projectId === undefined || post.projectId === opts.projectId),
+    )
+    .sort((a, b) => a.createdAt - b.createdAt);
+}
+
+export interface Answer {
+  comment: Comment;
+  post: Post;
+  projectSlug: string;
+}
+
+/**
+ * Replies waiting for an agent: comments by somebody else on the posts and
+ * questions that agent wrote. This is the return path that closes the loop —
+ * an agent posts, the user replies, and the agent reads the reply next session.
+ */
+export function listAnswers(store: Store, opts: { agentName?: string; since?: number } = {}): Answer[] {
+  const data = board(store);
+  const mine = opts.agentName ? new Set([opts.agentName, `agent:${opts.agentName}`]) : undefined;
+  const since = opts.since ?? 0;
+  return data.comments
+    .filter((comment) => comment.createdAt > since)
+    .flatMap((comment) => {
+      const post = data.posts.find((candidate) => candidate.id === comment.postId);
+      if (!post) return [];
+      if (mine && !mine.has(post.author)) return [];
+      if (mine && mine.has(comment.author)) return [];
+      const project = data.projects.find((candidate) => candidate.id === post.projectId);
+      return project ? [{ comment, post, projectSlug: project.slug }] : [];
     })
-    .returning()
-    .get();
-  touchProject(db, projectId);
-  return update;
+    .sort((a, b) => a.comment.createdAt - b.comment.createdAt);
 }
 
 // ---------- summaries & reports ----------
 
-export function upsertSummary(db: Db, projectId: number, body: string, generatedBy = "agent"): Summary {
-  const summary = db
-    .insert(summaries)
-    .values({ projectId, kind: "project_summary", body, generatedBy, createdAt: now() })
-    .returning()
-    .get();
-  touchProject(db, projectId);
+export function upsertSummary(store: Store, projectId: number, body: string, generatedBy = "agent"): Summary {
+  const summary: Summary = {
+    id: nextId(store, "summaries"),
+    projectId,
+    kind: "project_summary",
+    body,
+    generatedBy,
+    createdAt: now(),
+  };
+  writeSummary(store, projectSlug(store, projectId), summary);
+  touchProject(store, projectId);
   return summary;
 }
 
 /** Past AI summaries for a project, newest first (every upsert_summary keeps history). */
-export function listSummaryHistory(db: Db, projectId: number, limit = 20): Summary[] {
-  return db
-    .select()
-    .from(summaries)
-    .where(and(eq(summaries.projectId, projectId), eq(summaries.kind, "project_summary")))
-    .orderBy(desc(summaries.createdAt), desc(summaries.id))
-    .limit(limit)
-    .all();
+export function listSummaryHistory(store: Store, projectId: number, limit = 20): Summary[] {
+  return board(store)
+    .summaries.filter((summary) => summary.projectId === projectId && summary.kind === "project_summary")
+    .sort(byNewest)
+    .slice(0, limit);
 }
 
-export function saveReport(db: Db, kind: "digest" | "triage" | "accomplishments", body: string, generatedBy = "agent"): Summary {
-  return db.insert(summaries).values({ projectId: null, kind, body, generatedBy, createdAt: now() }).returning().get();
+export function saveReport(store: Store, kind: "digest" | "triage" | "accomplishments", body: string, generatedBy = "agent"): Summary {
+  const report: Summary = { id: nextId(store, "summaries"), projectId: null, kind, body, generatedBy, createdAt: now() };
+  return writeSummary(store, null, report);
 }
 
-export function listReports(db: Db, kind?: "digest" | "triage" | "accomplishments", limit = 50): Summary[] {
-  const cond = kind
-    ? and(isNull(summaries.projectId), eq(summaries.kind, kind))
-    : and(isNull(summaries.projectId), inArray(summaries.kind, ["digest", "triage", "accomplishments"]));
-  return db.select().from(summaries).where(cond).orderBy(desc(summaries.createdAt)).limit(limit).all();
+const REPORT_KINDS: SummaryKind[] = ["digest", "triage", "accomplishments"];
+
+export function listReports(store: Store, kind?: "digest" | "triage" | "accomplishments", limit = 50): Summary[] {
+  return board(store)
+    .summaries.filter((s) => s.projectId === null && (kind ? s.kind === kind : REPORT_KINDS.includes(s.kind)))
+    .sort(byNewest)
+    .slice(0, limit);
 }
 
-export function latestReport(db: Db, kind: "digest" | "triage" | "accomplishments"): Summary | undefined {
-  return listReports(db, kind, 1)[0];
+export function latestReport(store: Store, kind: "digest" | "triage" | "accomplishments"): Summary | undefined {
+  return listReports(store, kind, 1)[0];
 }
 
 // ---------- links ----------
@@ -453,36 +565,41 @@ export function inferLink(url: string): Pick<AddLinkInput, "provider" | "kind" |
   return { provider: "url", kind: "url" };
 }
 
-export function addLink(db: Db, projectId: number, input: Partial<AddLinkInput> & { url: string }): Link {
+export function addLink(store: Store, projectId: number, input: Partial<AddLinkInput> & { url: string }): Link {
   const inferred = inferLink(input.url);
-  const link = db
-    .insert(links)
-    .values({
-      projectId,
-      provider: input.provider ?? inferred.provider,
-      kind: input.kind ?? inferred.kind,
-      url: input.url,
-      externalId: input.externalId ?? inferred.externalId ?? null,
-      title: input.title ?? "",
-      scope: input.scope ?? null,
-      createdAt: now(),
-    })
-    .returning()
-    .get();
-  touchProject(db, projectId);
+  const link: Link = {
+    id: nextId(store, "links"),
+    projectId,
+    provider: input.provider ?? inferred.provider,
+    kind: input.kind ?? inferred.kind,
+    url: input.url,
+    externalId: input.externalId ?? inferred.externalId ?? null,
+    title: input.title ?? "",
+    scope: input.scope ?? null,
+    createdAt: now(),
+    deletedAt: null,
+  };
+  writeLink(store, projectSlug(store, projectId), link);
+  touchProject(store, projectId);
   return link;
+}
+
+function getLink(store: Store, id: number): Link | undefined {
+  return board(store).links.find((link) => link.id === id);
 }
 
 /** Soft delete: snapshots and sync state are kept; the link is hidden and syncs stop. */
-export function deleteLink(db: Db, id: number): void {
-  db.update(links).set({ deletedAt: now() }).where(eq(links.id, id)).run();
+export function deleteLink(store: Store, id: number): void {
+  const link = getLink(store, id);
+  if (link) writeLink(store, projectSlug(store, link.projectId), { ...link, deletedAt: now() });
 }
 
-export function restoreLink(db: Db, id: number): Link {
-  const link = db.update(links).set({ deletedAt: null }).where(eq(links.id, id)).returning().get();
+export function restoreLink(store: Store, id: number): Link {
+  const link = getLink(store, id);
   if (!link) throw new Error(`Link ${id} not found`);
-  touchProject(db, link.projectId);
-  return link;
+  const restored = writeLink(store, projectSlug(store, link.projectId), { ...link, deletedAt: null });
+  touchProject(store, link.projectId);
+  return restored;
 }
 
 export interface DeletedItems {
@@ -490,41 +607,40 @@ export interface DeletedItems {
   links: Link[];
 }
 
-export function listDeleted(db: Db, projectId: number): DeletedItems {
+export function listDeleted(store: Store, projectId: number): DeletedItems {
+  const data = board(store);
   return {
-    tasks: db
-      .select()
-      .from(tasks)
-      .where(and(eq(tasks.projectId, projectId), sql`${tasks.deletedAt} IS NOT NULL`))
-      .orderBy(desc(tasks.deletedAt))
-      .all(),
-    links: db
-      .select()
-      .from(links)
-      .where(and(eq(links.projectId, projectId), sql`${links.deletedAt} IS NOT NULL`))
-      .orderBy(desc(links.deletedAt))
-      .all(),
+    tasks: data.tasks
+      .filter((task) => task.projectId === projectId && task.deletedAt !== null)
+      .sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0)),
+    links: data.links
+      .filter((link) => link.projectId === projectId && link.deletedAt !== null)
+      .sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0)),
   };
 }
 
-export function saveSnapshot(db: Db, linkId: number, data: unknown): void {
-  db.insert(snapshots)
-    .values({ linkId, data, fetchedAt: now() })
-    .onConflictDoUpdate({ target: snapshots.linkId, set: { data, fetchedAt: now() } })
-    .run();
+export function saveSnapshot(store: Store, linkId: number, data: unknown): void {
+  const existing = board(store).snapshots.find((snapshot) => snapshot.linkId === linkId);
+  writeJson(store, p.snapshotFile(store.root, linkId), {
+    id: existing?.id ?? nextId(store, "snapshots"),
+    linkId,
+    data,
+    fetchedAt: now(),
+  } satisfies Snapshot);
 }
 
 // ---------- sync health ----------
 
-export function recordSyncResult(db: Db, linkId: number, error: string | null): void {
+export function recordSyncResult(store: Store, linkId: number, error: string | null): void {
   const t = now();
-  db.insert(syncState)
-    .values({ linkId, lastAttemptAt: t, lastSuccessAt: error ? null : t, lastError: error })
-    .onConflictDoUpdate({
-      target: syncState.linkId,
-      set: error ? { lastAttemptAt: t, lastError: error } : { lastAttemptAt: t, lastSuccessAt: t, lastError: null },
-    })
-    .run();
+  const existing = board(store).syncState.find((state) => state.linkId === linkId);
+  writeJson(store, p.syncStateFile(store.root, linkId), {
+    id: existing?.id ?? nextId(store, "syncState"),
+    linkId,
+    lastAttemptAt: t,
+    lastSuccessAt: error ? (existing?.lastSuccessAt ?? null) : t,
+    lastError: error,
+  } satisfies SyncState);
 }
 
 export interface FailingSync {
@@ -545,31 +661,29 @@ export interface SyncHealth {
   lastSuccessAt: number | null;
 }
 
-export function getSyncHealth(db: Db): SyncHealth {
-  const rows = db
-    .select()
-    .from(syncState)
-    .innerJoin(links, eq(syncState.linkId, links.id))
-    .innerJoin(projects, eq(links.projectId, projects.id))
-    .where(and(isNull(links.deletedAt), sql`${projects.status} != 'archived'`))
-    .all();
+export function getSyncHealth(store: Store): SyncHealth {
+  const data = board(store);
   const failing: FailingSync[] = [];
   let lastSuccessAt: number | null = null;
-  for (const row of rows) {
-    if (row.sync_state.lastSuccessAt && (!lastSuccessAt || row.sync_state.lastSuccessAt > lastSuccessAt)) {
-      lastSuccessAt = row.sync_state.lastSuccessAt;
-    }
-    if (row.sync_state.lastError) {
+
+  for (const state of data.syncState) {
+    const link = data.links.find((candidate) => candidate.id === state.linkId);
+    if (!link || link.deletedAt) continue;
+    const project = data.projects.find((candidate) => candidate.id === link.projectId);
+    if (!project || project.status === "archived") continue;
+
+    if (state.lastSuccessAt && (!lastSuccessAt || state.lastSuccessAt > lastSuccessAt)) lastSuccessAt = state.lastSuccessAt;
+    if (state.lastError) {
       failing.push({
-        linkId: row.links.id,
-        url: row.links.url,
-        title: row.links.title,
-        provider: row.links.provider,
-        projectSlug: row.projects.slug,
-        projectName: row.projects.name,
-        error: row.sync_state.lastError,
-        lastAttemptAt: row.sync_state.lastAttemptAt,
-        lastSuccessAt: row.sync_state.lastSuccessAt,
+        linkId: link.id,
+        url: link.url,
+        title: link.title,
+        provider: link.provider,
+        projectSlug: project.slug,
+        projectName: project.name,
+        error: state.lastError,
+        lastAttemptAt: state.lastAttemptAt,
+        lastSuccessAt: state.lastSuccessAt,
       });
     }
   }
@@ -586,58 +700,47 @@ export interface RaiseWarningInput {
   raisedBy?: string;
 }
 
-export function raiseWarning(db: Db, projectId: number, input: RaiseWarningInput): Warning {
-  const warning = db
-    .insert(warnings)
-    .values({
-      projectId,
-      severity: input.severity ?? "warning",
-      message: input.message,
-      suggestedAction: input.suggestedAction ?? null,
-      raisedBy: input.raisedBy ?? "agent",
-      status: "open",
-      createdAt: now(),
-    })
-    .returning()
-    .get();
-  touchProject(db, projectId);
+export function raiseWarning(store: Store, projectId: number, input: RaiseWarningInput): Warning {
+  const warning: Warning = {
+    id: nextId(store, "warnings"),
+    projectId,
+    severity: input.severity ?? "warning",
+    message: input.message,
+    suggestedAction: input.suggestedAction ?? null,
+    status: "open",
+    raisedBy: input.raisedBy ?? "agent",
+    createdAt: now(),
+    resolvedAt: null,
+  };
+  writeWarning(store, projectSlug(store, projectId), warning);
+  touchProject(store, projectId);
   return warning;
 }
 
-export function resolveWarning(db: Db, id: number, opts: { resolvedBy?: string; note?: string } = {}): Warning {
-  const existing = db.select().from(warnings).where(eq(warnings.id, id)).get();
+export function resolveWarning(store: Store, id: number, opts: { resolvedBy?: string; note?: string } = {}): Warning {
+  const existing = board(store).warnings.find((warning) => warning.id === id);
   if (!existing) throw new Error(`Warning ${id} not found`);
-  const resolved = db
-    .update(warnings)
-    .set({ status: "resolved", resolvedAt: now() })
-    .where(eq(warnings.id, id))
-    .returning()
-    .get();
-  db.insert(updates)
-    .values({
-      projectId: existing.projectId,
-      type: "note",
-      body: `Resolved warning: ${existing.message}${opts.note ? ` — ${opts.note}` : ""}`,
-      author: opts.resolvedBy ?? "user",
-      createdAt: now(),
-    })
-    .run();
+  const resolved = writeWarning(store, projectSlug(store, existing.projectId), {
+    ...existing,
+    status: "resolved",
+    resolvedAt: now(),
+  });
+  addPost(store, existing.projectId, `Resolved warning: ${existing.message}${opts.note ? ` — ${opts.note}` : ""}`, {
+    type: "note",
+    author: opts.resolvedBy ?? "user",
+  });
   return resolved;
 }
 
+const WARNING_SEVERITY_RANK = { critical: 0, warning: 1, info: 2 } as const;
+
 /** Open warnings, most severe first. Pass projectId to scope to one project. */
-export function listWarnings(db: Db, opts: { projectId?: number } = {}): Warning[] {
-  const conds = [eq(warnings.status, "open")];
-  if (opts.projectId !== undefined) conds.push(eq(warnings.projectId, opts.projectId));
-  return db
-    .select()
-    .from(warnings)
-    .where(and(...conds))
-    .orderBy(
-      sql`CASE ${warnings.severity} WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END`,
-      desc(warnings.createdAt),
+export function listWarnings(store: Store, opts: { projectId?: number } = {}): Warning[] {
+  return board(store)
+    .warnings.filter(
+      (warning) => warning.status === "open" && (opts.projectId === undefined || warning.projectId === opts.projectId),
     )
-    .all();
+    .sort((a, b) => WARNING_SEVERITY_RANK[a.severity] - WARNING_SEVERITY_RANK[b.severity] || b.createdAt - a.createdAt);
 }
 
 // ---------- find_project: resolve monorepo work to a project ----------
@@ -660,15 +763,15 @@ export interface ProjectMatch {
  * A repo hosts many projects, so resolution is layered:
  * exact PR/issue link > repo-link scope match (branch prefix, path prefix, label) > bare repo link.
  */
-export function findProject(db: Db, query: FindProjectQuery): ProjectMatch[] {
+export function findProject(store: Store, query: FindProjectQuery): ProjectMatch[] {
+  const data = board(store);
   const matches: ProjectMatch[] = [];
   const seen = new Set<number>();
-  const allLinks = db
-    .select()
-    .from(links)
-    .innerJoin(projects, eq(links.projectId, projects.id))
-    .where(and(isNull(links.deletedAt), sql`${projects.status} != 'archived'`))
-    .all();
+  const allLinks = data.links.flatMap((link) => {
+    if (link.deletedAt) return [];
+    const project = data.projects.find((candidate) => candidate.id === link.projectId);
+    return project && project.status !== "archived" ? [{ link, project }] : [];
+  });
 
   const push = (project: Project, confidence: ProjectMatch["confidence"], reason: string) => {
     if (seen.has(project.id)) return;
@@ -678,31 +781,31 @@ export function findProject(db: Db, query: FindProjectQuery): ProjectMatch[] {
 
   if (query.repo && query.prNumber) {
     const id = `${query.repo}#${query.prNumber}`;
-    for (const row of allLinks) {
-      if (row.links.externalId === id) push(row.projects, "exact", `linked to ${id}`);
+    for (const { link, project } of allLinks) {
+      if (link.externalId === id) push(project, "exact", `linked to ${id}`);
     }
   }
 
   if (query.repo) {
-    for (const row of allLinks) {
-      if (row.links.kind !== "repo" || row.links.externalId !== query.repo) continue;
-      const scope = row.links.scope;
+    for (const { link, project } of allLinks) {
+      if (link.kind !== "repo" || link.externalId !== query.repo) continue;
+      const scope = link.scope;
       if (scope) {
         if (query.branch && scope.branchPrefix && query.branch.startsWith(scope.branchPrefix)) {
-          push(row.projects, "scoped", `branch matches prefix "${scope.branchPrefix}"`);
+          push(project, "scoped", `branch matches prefix "${scope.branchPrefix}"`);
           continue;
         }
         if (query.paths?.length && scope.pathPrefixes?.length) {
-          const prefix = scope.pathPrefixes.find((p) => query.paths!.some((path) => path.startsWith(p)));
+          const prefix = scope.pathPrefixes.find((candidate) => query.paths!.some((path) => path.startsWith(candidate)));
           if (prefix) {
-            push(row.projects, "scoped", `changed paths match prefix "${prefix}"`);
+            push(project, "scoped", `changed paths match prefix "${prefix}"`);
             continue;
           }
         }
         if (query.labels?.length && scope.labels?.length) {
-          const label = scope.labels.find((l) => query.labels!.includes(l));
+          const label = scope.labels.find((candidate) => query.labels!.includes(candidate));
           if (label) {
-            push(row.projects, "scoped", `label "${label}" matches scope`);
+            push(project, "scoped", `label "${label}" matches scope`);
             continue;
           }
         }
@@ -714,12 +817,12 @@ export function findProject(db: Db, query: FindProjectQuery): ProjectMatch[] {
     // scope, that project is not a candidate.
     if (matches.length === 0) {
       const hadDiscriminators = Boolean(query.branch || query.paths?.length || query.labels?.length);
-      for (const row of allLinks) {
-        if (row.links.kind !== "repo" || row.links.externalId !== query.repo) continue;
-        if (!row.links.scope) {
-          push(row.projects, "repo", `project links repo ${query.repo} (unscoped)`);
+      for (const { link, project } of allLinks) {
+        if (link.kind !== "repo" || link.externalId !== query.repo) continue;
+        if (!link.scope) {
+          push(project, "repo", `project links repo ${query.repo} (unscoped)`);
         } else if (!hadDiscriminators) {
-          push(row.projects, "repo", `project links repo ${query.repo} (scoped; pass branch/paths/labels to narrow)`);
+          push(project, "repo", `project links repo ${query.repo} (scoped; pass branch/paths/labels to narrow)`);
         }
       }
     }
@@ -733,32 +836,25 @@ export function findProject(db: Db, query: FindProjectQuery): ProjectMatch[] {
  * Updates-per-day buckets for the last `days` days, oldest first —
  * sparkline data for project cards. Buckets are local-midnight aligned.
  */
-export function getActivityCounts(db: Db, projectId: number, days = 14): number[] {
+export function getActivityCounts(store: Store, projectId: number, days = 14): number[] {
   const end = new Date();
   end.setHours(24, 0, 0, 0); // end of today
   const startMs = end.getTime() - days * 24 * 60 * 60 * 1000;
-  const rows = db
-    .select({ createdAt: updates.createdAt })
-    .from(updates)
-    .where(and(eq(updates.projectId, projectId), gt(updates.createdAt, startMs)))
-    .all();
   const counts = new Array<number>(days).fill(0);
   const dayMs = 24 * 60 * 60 * 1000;
-  for (const row of rows) {
-    const bucket = Math.floor((row.createdAt - startMs) / dayMs);
+  for (const post of board(store).posts) {
+    if (post.projectId !== projectId || post.createdAt <= startMs) continue;
+    const bucket = Math.floor((post.createdAt - startMs) / dayMs);
     if (bucket >= 0 && bucket < days) counts[bucket]++;
   }
   return counts;
 }
-
-// ---------- progress metrics (per-project reporting) ----------
 
 export interface ProjectMetrics {
   tasksTotal: number;
   tasksDone: number;
   openPrs: number;
   mergedRecently: number;
-  /** Whole days since the project last moved; 0 means today. */
   daysSinceActivity: number;
 }
 
@@ -781,10 +877,10 @@ function collectSnapshotPrs(data: unknown, into: PrLike[]): void {
 }
 
 /** Task completion and PR throughput for a project — the reporting numbers. */
-export function getProjectMetrics(db: Db, ref: number | string): ProjectMetrics | undefined {
-  const detail = getProjectDetail(db, ref, { updatesLimit: 0 });
+export function getProjectMetrics(store: Store, ref: number | string): ProjectMetrics | undefined {
+  const detail = getProjectDetail(store, ref, { postsLimit: 0 });
   if (!detail) return undefined;
-  const tasksDone = detail.tasks.filter((t) => t.status === "done").length;
+  const tasksDone = detail.tasks.filter((task) => task.status === "done").length;
   const prs: PrLike[] = [];
   for (const link of detail.links) collectSnapshotPrs(link.snapshot?.data, prs);
   const recentCutoff = Date.now() - RECENT_PR_MS;
@@ -810,58 +906,39 @@ export interface ActivityFeed {
   projects: {
     project: Project;
     latestSummary: string | null;
-    updates: Update[];
+    posts: Post[];
     openTasks: Task[];
     openWarnings: Warning[];
     links: { url: string; kind: LinkKind; title: string; externalId: string | null; snapshot: unknown; fetchedAt: number | null }[];
   }[];
 }
 
-export function getActivity(db: Db, since: number): ActivityFeed {
-  const active = listProjects(db, {});
+export function getActivity(store: Store, since: number): ActivityFeed {
+  const data = board(store);
   return {
     since,
-    projects: active.map((project) => {
-      const recentUpdates = db
-        .select()
-        .from(updates)
-        .where(and(eq(updates.projectId, project.id), gt(updates.createdAt, since)))
-        .orderBy(desc(updates.createdAt))
-        .all();
-      const openTasks = db
-        .select()
-        .from(tasks)
-        .where(and(eq(tasks.projectId, project.id), inArray(tasks.status, ["todo", "in_progress"]), isNull(tasks.deletedAt)))
-        .all();
-      const latest = db
-        .select()
-        .from(summaries)
-        .where(and(eq(summaries.projectId, project.id), eq(summaries.kind, "project_summary")))
-        .orderBy(desc(summaries.createdAt))
-        .limit(1)
-        .get();
-      const projectLinks = db
-        .select()
-        .from(links)
-        .leftJoin(snapshots, eq(snapshots.linkId, links.id))
-        .where(and(eq(links.projectId, project.id), isNull(links.deletedAt)))
-        .all()
-        .map((row) => ({
-          url: row.links.url,
-          kind: row.links.kind,
-          title: row.links.title,
-          externalId: row.links.externalId,
-          snapshot: row.snapshots?.data ?? null,
-          fetchedAt: row.snapshots?.fetchedAt ?? null,
-        }));
-      return {
-        project,
-        latestSummary: latest?.body ?? null,
-        updates: recentUpdates,
-        openTasks,
-        openWarnings: listWarnings(db, { projectId: project.id }),
-        links: projectLinks,
-      };
-    }),
+    projects: listProjects(store, {}).map((project) => ({
+      project,
+      latestSummary:
+        data.summaries.filter((s) => s.projectId === project.id && s.kind === "project_summary").sort(byNewest)[0]?.body ?? null,
+      posts: data.posts.filter((post) => post.projectId === project.id && post.createdAt > since).sort(byNewest),
+      openTasks: data.tasks.filter(
+        (task) => task.projectId === project.id && !task.deletedAt && (task.status === "todo" || task.status === "in_progress"),
+      ),
+      openWarnings: listWarnings(store, { projectId: project.id }),
+      links: data.links
+        .filter((link) => link.projectId === project.id && !link.deletedAt)
+        .map((link) => {
+          const snapshot = data.snapshots.find((candidate) => candidate.linkId === link.id);
+          return {
+            url: link.url,
+            kind: link.kind,
+            title: link.title,
+            externalId: link.externalId,
+            snapshot: snapshot?.data ?? null,
+            fetchedAt: snapshot?.fetchedAt ?? null,
+          };
+        }),
+    })),
   };
 }

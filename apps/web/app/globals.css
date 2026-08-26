@@ -108,6 +108,85 @@ body {
   color: var(--wb-muted);
 }
 
+/* Long-form posts carry tables, fenced code, task lists, and diagrams. */
+.prose-wb pre {
+  background: var(--wb-surface-2);
+  border: 1px solid var(--wb-hairline);
+  border-radius: 8px;
+  padding: 0.65rem 0.8rem;
+  overflow-x: auto;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  font-family: var(--font-mono);
+}
+/* Inline-code chrome would double up inside a block. */
+.prose-wb pre code {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: inherit;
+}
+.prose-wb table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+  display: block;
+  overflow-x: auto;
+}
+.prose-wb th,
+.prose-wb td {
+  border: 1px solid var(--wb-hairline);
+  padding: 0.3rem 0.55rem;
+  text-align: left;
+  vertical-align: top;
+}
+.prose-wb th {
+  background: var(--wb-surface-2);
+  color: var(--wb-ink);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.prose-wb img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+.prose-wb hr {
+  border: 0;
+  border-top: 1px solid var(--wb-hairline);
+  margin: 1rem 0;
+}
+.prose-wb li:has(> input[type="checkbox"]) {
+  list-style: none;
+  margin-left: -1.05rem;
+}
+.prose-wb input[type="checkbox"] {
+  margin-right: 0.4rem;
+  accent-color: var(--wb-accent);
+}
+.prose-wb .wb-mermaid {
+  background: var(--wb-surface-2);
+  border: 1px solid var(--wb-hairline);
+  border-radius: 8px;
+  padding: 0.75rem;
+  overflow-x: auto;
+  text-align: center;
+}
+.prose-wb .wb-mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+/* Until the client draws it, and if it fails, the source stays readable. */
+.prose-wb .wb-mermaid-src {
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  color: var(--wb-muted);
+  white-space: pre-wrap;
+}
+
 /* Keyboard-navigated row highlight (BoardKeynav); unlayered so it wins over utility backgrounds */
 .keynav-active {
   background: color-mix(in srgb, var(--wb-surface-2) 55%, transparent);

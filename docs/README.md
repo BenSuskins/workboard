@@ -16,15 +16,19 @@ and triage reports the dashboard displays — guided by the skills in this repo.
 
 ```mermaid
 flowchart LR
-    Agent["Claude Code<br/>(any repo)"] -->|"MCP · HTTP :8787 / stdio"| WB["Workboard<br/>SQLite + Next"]
+    Agent["Claude Code<br/>(any repo)"] -->|"MCP · HTTP :8787 / stdio"| WB["Workboard<br/>markdown + Next"]
     You["You :3000"] --> WB
     WB -->|read-only sync| Ext["GitHub · Jira · Google Docs"]
 ```
 
 ## Features
 
-- **Agent-authored updates** — progress notes, summaries, digests, and triage
-  reports posted over MCP; the app never calls an LLM.
+- **Agent-authored posts** — long-form progress posts with tables, code, and
+  mermaid diagrams, plus summaries, digests, and triage reports, all posted over
+  MCP; the app never calls an LLM.
+- **A reply loop** — comment on any post and the reply reaches the agent through
+  `list_answers`. Agents ask for decisions with `ask_question`; open questions
+  sit on the board until answered.
 - **Agent task queue** — queue tasks from the board; any agent session claims
   work over MCP (`list_queued_tasks` / `claim_task`) with atomic claims and
   attribution.
@@ -39,12 +43,14 @@ flowchart LR
   for your own reporting.
 - **Trustworthy data** — visible sync health, soft deletes with restore, and
   full summary history.
+- **Plain markdown on disk** — the whole board is files you can read, edit, grep,
+  and back up without the app. No database.
 
 ## Tech Stack
 
 - TypeScript, Node 22, npm workspaces
 - Next.js (App Router — server components + server actions)
-- SQLite via Drizzle ORM
+- Markdown files with frontmatter — no database
 - Model Context Protocol server (streamable HTTP + stdio)
 - Docker / Docker Compose
 
@@ -52,13 +58,13 @@ flowchart LR
 
 ```
 workboard/
-├── packages/core   # schema (SQLite/Drizzle), services, integration clients, sync engine
+├── packages/core   # domain, markdown store, services, integration clients, sync engine
 ├── packages/mcp    # MCP server — streamable HTTP (:8787/mcp) + stdio
 ├── apps/web        # Next.js dashboard (server components + server actions)
 ├── skills/         # Claude Code skills (status, digest, triage, accomplishments)
 ├── scripts/        # seed, google-auth, install-skills, mcp-smoke
 ├── docs/           # documentation
-├── data/           # workboard.db (created on first run; gitignored)
+├── data/workboard/ # the board, one markdown file per entity (gitignored)
 ├── Dockerfile      # multi-stage image used by both compose services
 └── docker-compose.yml  # web + mcp services sharing the `data` volume
 ```
@@ -82,6 +88,10 @@ npm run dev         # web on :3000, MCP server on :8787
 
 Verify: visit `http://localhost:3000` — you should see the Workboard dashboard.
 
+**Upgrading from a version that used SQLite?** Nothing to do. On first start,
+a `data/workboard.db` sitting next to an empty data directory is converted into
+the markdown tree automatically, and the database is left untouched as a backup.
+
 ## Environment Variables
 
 Every integration is optional; the UI degrades to plain links without
@@ -93,6 +103,7 @@ credentials. Copy `.env.example` to `.env` and fill in what you use.
 | `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` | no | — | Jira Cloud issue status and per-epic/project counts |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | no | — | Google Doc titles + last-edited times (run `npm run google:auth` once) |
 | `WORKBOARD_MCP_TOKEN` | no | — | Require a bearer token on the HTTP MCP transport |
+| `WORKBOARD_DATA_DIR` | no | `<repo>/data/workboard` | Where the markdown board lives |
 
 ## Commands
 
@@ -105,6 +116,7 @@ credentials. Copy `.env.example` to `.env` and fill in what you use.
 | `npm run mcp:smoke` | Full agent flow against the real MCP server (stdio) |
 | `npm run google:auth` | One-time Google Docs OAuth flow |
 | `npm run skills:install` | Copy `skills/` → `~/.claude/skills/` |
+| `npm run migrate:files` | Rarely needed — the servers convert an old `data/workboard.db` themselves on first start. Use this for a database elsewhere, or to redo one with `--force` |
 
 ## Connecting a coding agent
 
@@ -165,8 +177,9 @@ npm test            # core unit tests (vitest)
 npm run mcp:smoke   # full agent flow against the real MCP server (stdio)
 ```
 
-Core services are covered by contract tests against a real in-memory SQLite
-database rather than mocks.
+Core services are covered by contract tests against a real temp-directory store
+rather than mocks. Concurrency is tested with real processes: several racing to
+claim one task, to allocate ids, and to cold-boot a migration.
 
 ## Deployment
 
@@ -176,8 +189,10 @@ docker compose up -d --build  # web on :3000, MCP on :8787
 docker compose run --rm web npm run seed   # optional: sample data
 ```
 
-One image, two services (`web` and `mcp`), sharing the SQLite database on the
-named `data` volume — that volume is the only state worth backing up. See
+One image, two services (`web` and `mcp`), sharing the markdown tree on the
+named `data` volume — that volume is the only state worth backing up. An
+existing volume holding a SQLite board converts itself on first start; both
+services can boot together, and only one of them will run the conversion. See
 [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for Docker MCP access, Google auth, and
 backup notes.
 

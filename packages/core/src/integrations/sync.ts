@@ -1,7 +1,7 @@
-import { and, eq, isNull } from "drizzle-orm";
-import type { Db } from "../db/client.js";
-import { links, type Link } from "../db/schema.js";
+import type { Link } from "../domain.js";
+import type { Store } from "../store/store.js";
 import { recordSyncResult, saveSnapshot } from "../services.js";
+import { board, invalidate } from "../store/store.js";
 import { fetchGdoc, googleConfigured } from "./gdrive.js";
 import { fetchIssue, fetchPr, fetchScopedRepo, githubConfigured } from "./github.js";
 import { fetchJiraIssue, fetchJiraProject, jiraConfigured } from "./jira.js";
@@ -40,48 +40,46 @@ async function fetchForLink(link: Link): Promise<unknown | { skipped: SyncResult
   }
 }
 
-export async function syncLink(db: Db, link: Link): Promise<SyncResult> {
+export async function syncLink(store: Store, link: Link): Promise<SyncResult> {
   try {
     const result = await fetchForLink(link);
     if (result && typeof result === "object" && "skipped" in result) {
       // nothing was attempted, so sync_state is left untouched
       return { linkId: link.id, url: link.url, ok: true, skipped: (result as { skipped: SyncResult["skipped"] }).skipped };
     }
-    saveSnapshot(db, link.id, result);
-    recordSyncResult(db, link.id, null);
+    saveSnapshot(store, link.id, result);
+    recordSyncResult(store, link.id, null);
     return { linkId: link.id, url: link.url, ok: true };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    recordSyncResult(db, link.id, message);
+    recordSyncResult(store, link.id, message);
     return { linkId: link.id, url: link.url, ok: false, error: message };
   }
 }
 
-export async function syncProject(db: Db, projectId: number): Promise<SyncResult[]> {
-  const projectLinks = db
-    .select()
-    .from(links)
-    .where(and(eq(links.projectId, projectId), isNull(links.deletedAt)))
-    .all();
+export async function syncProject(store: Store, projectId: number): Promise<SyncResult[]> {
+  invalidate(store);
+  const projectLinks = board(store).links.filter((link) => link.projectId === projectId && !link.deletedAt);
   const results: SyncResult[] = [];
-  for (const link of projectLinks) results.push(await syncLink(db, link));
+  for (const link of projectLinks) results.push(await syncLink(store, link));
   return results;
 }
 
-export async function syncAll(db: Db): Promise<SyncResult[]> {
-  const allLinks = db.select().from(links).where(isNull(links.deletedAt)).all();
+export async function syncAll(store: Store): Promise<SyncResult[]> {
+  invalidate(store);
+  const allLinks = board(store).links.filter((link) => !link.deletedAt);
   const results: SyncResult[] = [];
-  for (const link of allLinks) results.push(await syncLink(db, link));
+  for (const link of allLinks) results.push(await syncLink(store, link));
   return results;
 }
 
 let timer: ReturnType<typeof setInterval> | undefined;
 
 /** Background poll — call once from the web server. No-ops if already started. */
-export function startBackgroundSync(db: Db, intervalMs = 10 * 60 * 1000): void {
+export function startBackgroundSync(store: Store, intervalMs = 10 * 60 * 1000): void {
   if (timer) return;
   timer = setInterval(() => {
-    syncAll(db).catch((err) => console.error("[workboard] background sync failed:", err));
+    syncAll(store).catch((err) => console.error("[workboard] background sync failed:", err));
   }, intervalMs);
   timer.unref?.();
 }
