@@ -1,5 +1,8 @@
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
-import { openDb, type Db } from "./db/client.js";
+import { openStore, type Store } from "./store/store.js";
 import { aggregateCheckRuns } from "./integrations/github.js";
 import {
   claimTask,
@@ -41,9 +44,11 @@ import {
   upsertSummary,
 } from "./services.js";
 
-let db: Db;
+// The suite is unchanged from the SQLite implementation apart from this handle:
+// it is the contract proving the markdown store behaves like the database it replaced.
+let db: Store;
 beforeEach(() => {
-  db = openDb(":memory:");
+  db = openStore(mkdtempSync(join(tmpdir(), "workboard-test-")));
 });
 
 describe("projects", () => {
@@ -473,6 +478,20 @@ describe("agent task queue", () => {
     const done = getProjectDetail(db, p.id)!.tasks.find((t) => t.id === task.id)!;
     expect(done.status).toBe("done");
     expect(done.claimedBy).toBe("agent:claude");
+  });
+});
+
+describe("partial updates", () => {
+  it("ignores fields explicitly passed as undefined", () => {
+    const project = createProject(db, { name: "Alpha", description: "keep me" });
+    const task = addTask(db, project.id, "Keep this title", { description: "keep this spec" });
+
+    updateTask(db, task.id, { title: undefined, description: undefined, status: "done" });
+    const after = getTaskDetail(db, task.id)!.task;
+    expect([after.title, after.description, after.status]).toEqual(["Keep this title", "keep this spec", "done"]);
+
+    updateProject(db, project.id, { name: undefined, health: "amber" });
+    expect(getProjectDetail(db, project.id)!.project).toMatchObject({ name: "Alpha", description: "keep me", health: "amber" });
   });
 });
 

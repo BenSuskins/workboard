@@ -1,8 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { getDb, type Db } from "@workboard/core";
+import { openStore, type Store } from "@workboard/core";
 import { registerTools } from "./tools.js";
 
-export function createServer(db: Db = getDb()): McpServer {
+export function createServer(db: Store = openStore()): McpServer {
   const server = new McpServer(
     { name: "workboard", version: "0.1.0" },
     {

@@ -1,7 +1,6 @@
 export * from "./domain.js";
-export * from "./db/schema.js";
-export * from "./db/client.js";
 export * from "./services.js";
+export * from "./store/store.js";
 export * from "./integrations/sync.js";
 export {
   aggregateCheckRuns,

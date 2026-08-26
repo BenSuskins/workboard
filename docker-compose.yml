@@ -11,7 +11,7 @@ x-workboard: &workboard
     - path: .env
       required: false
   environment:
-    WORKBOARD_DB_PATH: /data/workboard.db
+    WORKBOARD_DATA_DIR: /data/workboard
   volumes:
     - data:/data
   restart: unless-stopped

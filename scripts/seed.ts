@@ -1,28 +1,26 @@
-/** Seeds the database with realistic sample data. Idempotent-ish: skips if projects exist. Pass --force to reseed from scratch. */
+/** Seeds the board with realistic sample data. Idempotent-ish: skips if projects exist. Pass --force to reseed from scratch. */
 import { rmSync } from "node:fs";
 import {
   addLink,
   addTask,
   addUpdate,
   createProject,
-  defaultDbPath,
+  defaultDataDir,
   listProjects,
-  openDb,
+  openStore,
   raiseWarning,
   saveReport,
   updateTask,
   upsertSummary,
 } from "@workboard/core";
 
-const dbPath = defaultDbPath();
-if (process.argv.includes("--force")) {
-  for (const suffix of ["", "-wal", "-shm"]) rmSync(`${dbPath}${suffix}`, { force: true });
-}
+const dataDir = defaultDataDir();
+if (process.argv.includes("--force")) rmSync(dataDir, { recursive: true, force: true });
 
-const db = openDb(dbPath);
+const db = openStore(dataDir);
 
 if (listProjects(db, { includeArchived: true }).length > 0) {
-  console.log("Database already has projects — skipping seed. Use --force to reseed.");
+  console.log("Board already has projects — skipping seed. Use --force to reseed.");
   process.exit(0);
 }
 

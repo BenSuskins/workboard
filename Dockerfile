@@ -2,10 +2,6 @@
 # and the MCP server (`npx tsx packages/mcp/src/http.ts`) — see docker-compose.yml.
 FROM node:22-bookworm-slim AS deps
 WORKDIR /app
-# toolchain only as a fallback: better-sqlite3 normally downloads a prebuilt binary
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends python3 make g++ \
-  && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
 COPY apps/web/package.json apps/web/
 COPY packages/core/package.json packages/core/
@@ -22,7 +18,7 @@ FROM node:22-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
-    WORKBOARD_DB_PATH=/data/workboard.db
+    WORKBOARD_DATA_DIR=/data/workboard
 COPY --from=build /app ./
 RUN mkdir -p /data && chown -R node:node /data /app
 USER node

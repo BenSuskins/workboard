@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// stdio entrypoint — set WORKBOARD_DB_PATH if the db isn't at <cwd>/data/workboard.db
+// stdio entrypoint — set WORKBOARD_DATA_DIR if the board isn't at <cwd>/data/workboard
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";

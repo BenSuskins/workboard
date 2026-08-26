@@ -11,11 +11,8 @@
   "scripts": {
     "build": "tsc --noEmit"
   },
-  "dependencies": {
-    "better-sqlite3": "^11.7.0",
-    "drizzle-orm": "^0.38.0"
-  },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.12"
+    "@types/better-sqlite3": "^7.6.12",
+    "better-sqlite3": "^11.7.0"
   }
 }

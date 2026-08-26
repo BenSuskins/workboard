@@ -4,6 +4,7 @@ dist/
 data/*.db
 data/*.db-*
 data/google-token.json
+data/workboard/
 .env
 .env.local
 *.tsbuildinfo

@@ -29,7 +29,7 @@ import {
   updateTask,
   upsertSummary,
   WARNING_SEVERITIES,
-  type Db,
+  type Store,
   type Project,
   type Warning,
 } from "@workboard/core";
@@ -48,7 +48,7 @@ function json(data: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
 }
 
-function resolveProject(db: Db, ref: number | string): Project {
+function resolveProject(db: Store, ref: number | string): Project {
   const project = getProject(db, typeof ref === "string" && /^\d+$/.test(ref) ? Number(ref) : ref);
   if (!project) throw new Error(`No project found for "${ref}". Use list_projects to see available projects.`);
   return project;
@@ -79,7 +79,7 @@ function projectCard(p: Project) {
   };
 }
 
-export function registerTools(server: McpServer, db: Db): void {
+export function registerTools(server: McpServer, db: Store): void {
   server.registerTool(
     "list_projects",
     {

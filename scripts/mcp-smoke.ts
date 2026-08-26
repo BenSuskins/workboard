@@ -1,6 +1,6 @@
 /**
  * End-to-end smoke test of the MCP server over stdio: spawns the real server
- * against a throwaway database and walks the full agent flow.
+ * against a throwaway board and walks the full agent flow.
  * Run: npm run mcp:smoke
  */
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -9,7 +9,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-const dbPath = join(mkdtempSync(join(tmpdir(), "workboard-smoke-")), "smoke.db");
+const dataDir = join(mkdtempSync(join(tmpdir(), "workboard-smoke-")), "board");
 
 // Strip integration credentials so the no-credentials paths are exercised deterministically.
 const cleanEnv = Object.fromEntries(
@@ -21,7 +21,7 @@ const cleanEnv = Object.fromEntries(
 const transport = new StdioClientTransport({
   command: "npx",
   args: ["tsx", resolve(import.meta.dirname, "../packages/mcp/src/stdio.ts")],
-  env: { ...cleanEnv, WORKBOARD_DB_PATH: dbPath },
+  env: { ...cleanEnv, WORKBOARD_DATA_DIR: dataDir },
 });
 const client = new Client({ name: "smoke", version: "0.0.1" });
 await client.connect(transport);
