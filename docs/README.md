@@ -88,6 +88,10 @@ npm run dev         # web on :3000, MCP server on :8787
 
 Verify: visit `http://localhost:3000` — you should see the Workboard dashboard.
 
+**Upgrading from a version that used SQLite?** Nothing to do. On first start,
+a `data/workboard.db` sitting next to an empty data directory is converted into
+the markdown tree automatically, and the database is left untouched as a backup.
+
 ## Environment Variables
 
 Every integration is optional; the UI degrades to plain links without
@@ -112,7 +116,7 @@ credentials. Copy `.env.example` to `.env` and fill in what you use.
 | `npm run mcp:smoke` | Full agent flow against the real MCP server (stdio) |
 | `npm run google:auth` | One-time Google Docs OAuth flow |
 | `npm run skills:install` | Copy `skills/` → `~/.claude/skills/` |
-| `npm run migrate:files` | One-time: convert an old `data/workboard.db` into the markdown tree |
+| `npm run migrate:files` | Rarely needed — the servers convert an old `data/workboard.db` themselves on first start. Use this for a database elsewhere, or to redo one with `--force` |
 
 ## Connecting a coding agent
 
@@ -174,7 +178,8 @@ npm run mcp:smoke   # full agent flow against the real MCP server (stdio)
 ```
 
 Core services are covered by contract tests against a real temp-directory store
-database rather than mocks.
+rather than mocks. Concurrency is tested with real processes: several racing to
+claim one task, to allocate ids, and to cold-boot a migration.
 
 ## Deployment
 
@@ -185,7 +190,9 @@ docker compose run --rm web npm run seed   # optional: sample data
 ```
 
 One image, two services (`web` and `mcp`), sharing the markdown tree on the
-named `data` volume — that volume is the only state worth backing up. See
+named `data` volume — that volume is the only state worth backing up. An
+existing volume holding a SQLite board converts itself on first start; both
+services can boot together, and only one of them will run the conversion. See
 [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for Docker MCP access, Google auth, and
 backup notes.
 

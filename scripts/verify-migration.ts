@@ -1,8 +1,10 @@
 /** Compares the migrated markdown tree against the SQLite source, row by row. */
-import Database from "better-sqlite3";
+import { createRequire } from "node:module";
 import { openStore, getProjectDetail, listProjects, listReports, listDeleted, listSummaryHistory } from "@workboard/core";
 
-const sqlite = new Database(process.argv[2], { readonly: true });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite") as any;
+const sqlite = new DatabaseSync(process.argv[2], { readOnly: true });
 const store = openStore(process.argv[3]);
 const all = <T>(t: string): T[] => sqlite.prepare(`SELECT * FROM ${t}`).all() as T[];
 /* eslint-disable @typescript-eslint/no-explicit-any */

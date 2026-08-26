@@ -14,6 +14,7 @@ import { dirname, join, resolve } from "node:path";
 import type { Comment, Link, Post, Project, Snapshot, Summary, SyncState, Task, Warning } from "../domain.js";
 import { allocateId, readdirSyncSafe, readFileSyncSafe, writeFileAtomic } from "./atomic.js";
 import { parse, serialize, type Fields } from "./frontmatter.js";
+import { migrateLegacyIfNeeded } from "./migrate.js";
 import * as p from "./paths.js";
 
 export interface Store {
@@ -60,6 +61,8 @@ export function defaultDataDir(): string {
 
 export function openStore(root: string = defaultDataDir()): Store {
   mkdirSync(root, { recursive: true });
+  // A deployment upgrading from the SQLite build converts itself on first open.
+  migrateLegacyIfNeeded(root);
   return { root };
 }
 
