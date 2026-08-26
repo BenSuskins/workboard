@@ -10,6 +10,7 @@ export interface PrLite {
   merged: boolean;
   reviewDecision?: PrSnapshot["reviewDecision"];
   ciStatus?: CiStatus;
+  author: string | null;
   updatedAt: string;
 }
 

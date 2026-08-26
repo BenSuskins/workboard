@@ -10,6 +10,7 @@ import type {
   LinkProvider,
   Project,
   ProjectHealth,
+  ProjectAccent,
   ProjectPriority,
   ProjectStatus,
   RepoScope,
@@ -81,6 +82,8 @@ export interface CreateProjectInput {
   status?: ProjectStatus;
   priority?: ProjectPriority;
   health?: ProjectHealth;
+  icon?: string;
+  accent?: ProjectAccent;
 }
 
 export function createProject(store: Store, input: CreateProjectInput): Project {
@@ -98,6 +101,8 @@ export function createProject(store: Store, input: CreateProjectInput): Project 
     priority: input.priority ?? "medium",
     health: input.health ?? "green",
     pinned: 0,
+    icon: input.icon ?? null,
+    accent: input.accent ?? null,
     createdAt: t,
     updatedAt: t,
     lastActivityAt: t,
@@ -111,6 +116,8 @@ export interface UpdateProjectInput {
   status?: ProjectStatus;
   priority?: ProjectPriority;
   health?: ProjectHealth;
+  icon?: string;
+  accent?: ProjectAccent;
 }
 
 export function updateProject(store: Store, id: number, input: UpdateProjectInput, author = "user"): Project {
@@ -832,22 +839,33 @@ export function findProject(store: Store, query: FindProjectQuery): ProjectMatch
   return matches.sort((a, b) => rank[a.confidence] - rank[b.confidence]);
 }
 
-/**
- * Updates-per-day buckets for the last `days` days, oldest first —
- * sparkline data for project cards. Buckets are local-midnight aligned.
- */
-export function getActivityCounts(store: Store, projectId: number, days = 14): number[] {
+/** Local-midnight-aligned day buckets, oldest first. Shared by the card and board charts. */
+function bucketByDay(posts: Post[], days: number, projectId?: number): number[] {
   const end = new Date();
   end.setHours(24, 0, 0, 0); // end of today
   const startMs = end.getTime() - days * 24 * 60 * 60 * 1000;
   const counts = new Array<number>(days).fill(0);
   const dayMs = 24 * 60 * 60 * 1000;
-  for (const post of board(store).posts) {
-    if (post.projectId !== projectId || post.createdAt <= startMs) continue;
+  for (const post of posts) {
+    if (projectId !== undefined && post.projectId !== projectId) continue;
+    if (post.createdAt <= startMs) continue;
     const bucket = Math.floor((post.createdAt - startMs) / dayMs);
     if (bucket >= 0 && bucket < days) counts[bucket]++;
   }
   return counts;
+}
+
+/**
+ * Updates-per-day buckets for the last `days` days, oldest first —
+ * sparkline data for project cards. Buckets are local-midnight aligned.
+ */
+export function getActivityCounts(store: Store, projectId: number, days = 14): number[] {
+  return bucketByDay(board(store).posts, days, projectId);
+}
+
+/** The same buckets across every project — the board's pulse chart. */
+export function getWorkspaceActivityCounts(store: Store, days = 30): number[] {
+  return bucketByDay(board(store).posts, days);
 }
 
 export interface ProjectMetrics {

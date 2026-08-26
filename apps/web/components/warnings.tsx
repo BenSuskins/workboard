@@ -16,7 +16,7 @@ export function WarningStrip({ warnings }: { warnings: Warning[] }) {
   const top = warnings[0];
   const s = SEVERITY[top.severity];
   return (
-    <div className={`flex items-start gap-1.5 rounded-lg border px-2 py-1.5 text-[12px] leading-snug ${s.cls}`}>
+    <div className={`flex items-start gap-1.5 rounded-control border px-2 py-1.5 text-meta leading-snug ${s.cls}`}>
       <span aria-hidden>{s.icon}</span>
       <span className="min-w-0 line-clamp-2" title={top.message}>
         <span className="font-semibold">{s.label}: </span>
@@ -35,10 +35,10 @@ export function WarningsPanel({ warnings, slug }: { warnings: Warning[]; slug: s
       {warnings.map((w) => {
         const s = SEVERITY[w.severity];
         return (
-          <div key={w.id} className={`rounded-[10px] border p-3.5 ${s.cls}`}>
+          <div key={w.id} className={`rounded-card border p-3.5 ${s.cls}`}>
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px]">
+                <div className="mb-1 flex flex-wrap items-center gap-2 text-meta">
                   <span className="font-semibold uppercase tracking-wide">
                     {s.icon} {s.label}
                   </span>
@@ -48,7 +48,7 @@ export function WarningsPanel({ warnings, slug }: { warnings: Warning[]; slug: s
                 </div>
                 <Markdown>{w.message}</Markdown>
                 {w.suggestedAction && (
-                  <p className="mt-1.5 text-[12px] text-ink-2">
+                  <p className="mt-1.5 text-meta text-ink-2">
                     <span className="font-semibold text-ink">Suggested action:</span> {w.suggestedAction}
                   </p>
                 )}
@@ -58,7 +58,7 @@ export function WarningsPanel({ warnings, slug }: { warnings: Warning[]; slug: s
                 <input type="hidden" name="slug" value={slug} />
                 <button
                   type="submit"
-                  className="rounded-lg border border-hairline px-2.5 py-1 text-xs text-ink-2 transition-colors hover:border-muted hover:text-ink"
+                  className="rounded-control border border-hairline px-2.5 py-1 text-meta text-ink-2 transition-colors hover:border-muted hover:text-ink"
                 >
                   Resolve
                 </button>

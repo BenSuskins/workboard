@@ -8,6 +8,8 @@ export const PROJECT_STATUSES = ["active", "blocked", "on_hold", "done", "archiv
 export const PROJECT_HEALTHS = ["green", "amber", "red"] as const;
 export const PROJECT_PRIORITIES = ["high", "medium", "low"] as const;
 export const CATEGORY_PRESETS = ["coding", "platform", "hiring", "process", "other"] as const;
+/** Identity hues a project tile can take. A fixed set, so every tile stays legible in both themes. */
+export const PROJECT_ACCENTS = ["orange", "purple", "green", "blue", "pink", "amber", "teal", "red"] as const;
 export const TASK_STATUSES = ["todo", "in_progress", "done"] as const;
 /** Null priority sorts last — unprioritized work trails prioritized work in the queue. */
 export const TASK_PRIORITIES = ["high", "medium", "low"] as const;
@@ -22,6 +24,7 @@ export const WARNING_STATUSES = ["open", "resolved"] as const;
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 export type ProjectHealth = (typeof PROJECT_HEALTHS)[number];
 export type ProjectPriority = (typeof PROJECT_PRIORITIES)[number];
+export type ProjectAccent = (typeof PROJECT_ACCENTS)[number];
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 export type TaskPriority = (typeof TASK_PRIORITIES)[number];
 export type PostType = (typeof POST_TYPES)[number];
@@ -49,6 +52,10 @@ export interface Project {
   health: ProjectHealth;
   /** 0 or 1 — starred by the user; pinned projects lead the board. */
   pinned: number;
+  /** One emoji shown on the project tile. Null falls back to the project's initial. */
+  icon: string | null;
+  /** Tile hue. Null derives a stable hue from the slug, so every project still reads apart. */
+  accent: ProjectAccent | null;
   createdAt: number;
   updatedAt: number;
   lastActivityAt: number;

@@ -3,43 +3,64 @@
 /*
  * Theme tokens. Utilities (bg-surface, text-ink, …) resolve through var()
  * indirection so light/dark swap at runtime via [data-theme] on <html>.
- * Values come from the validated reference palette (light + dark columns).
+ * Both themes ride one neutral-cool grey ramp so they read as one product;
+ * dark is AMOLED — a true-black page with near-black lifted surfaces.
  */
 :root {
-  --wb-page: #fbfbfa;
+  --wb-page: #fbfbfc;
   --wb-surface: #ffffff;
-  --wb-surface-2: #f4f3f0;
-  --wb-ink: #18181a;
-  --wb-ink-2: #5c5a54;
-  --wb-muted: #918f87;
-  --wb-hairline: rgba(20, 20, 20, 0.09);
-  --wb-grid: rgba(20, 20, 20, 0.14);
-  --wb-accent: #3d55d9;
-  --wb-accent-deep: #2c3fac;
-  --wb-good: #178a3e;
+  --wb-surface-2: #f2f3f5;
+  --wb-ink: #14151a;
+  --wb-ink-2: #55575d;
+  --wb-muted: #8a8f98;
+  --wb-hairline: rgba(20, 21, 26, 0.09);
+  --wb-grid: rgba(20, 21, 26, 0.14);
+  --wb-overlay: rgba(20, 21, 26, 0.28);
+  --wb-accent: #5e6ad2;
+  --wb-accent-deep: #4b55b8;
+  --wb-good: #1a7f4b;
   /* warning steps darker in light mode so warning *text* stays readable;
      badges/dots keep the icon+label pairing either way */
-  --wb-warning: #9a6a00;
+  --wb-warning: #96690a;
   --wb-critical: #d03b3b;
   --wb-serious: #b45309;
+  /* Project identity hues. Light values step darker so a tile label holds
+     contrast on white; dark values brighten to carry on black. */
+  --wb-tile-orange: #d4541f;
+  --wb-tile-purple: #7c4ddb;
+  --wb-tile-green: #1a7f4b;
+  --wb-tile-blue: #2563eb;
+  --wb-tile-pink: #d1418b;
+  --wb-tile-amber: #b45309;
+  --wb-tile-teal: #0d9488;
+  --wb-tile-red: #dc2626;
   color-scheme: light;
 }
 
 :root[data-theme="dark"] {
-  --wb-page: #181713;
-  --wb-surface: #211f1b;
-  --wb-surface-2: #2a2824;
-  --wb-ink: #f5f4f0;
-  --wb-ink-2: #c9c7bf;
-  --wb-muted: #948f84;
-  --wb-hairline: rgba(255, 255, 255, 0.1);
-  --wb-grid: rgba(255, 255, 255, 0.14);
-  --wb-accent: #7c8ff2;
-  --wb-accent-deep: #a6b2f6;
-  --wb-good: #34b566;
-  --wb-warning: #fab219;
-  --wb-critical: #e5675f;
-  --wb-serious: #dd8a4c;
+  --wb-page: #000000;
+  --wb-surface: #0e0e10;
+  --wb-surface-2: #1a1a1d;
+  --wb-ink: #f7f8f8;
+  --wb-ink-2: #b4b8bf;
+  --wb-muted: #6f757e;
+  --wb-hairline: rgba(255, 255, 255, 0.08);
+  --wb-grid: rgba(255, 255, 255, 0.12);
+  --wb-overlay: rgba(0, 0, 0, 0.62);
+  --wb-accent: #8b90f8;
+  --wb-accent-deep: #a5a9fb;
+  --wb-good: #4cc38a;
+  --wb-warning: #f2c94c;
+  --wb-critical: #ef6f6c;
+  --wb-serious: #e08c48;
+  --wb-tile-orange: #ff6b35;
+  --wb-tile-purple: #a78bfa;
+  --wb-tile-green: #4cc38a;
+  --wb-tile-blue: #60a5fa;
+  --wb-tile-pink: #f472b6;
+  --wb-tile-amber: #fbbf24;
+  --wb-tile-teal: #2dd4bf;
+  --wb-tile-red: #f87171;
   color-scheme: dark;
 }
 
@@ -52,12 +73,41 @@
   --color-muted: var(--wb-muted);
   --color-hairline: var(--wb-hairline);
   --color-grid: var(--wb-grid);
+  --color-overlay: var(--wb-overlay);
   --color-accent: var(--wb-accent);
   --color-accent-deep: var(--wb-accent-deep);
   --color-good: var(--wb-good);
   --color-warning: var(--wb-warning);
   --color-critical: var(--wb-critical);
   --color-serious: var(--wb-serious);
+  --color-tile-orange: var(--wb-tile-orange);
+  --color-tile-purple: var(--wb-tile-purple);
+  --color-tile-green: var(--wb-tile-green);
+  --color-tile-blue: var(--wb-tile-blue);
+  --color-tile-pink: var(--wb-tile-pink);
+  --color-tile-amber: var(--wb-tile-amber);
+  --color-tile-teal: var(--wb-tile-teal);
+  --color-tile-red: var(--wb-tile-red);
+
+  /* Named type steps replace the scattered text-[11px] / text-[14.5px] one-offs.
+     Every step sits one size above the old scale — the reference reads roomy,
+     not dense. */
+  --text-meta: 0.75rem;
+  --text-meta--line-height: 1.1rem;
+  --text-body: 0.875rem;
+  --text-body--line-height: 1.4rem;
+  --text-title: 0.9375rem;
+  --text-title--line-height: 1.4rem;
+  --text-heading: 1.125rem;
+  --text-heading--line-height: 1.6rem;
+  --text-display: 1.75rem;
+  --text-display--line-height: 2.15rem;
+
+  --radius-chip: 6px;
+  --radius-control: 8px;
+  --radius-card: 14px;
+  --radius-pill: 999px;
+
   --font-sans: var(--font-inter), system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
 }
@@ -72,21 +122,22 @@ body {
 /* Rendered markdown (summaries, updates, reports) */
 .prose-wb {
   color: var(--wb-ink-2);
-  font-size: 0.875rem;
-  line-height: 1.6;
+  font-size: 0.9375rem;
+  line-height: 1.7;
 }
 .prose-wb > * + * {
-  margin-top: 0.5rem;
+  margin-top: 0.85rem;
 }
 .prose-wb h1,
 .prose-wb h2,
 .prose-wb h3 {
   color: var(--wb-ink);
   font-weight: 600;
+  letter-spacing: -0.011em;
 }
-.prose-wb h1 { font-size: 1.05rem; }
-.prose-wb h2 { font-size: 0.95rem; }
-.prose-wb h3 { font-size: 0.875rem; }
+.prose-wb h1 { font-size: 1.6rem; line-height: 2rem; margin-top: 1.75rem; }
+.prose-wb h2 { font-size: 1.25rem; line-height: 1.7rem; margin-top: 1.6rem; }
+.prose-wb h3 { font-size: 1.05rem; line-height: 1.5rem; margin-top: 1.4rem; }
 .prose-wb strong { color: var(--wb-ink); font-weight: 600; }
 .prose-wb a { color: var(--wb-accent); text-decoration: none; }
 .prose-wb a:hover { text-decoration: underline; }
@@ -95,16 +146,16 @@ body {
   border: 1px solid var(--wb-hairline);
   border-radius: 4px;
   padding: 0.05rem 0.3rem;
-  font-size: 0.8em;
+  font-size: 0.85em;
   font-family: var(--font-mono);
 }
-.prose-wb ul, .prose-wb ol { padding-left: 1.25rem; }
+.prose-wb ul, .prose-wb ol { padding-left: 1.35rem; }
 .prose-wb ul { list-style: disc; }
 .prose-wb ol { list-style: decimal; }
-.prose-wb li + li { margin-top: 0.15rem; }
+.prose-wb li + li { margin-top: 0.3rem; }
 .prose-wb blockquote {
   border-left: 2px solid var(--wb-grid);
-  padding-left: 0.75rem;
+  padding-left: 0.9rem;
   color: var(--wb-muted);
 }
 
@@ -112,11 +163,11 @@ body {
 .prose-wb pre {
   background: var(--wb-surface-2);
   border: 1px solid var(--wb-hairline);
-  border-radius: 8px;
-  padding: 0.65rem 0.8rem;
+  border-radius: var(--radius-control);
+  padding: 0.8rem 0.95rem;
   overflow-x: auto;
-  font-size: 0.8rem;
-  line-height: 1.5;
+  font-size: 0.8125rem;
+  line-height: 1.6;
   font-family: var(--font-mono);
 }
 /* Inline-code chrome would double up inside a block. */
@@ -129,14 +180,14 @@ body {
 .prose-wb table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   display: block;
   overflow-x: auto;
 }
 .prose-wb th,
 .prose-wb td {
   border: 1px solid var(--wb-hairline);
-  padding: 0.3rem 0.55rem;
+  padding: 0.4rem 0.65rem;
   text-align: left;
   vertical-align: top;
 }
@@ -149,26 +200,57 @@ body {
 .prose-wb img {
   max-width: 100%;
   height: auto;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
 }
 .prose-wb hr {
   border: 0;
   border-top: 1px solid var(--wb-hairline);
-  margin: 1rem 0;
+  margin: 1.5rem 0;
 }
 .prose-wb li:has(> input[type="checkbox"]) {
   list-style: none;
-  margin-left: -1.05rem;
+  margin-left: -1.15rem;
 }
 .prose-wb input[type="checkbox"] {
-  margin-right: 0.4rem;
+  margin-right: 0.45rem;
   accent-color: var(--wb-accent);
 }
-.prose-wb .wb-mermaid {
-  background: var(--wb-surface-2);
+
+/*
+ * Diagram figure. The header bar names the diagram kind and carries the
+ * fullscreen control; the body holds the placeholder Mermaid draws into.
+ */
+.wb-figure {
   border: 1px solid var(--wb-hairline);
-  border-radius: 8px;
-  padding: 0.75rem;
+  border-radius: var(--radius-card);
+  background: var(--wb-surface);
+  overflow: hidden;
+}
+.wb-figure-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--wb-hairline);
+  font-size: 0.75rem;
+  color: var(--wb-muted);
+}
+.wb-figure-kind { color: var(--wb-ink-2); font-weight: 600; }
+.wb-figure-expand {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-chip);
+  color: var(--wb-muted);
+  cursor: pointer;
+}
+.wb-figure-expand:hover { background: var(--wb-surface-2); color: var(--wb-ink); }
+.prose-wb .wb-mermaid {
+  background: var(--wb-page);
+  padding: 1rem;
   overflow-x: auto;
   text-align: center;
 }
@@ -186,8 +268,74 @@ body {
   color: var(--wb-muted);
   white-space: pre-wrap;
 }
+/*
+ * Fullscreen: the figure fills the viewport, so the diagram should too.
+ * .wb-figure-fallback covers browsers with no element fullscreen (iOS Safari).
+ */
+.wb-figure:fullscreen,
+.wb-figure-fallback {
+  background: var(--wb-page);
+  border: 0;
+  border-radius: 0;
+}
+.wb-figure-fallback {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  overflow: auto;
+}
+.wb-figure:fullscreen .wb-mermaid,
+.wb-figure-fallback .wb-mermaid {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: calc(100vh - 3rem);
+}
+.wb-figure:fullscreen .wb-mermaid svg,
+.wb-figure-fallback .wb-mermaid svg {
+  max-height: calc(100vh - 5rem);
+  max-width: 100%;
+}
+
+/*
+ * The sidebar is fixed, so the content pane carries its width as padding. The
+ * pre-paint script stamps data-sidebar, which keeps the offset correct on the
+ * first frame instead of shifting once React mounts.
+ */
+.wb-content {
+  padding-left: 15rem;
+  transition: padding-left 150ms;
+}
+:root[data-sidebar="collapsed"] .wb-content {
+  padding-left: 3.5rem;
+}
+@media (max-width: 640px) {
+  .wb-content {
+    padding-left: 3.5rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wb-content {
+    transition: none;
+  }
+}
 
 /* Keyboard-navigated row highlight (BoardKeynav); unlayered so it wins over utility backgrounds */
 .keynav-active {
   background: color-mix(in srgb, var(--wb-surface-2) 55%, transparent);
+}
+
+/* The detail panel slides in from the right; the scrim fades with it. */
+@keyframes wb-panel-in {
+  from { transform: translateX(1.5rem); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes wb-scrim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.wb-panel { animation: wb-panel-in 180ms cubic-bezier(0.32, 0.72, 0, 1); }
+.wb-scrim { animation: wb-scrim-in 180ms ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .wb-panel, .wb-scrim { animation: none; }
 }

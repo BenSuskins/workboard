@@ -20,6 +20,13 @@ interface Item {
   run: () => void | Promise<void>;
 }
 
+/** Anything can ask for the palette without owning its state. */
+export const OPEN_PALETTE_EVENT = "wb:open-palette";
+
+export function openPalette() {
+  window.dispatchEvent(new Event(OPEN_PALETTE_EVENT));
+}
+
 export function CommandPalette() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -35,7 +42,7 @@ export function CommandPalette() {
     setSelected(0);
   }, []);
 
-  // global ⌘K / Ctrl+K
+  // global ⌘K / Ctrl+K, plus the sidebar's search field asking for it by name
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
@@ -45,8 +52,13 @@ export function CommandPalette() {
         close();
       }
     };
+    const onRequest = () => setOpen(true);
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener(OPEN_PALETTE_EVENT, onRequest);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener(OPEN_PALETTE_EVENT, onRequest);
+    };
   }, [close]);
 
   // lazy project index, refreshed each time the palette opens
@@ -69,6 +81,8 @@ export function CommandPalette() {
 
   const commands: Item[] = [
     { key: "cmd-board", label: "Go to Board", hint: "navigate", run: () => go("/") },
+    { key: "cmd-inbox", label: "Go to Inbox", hint: "navigate", run: () => go("/inbox") },
+    { key: "cmd-prs", label: "Go to Pull requests", hint: "navigate", run: () => go("/prs") },
     { key: "cmd-reports", label: "Go to Reports", hint: "navigate", run: () => go("/reports") },
     { key: "cmd-new", label: "New project", hint: "create", run: () => go("/projects/new") },
     {
@@ -108,7 +122,7 @@ export function CommandPalette() {
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-[15vh]" onMouseDown={close} role="dialog" aria-modal>
       <div
-        className="w-full max-w-lg overflow-hidden rounded-[10px] border border-hairline bg-surface shadow-2xl"
+        className="w-full max-w-lg overflow-hidden rounded-card border border-hairline bg-surface shadow-2xl"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <input
@@ -131,22 +145,22 @@ export function CommandPalette() {
             }
           }}
           placeholder="Jump to a project or run a command…"
-          className="w-full border-b border-hairline bg-transparent px-4 py-3 text-sm text-ink placeholder:text-muted focus:outline-none"
+          className="w-full border-b border-hairline bg-transparent px-4 py-3 text-body text-ink placeholder:text-muted focus:outline-none"
         />
         <ul className="max-h-72 overflow-y-auto p-1.5">
-          {items.length === 0 && <li className="px-3 py-6 text-center text-sm text-muted">No matches.</li>}
+          {items.length === 0 && <li className="px-3 py-6 text-center text-body text-muted">No matches.</li>}
           {items.map((item, i) => (
             <li key={item.key}>
               <button
                 type="button"
                 onMouseEnter={() => setSelected(i)}
                 onClick={() => void item.run()}
-                className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm ${
+                className={`flex w-full items-center justify-between gap-3 rounded-control px-3 py-2 text-left text-body ${
                   i === active ? "bg-accent/15 text-ink" : "text-ink-2"
                 }`}
               >
                 <span className="truncate">{item.label}</span>
-                <span className="shrink-0 text-[11px] text-muted">{item.hint}</span>
+                <span className="shrink-0 text-meta text-muted">{item.hint}</span>
               </button>
             </li>
           ))}
@@ -157,17 +171,3 @@ export function CommandPalette() {
   );
 }
 
-/** Header affordance that opens the palette (dispatches the same ⌘K keystroke). */
-export function PaletteHint() {
-  return (
-    <button
-      type="button"
-      aria-label="Open command palette"
-      title="Command palette (⌘K)"
-      onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))}
-      className="hidden items-center gap-1 rounded-md border border-hairline px-2 py-1 font-mono text-[11px] text-muted transition-colors hover:border-muted hover:text-ink sm:inline-flex"
-    >
-      ⌘K
-    </button>
-  );
-}

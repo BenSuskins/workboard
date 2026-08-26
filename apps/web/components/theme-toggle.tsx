@@ -28,7 +28,7 @@ export function ThemeToggle() {
       aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
       title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
       onClick={() => setTheme(toggleTheme())}
-      className="grid size-8 place-items-center rounded-lg border border-hairline text-ink-2 transition-colors hover:border-muted hover:text-ink"
+      className="grid size-8 place-items-center rounded-control border border-hairline text-ink-2 transition-colors hover:border-muted hover:text-ink"
     >
       <span aria-hidden>{theme === null ? "◐" : theme === "dark" ? "☀" : "☾"}</span>
     </button>

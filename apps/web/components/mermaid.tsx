@@ -54,9 +54,30 @@ export function Mermaid() {
     });
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
+    /*
+     * Fullscreen. The expand button is markup the renderer emitted, not React,
+     * so one delegated listener covers every diagram on the page — including
+     * ones that arrive later in a panel.
+     */
+    const onClick = (event: MouseEvent) => {
+      const button = (event.target as HTMLElement | null)?.closest<HTMLElement>("[data-wb-expand]");
+      if (!button) return;
+      const figure = button.closest<HTMLElement>(".wb-figure");
+      if (!figure) return;
+      event.preventDefault();
+      if (document.fullscreenElement === figure) {
+        void document.exitFullscreen();
+      } else {
+        // Safari on iOS has no element fullscreen; the class is the fallback.
+        void figure.requestFullscreen?.().catch(() => figure.classList.toggle("wb-figure-fallback"));
+      }
+    };
+    document.addEventListener("click", onClick);
+
     return () => {
       cancelled = true;
       observer.disconnect();
+      document.removeEventListener("click", onClick);
     };
   }, []);
 

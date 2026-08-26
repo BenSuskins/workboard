@@ -21,6 +21,7 @@ import {
   listReports,
   listSummaryHistory,
   PROJECT_HEALTHS,
+  PROJECT_ACCENTS,
   PROJECT_PRIORITIES,
   PROJECT_STATUSES,
   raiseWarning,
@@ -41,6 +42,7 @@ import {
 const statusEnum = z.enum(PROJECT_STATUSES);
 const healthEnum = z.enum(PROJECT_HEALTHS);
 const priorityEnum = z.enum(PROJECT_PRIORITIES);
+const accentEnum = z.enum(PROJECT_ACCENTS);
 const taskStatusEnum = z.enum(TASK_STATUSES);
 const taskPriorityEnum = z.enum(TASK_PRIORITIES);
 
@@ -209,11 +211,13 @@ export function registerTools(server: McpServer, db: Store): void {
         description: z.string().optional().describe("What this project is and its goal (markdown)"),
         category: z.string().optional(),
         priority: priorityEnum.optional(),
+        icon: z.string().optional().describe("One emoji for the project tile"),
+        accent: accentEnum.optional().describe("Tile hue; omit to derive one from the name"),
         links: z.array(z.object({ url: z.string(), title: z.string().optional() })).optional(),
       },
     },
-    async ({ name, description, category, priority, links: initialLinks }) => {
-      const project = createProject(db, { name, description, category, priority });
+    async ({ name, description, category, priority, icon, accent, links: initialLinks }) => {
+      const project = createProject(db, { name, description, category, priority, icon, accent });
       for (const l of initialLinks ?? []) addLink(db, project.id, { url: l.url, title: l.title });
       return json({ created: projectCard(project) });
     },
@@ -223,7 +227,8 @@ export function registerTools(server: McpServer, db: Store): void {
     "update_project",
     {
       title: "Update project",
-      description: "Change a project's status, health, priority, name, category, or description. Status changes are logged to the activity timeline.",
+      description:
+        "Change a project's status, health, priority, name, category, description, or tile identity (icon and accent). Status changes are logged to the activity timeline.",
       inputSchema: {
         project: projectRef,
         name: z.string().optional(),
@@ -232,6 +237,8 @@ export function registerTools(server: McpServer, db: Store): void {
         status: statusEnum.optional(),
         priority: priorityEnum.optional(),
         health: healthEnum.optional(),
+        icon: z.string().optional().describe("One emoji for the project tile"),
+        accent: accentEnum.optional().describe("Tile hue; omit to derive one from the name"),
         agent_name: z.string().optional().describe("Your agent name, for attribution"),
       },
     },

@@ -8,7 +8,7 @@ function Inner({ label }: { label: string }) {
     <button
       type="submit"
       disabled={pending}
-      className="inline-flex items-center gap-1.5 rounded-lg border border-hairline px-3 py-1.5 text-sm text-ink-2 transition-colors hover:border-muted hover:text-ink disabled:cursor-wait disabled:opacity-60"
+      className="inline-flex items-center gap-1.5 rounded-control border border-hairline px-3 py-1.5 text-body text-ink-2 transition-colors hover:border-muted hover:text-ink disabled:cursor-wait disabled:opacity-60"
     >
       <span className={pending ? "inline-block animate-spin" : ""} aria-hidden>
         ↻

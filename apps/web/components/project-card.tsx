@@ -2,33 +2,64 @@ import Link from "next/link";
 import type { ProjectDetail } from "@workboard/core";
 import { setProjectPinnedAction } from "@/lib/actions";
 import { hasPipeline, prPipeline } from "@/lib/pipeline";
-import { ProjectMeta, StatusBadge } from "./badges";
+import { AvatarStack } from "./avatar";
 import { DocChips, JiraChips, PipelineChip } from "./chips";
+import { ACCENT_BG, ACCENT_TEXT, STATUS_LABEL, STATUS_TONE, tileAccent, tileGlyph } from "./labels";
 import { Markdown } from "./markdown";
 import { Sparkline } from "./sparkline";
-import { TimeAgo } from "./time-ago";
 import { WarningStrip } from "./warnings";
+
+/** Everyone who has touched the project lately, most recent first, no repeats. */
+function recentAuthors(detail: ProjectDetail): string[] {
+  const seen: string[] = [];
+  for (const post of detail.posts) {
+    if (!seen.includes(post.author)) seen.push(post.author);
+  }
+  return seen;
+}
 
 // The whole card is clickable via the title link's stretched ::after (fills the
 // nearest positioned ancestor, i.e. this card). The pipeline chip's popover PR
 // links sit later in the DOM at the same stacking level, so they paint above the
 // stretched area and stay independently clickable — no nested <a> involved.
-export function ProjectCard({ detail, activityCounts }: { detail: ProjectDetail; activityCounts?: number[] }) {
+export function ProjectCard({
+  detail,
+  activityCounts,
+  index,
+}: {
+  detail: ProjectDetail;
+  activityCounts?: number[];
+  index?: number;
+}) {
   const { project, latestSummary, links, tasks, openWarnings } = detail;
   const pipeline = prPipeline(links);
-  const openTasks = tasks.filter((t) => t.status !== "done").length;
-  const queuedTasks = tasks.filter((t) => t.agentReady && t.status === "todo" && !t.claimedAt).length;
-  const donePct =
-    tasks.length > 0 ? Math.round((tasks.filter((t) => t.status === "done").length / tasks.length) * 100) : null;
+  const moving = tasks.filter((t) => t.status === "in_progress").length;
+  const upForGrabs = tasks.filter((t) => t.agentReady && t.status === "todo" && !t.claimedAt).length;
+  const done = tasks.filter((t) => t.status === "done").length;
+  const accent = tileAccent(project);
+  const tone = STATUS_TONE[project.status];
+
   return (
-    <div className="relative flex flex-col gap-2 rounded-[10px] border border-hairline bg-surface p-3.5 transition-colors hover:border-accent/50">
-      <div className="flex items-start justify-between gap-2">
-        <h3 className="text-[14.5px] font-semibold leading-snug">
-          <Link href={`/projects/${project.slug}`} className="text-ink after:absolute after:inset-0 after:content-[''] hover:text-accent">
-            {project.name}
-          </Link>
-        </h3>
-        <div className="flex items-center gap-1.5">
+    <div
+      data-row
+      className="relative flex flex-col gap-3 rounded-card border border-hairline bg-surface p-4 transition-colors hover:border-accent/40"
+    >
+      <div className="flex items-start gap-3">
+        <span
+          className={`flex size-9 shrink-0 items-center justify-center rounded-control text-base font-semibold ${ACCENT_BG[accent]} ${ACCENT_TEXT[accent]}`}
+          aria-hidden
+        >
+          {tileGlyph(project)}
+        </span>
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate text-title font-semibold leading-snug">
+            <Link href={`/projects/${project.slug}`} className="text-ink after:absolute after:inset-0 after:content-[''] hover:text-accent">
+              {project.name}
+            </Link>
+          </h3>
+          {project.description && <p className="truncate text-meta text-muted">{project.description}</p>}
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
           <form action={setProjectPinnedAction}>
             <input type="hidden" name="projectId" value={project.id} />
             <input type="hidden" name="slug" value={project.slug} />
@@ -37,27 +68,39 @@ export function ProjectCard({ detail, activityCounts }: { detail: ProjectDetail;
               type="submit"
               aria-label={project.pinned ? "Unpin project" : "Pin project"}
               title={project.pinned ? "Unpin" : "Pin to top of board"}
-              className={`relative z-10 text-sm leading-none transition-colors ${
+              className={`relative z-10 text-body leading-none transition-colors ${
                 project.pinned ? "text-warning" : "text-muted/40 hover:text-muted"
               }`}
             >
               ★
             </button>
           </form>
-          <StatusBadge status={project.status} />
+          {index !== undefined && index <= 9 && (
+            <span
+              className="inline-flex size-5 items-center justify-center rounded-chip bg-surface-2 text-[10px] font-medium text-muted"
+              title={`Press ${index} to open`}
+            >
+              {index}
+            </span>
+          )}
         </div>
       </div>
-      <ProjectMeta category={project.category} health={project.health} priority={project.priority} />
+
+      <p className={`text-meta font-medium ${tone.text}`}>
+        {STATUS_LABEL[project.status]}
+        {moving > 0 && <span className="text-muted"> — {moving} in progress</span>}
+      </p>
+
       <WarningStrip warnings={openWarnings} />
+
       {latestSummary ? (
-        <div className="line-clamp-2">
+        <div className="line-clamp-2 text-body">
           <Markdown>{latestSummary.body}</Markdown>
         </div>
       ) : (
-        <p className="text-[12.5px] leading-[1.45] text-ink-2">
-          {project.description || "No summary yet — an agent will write one."}
-        </p>
+        <p className="line-clamp-2 text-body text-ink-2">No summary yet — an agent will write one.</p>
       )}
+
       {(hasPipeline(pipeline) || links.length > 0) && (
         <div className="flex flex-wrap items-center gap-1.5">
           <PipelineChip pipeline={pipeline} />
@@ -65,16 +108,19 @@ export function ProjectCard({ detail, activityCounts }: { detail: ProjectDetail;
           <DocChips links={links} />
         </div>
       )}
-      <div className="mt-auto flex items-center justify-between gap-2 border-t border-hairline pt-2 text-[11px] text-muted">
+
+      {activityCounts && (
+        <div className="mt-auto">
+          <Sparkline counts={activityCounts} width={280} height={44} fill />
+        </div>
+      )}
+
+      <div className="flex items-center justify-between gap-2 text-meta text-muted">
         <span>
-          {openTasks > 0 ? `${openTasks} open task${openTasks === 1 ? "" : "s"}` : "no open tasks"}
-          {queuedTasks > 0 && <span className="ml-1.5 text-accent">· {queuedTasks} queued for agents</span>}
-          {donePct !== null && <span>· {donePct}% done</span>}
+          <span className="font-semibold text-ink-2">{upForGrabs}</span> up for grabs ·{" "}
+          <span className="font-semibold text-ink-2">{done}</span> done
         </span>
-        {activityCounts && <Sparkline counts={activityCounts} />}
-        <span>
-          active <TimeAgo at={project.lastActivityAt} />
-        </span>
+        <AvatarStack authors={recentAuthors(detail)} />
       </div>
     </div>
   );

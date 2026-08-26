@@ -15,7 +15,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const tab = (href: string, label: string, active: boolean) => (
     <Link
       href={href}
-      className={`rounded-md px-2.5 py-1 text-xs font-medium ${active ? "bg-accent/15 text-accent" : "text-ink-2 hover:text-ink"}`}
+      className={`rounded-chip px-2.5 py-1 text-meta font-medium ${active ? "bg-accent/15 text-accent" : "text-ink-2 hover:text-ink"}`}
     >
       {label}
     </Link>
@@ -34,14 +34,14 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         </div>
       </div>
       {reports.length === 0 ? (
-        <div className="rounded-[10px] border border-dashed border-grid px-6 py-16 text-center text-sm text-muted">
+        <div className="rounded-card border border-dashed border-grid px-6 py-16 text-center text-body text-muted">
           No reports yet. Run the <code>workboard-digest</code>, <code>workboard-triage</code>, or{" "}
           <code>workboard-accomplishments</code> skill from a coding agent to generate one.
         </div>
       ) : (
         reports.map((r) => (
-          <article key={r.id} className="rounded-[10px] border border-hairline bg-surface p-5">
-            <div className="mb-3 flex items-center gap-2 text-[11px] text-muted">
+          <article key={r.id} className="rounded-card border border-hairline bg-surface p-5">
+            <div className="mb-3 flex items-center gap-2 text-meta text-muted">
               <span
                 className={`rounded-full border px-2 py-0.5 font-medium ${
                   r.kind === "digest"
