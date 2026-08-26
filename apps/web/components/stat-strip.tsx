@@ -4,6 +4,7 @@ import { boardHref, type Filters } from "./filter-bar";
 interface BoardStats {
   active: number;
   blocked: number;
+  questions: number;
   warnings: number;
   stale: number;
   openPrs: number;
@@ -12,6 +13,7 @@ interface BoardStats {
 
 const TONE_CLS = {
   critical: "text-critical",
+  serious: "text-serious",
   warning: "text-warning",
 } as const;
 
@@ -33,6 +35,12 @@ export function StatStrip({ filters, stats }: { filters: Filters; stats: BoardSt
       value: stats.blocked,
       tone: stats.blocked > 0 ? "critical" : undefined,
       href: boardHref({ ...filters, status: "blocked" }),
+    },
+    {
+      label: stats.questions === 1 ? "open question" : "open questions",
+      value: stats.questions,
+      // A question blocks an agent until the user replies, so it reads as work, not noise.
+      tone: stats.questions > 0 ? "serious" : undefined,
     },
     { label: "warnings", value: stats.warnings, tone: stats.warnings > 0 ? "warning" : undefined },
     {

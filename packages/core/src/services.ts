@@ -20,8 +20,9 @@ import type {
   Task,
   TaskPriority,
   TaskStatus,
-  Update,
-  UpdateType,
+  Comment,
+  Post,
+  PostType,
   Warning,
   WarningSeverity,
 } from "./domain.js";
@@ -35,6 +36,7 @@ import {
   slugify,
   writeJson,
   writeLink,
+  writeComment,
   writePost,
   writeProject,
   writeSummary,
@@ -117,7 +119,7 @@ export function updateProject(store: Store, id: number, input: UpdateProjectInpu
   const t = now();
   const updated = writeProject(store, { ...existing, ...defined(input), updatedAt: t, lastActivityAt: t });
   if (input.status && input.status !== existing.status) {
-    addUpdate(store, id, `Status changed from **${existing.status}** to **${input.status}**`, {
+    addPost(store, id, `Status changed from **${existing.status}** to **${input.status}**`, {
       type: "status_change",
       author,
     });
@@ -172,7 +174,8 @@ export interface LinkWithStatus extends Link {
 export interface ProjectDetail {
   project: Project;
   tasks: Task[];
-  updates: Update[];
+  posts: Post[];
+  comments: Comment[];
   links: LinkWithStatus[];
   latestSummary: Summary | null;
   openWarnings: Warning[];
@@ -183,7 +186,7 @@ const TASK_STATUS_RANK = { in_progress: 0, todo: 1, done: 2 } as const;
 const TASK_PRIORITY_RANK = { high: 0, medium: 1, low: 2 } as const;
 const taskPriorityRank = (priority: TaskPriority | null) => (priority ? TASK_PRIORITY_RANK[priority] : 3);
 
-export function getProjectDetail(store: Store, ref: number | string, opts: { updatesLimit?: number } = {}): ProjectDetail | undefined {
+export function getProjectDetail(store: Store, ref: number | string, opts: { postsLimit?: number } = {}): ProjectDetail | undefined {
   const project = getProject(store, ref);
   if (!project) return undefined;
   const data = board(store);
@@ -197,10 +200,12 @@ export function getProjectDetail(store: Store, ref: number | string, opts: { upd
         b.updatedAt - a.updatedAt,
     );
 
-  const projectUpdates = data.updates
-    .filter((update) => update.projectId === project.id)
+  const projectPosts = data.posts
+    .filter((post) => post.projectId === project.id)
     .sort(byNewest)
-    .slice(0, opts.updatesLimit ?? 50);
+    .slice(0, opts.postsLimit ?? 50);
+  const postIds = new Set(projectPosts.map((post) => post.id));
+  const projectComments = data.comments.filter((comment) => postIds.has(comment.postId)).sort((a, b) => a.createdAt - b.createdAt);
 
   const projectLinks = data.links
     .filter((link) => link.projectId === project.id && !link.deletedAt)
@@ -216,7 +221,8 @@ export function getProjectDetail(store: Store, ref: number | string, opts: { upd
   return {
     project,
     tasks: projectTasks,
-    updates: projectUpdates,
+    posts: projectPosts,
+    comments: projectComments,
     links: projectLinks,
     latestSummary,
     openWarnings: listWarnings(store, { projectId: project.id }),
@@ -380,24 +386,108 @@ export function claimTask(store: Store, id: number, claimedBy: string): Task {
   invalidate(store);
   const t = now();
   const claimed = writeTask(store, slug, { ...existing, status: "in_progress", claimedBy, claimedAt: t, updatedAt: t });
-  addUpdate(store, claimed.projectId, `Claimed task **${claimed.title}**`, { type: "agent_update", author: claimedBy });
+  addPost(store, claimed.projectId, `Claimed task **${claimed.title}**`, { type: "agent_update", author: claimedBy });
   return claimed;
 }
 
-// ---------- updates ----------
+// ---------- posts, comments, questions ----------
 
-export function addUpdate(store: Store, projectId: number, body: string, opts: { type?: UpdateType; author?: string } = {}): Update {
-  const update: Update = {
-    id: nextId(store, "updates"),
+export interface AddPostOptions {
+  type?: PostType;
+  title?: string;
+  author?: string;
+}
+
+export function addPost(store: Store, projectId: number, body: string, opts: AddPostOptions = {}): Post {
+  const post: Post = {
+    id: nextId(store, "posts"),
     projectId,
     type: opts.type ?? "note",
+    title: opts.title ?? "",
     body,
     author: opts.author ?? "user",
     createdAt: now(),
+    answeredAt: null,
   };
-  writePost(store, projectSlug(store, projectId), update);
+  writePost(store, projectSlug(store, projectId), post);
   touchProject(store, projectId);
-  return update;
+  return post;
+}
+
+export function getPost(store: Store, id: number): Post | undefined {
+  return board(store).posts.find((post) => post.id === id);
+}
+
+export function listComments(store: Store, postId: number): Comment[] {
+  return board(store)
+    .comments.filter((comment) => comment.postId === postId)
+    .sort((a, b) => a.createdAt - b.createdAt || a.id - b.id);
+}
+
+/**
+ * Reply to a post. A reply from anyone but the asker marks a question answered,
+ * which is what takes it off the board's open-questions count.
+ */
+export function addComment(store: Store, postId: number, body: string, author = "user"): Comment {
+  const post = getPost(store, postId);
+  if (!post) throw new Error(`Post ${postId} not found`);
+  const slug = projectSlug(store, post.projectId);
+  const comment: Comment = {
+    id: nextId(store, "comments"),
+    postId,
+    projectId: post.projectId,
+    body,
+    author,
+    createdAt: now(),
+  };
+  writeComment(store, slug, comment);
+  if (post.type === "question" && !post.answeredAt && author !== post.author) {
+    writePost(store, slug, { ...post, answeredAt: comment.createdAt });
+  }
+  touchProject(store, post.projectId);
+  return comment;
+}
+
+/** Questions still waiting on the user, oldest first — the ones blocking an agent. */
+export function listOpenQuestions(store: Store, opts: { projectId?: number } = {}): Post[] {
+  const live = new Set(listProjects(store, {}).map((project) => project.id));
+  return board(store)
+    .posts.filter(
+      (post) =>
+        post.type === "question" &&
+        !post.answeredAt &&
+        live.has(post.projectId) &&
+        (opts.projectId === undefined || post.projectId === opts.projectId),
+    )
+    .sort((a, b) => a.createdAt - b.createdAt);
+}
+
+export interface Answer {
+  comment: Comment;
+  post: Post;
+  projectSlug: string;
+}
+
+/**
+ * Replies waiting for an agent: comments by somebody else on the posts and
+ * questions that agent wrote. This is the return path that closes the loop —
+ * an agent posts, the user replies, and the agent reads the reply next session.
+ */
+export function listAnswers(store: Store, opts: { agentName?: string; since?: number } = {}): Answer[] {
+  const data = board(store);
+  const mine = opts.agentName ? new Set([opts.agentName, `agent:${opts.agentName}`]) : undefined;
+  const since = opts.since ?? 0;
+  return data.comments
+    .filter((comment) => comment.createdAt > since)
+    .flatMap((comment) => {
+      const post = data.posts.find((candidate) => candidate.id === comment.postId);
+      if (!post) return [];
+      if (mine && !mine.has(post.author)) return [];
+      if (mine && mine.has(comment.author)) return [];
+      const project = data.projects.find((candidate) => candidate.id === post.projectId);
+      return project ? [{ comment, post, projectSlug: project.slug }] : [];
+    })
+    .sort((a, b) => a.comment.createdAt - b.comment.createdAt);
 }
 
 // ---------- summaries & reports ----------
@@ -635,7 +725,7 @@ export function resolveWarning(store: Store, id: number, opts: { resolvedBy?: st
     status: "resolved",
     resolvedAt: now(),
   });
-  addUpdate(store, existing.projectId, `Resolved warning: ${existing.message}${opts.note ? ` — ${opts.note}` : ""}`, {
+  addPost(store, existing.projectId, `Resolved warning: ${existing.message}${opts.note ? ` — ${opts.note}` : ""}`, {
     type: "note",
     author: opts.resolvedBy ?? "user",
   });
@@ -752,9 +842,9 @@ export function getActivityCounts(store: Store, projectId: number, days = 14): n
   const startMs = end.getTime() - days * 24 * 60 * 60 * 1000;
   const counts = new Array<number>(days).fill(0);
   const dayMs = 24 * 60 * 60 * 1000;
-  for (const update of board(store).updates) {
-    if (update.projectId !== projectId || update.createdAt <= startMs) continue;
-    const bucket = Math.floor((update.createdAt - startMs) / dayMs);
+  for (const post of board(store).posts) {
+    if (post.projectId !== projectId || post.createdAt <= startMs) continue;
+    const bucket = Math.floor((post.createdAt - startMs) / dayMs);
     if (bucket >= 0 && bucket < days) counts[bucket]++;
   }
   return counts;
@@ -788,7 +878,7 @@ function collectSnapshotPrs(data: unknown, into: PrLike[]): void {
 
 /** Task completion and PR throughput for a project — the reporting numbers. */
 export function getProjectMetrics(store: Store, ref: number | string): ProjectMetrics | undefined {
-  const detail = getProjectDetail(store, ref, { updatesLimit: 0 });
+  const detail = getProjectDetail(store, ref, { postsLimit: 0 });
   if (!detail) return undefined;
   const tasksDone = detail.tasks.filter((task) => task.status === "done").length;
   const prs: PrLike[] = [];
@@ -816,7 +906,7 @@ export interface ActivityFeed {
   projects: {
     project: Project;
     latestSummary: string | null;
-    updates: Update[];
+    posts: Post[];
     openTasks: Task[];
     openWarnings: Warning[];
     links: { url: string; kind: LinkKind; title: string; externalId: string | null; snapshot: unknown; fetchedAt: number | null }[];
@@ -831,7 +921,7 @@ export function getActivity(store: Store, since: number): ActivityFeed {
       project,
       latestSummary:
         data.summaries.filter((s) => s.projectId === project.id && s.kind === "project_summary").sort(byNewest)[0]?.body ?? null,
-      updates: data.updates.filter((u) => u.projectId === project.id && u.createdAt > since).sort(byNewest),
+      posts: data.posts.filter((post) => post.projectId === project.id && post.createdAt > since).sort(byNewest),
       openTasks: data.tasks.filter(
         (task) => task.projectId === project.id && !task.deletedAt && (task.status === "todo" || task.status === "in_progress"),
       ),

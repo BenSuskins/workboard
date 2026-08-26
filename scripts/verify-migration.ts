@@ -17,7 +17,7 @@ const dbProjects = all<any>("projects");
 check("project count", dbProjects.length, listProjects(store, { includeArchived: true }).length);
 
 for (const row of dbProjects) {
-  const detail = getProjectDetail(store, row.id, { updatesLimit: 1000 });
+  const detail = getProjectDetail(store, row.id, { postsLimit: 1000 });
   if (!detail) { failures++; console.error(`MISSING project ${row.slug}`); continue; }
   const p = detail.project;
   check(`${row.slug}.project`,
@@ -30,9 +30,9 @@ for (const row of dbProjects) {
     detail.tasks.map((t) => [t.id, t.title, t.description, t.status, t.priority, t.agentReady, t.claimedBy, t.dueDate, t.author]).sort());
 
   const dbUpdates = all<any>("updates").filter((u) => u.project_id === row.id);
-  check(`${row.slug}.updates`,
+  check(`${row.slug}.posts`,
     dbUpdates.map((u) => [u.id, u.type, u.body, u.author, u.created_at]).sort(),
-    detail.updates.map((u) => [u.id, u.type, u.body, u.author, u.createdAt]).sort());
+    detail.posts.map((post) => [post.id, post.type, post.body, post.author, post.createdAt]).sort());
 
   const dbLinks = all<any>("links").filter((l) => l.project_id === row.id && !l.deleted_at);
   check(`${row.slug}.links`,

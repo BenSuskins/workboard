@@ -11,7 +11,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import type { Link, Project, Snapshot, Summary, SyncState, Task, Update, Warning } from "../domain.js";
+import type { Comment, Link, Post, Project, Snapshot, Summary, SyncState, Task, Warning } from "../domain.js";
 import { allocateId, readdirSyncSafe, readFileSyncSafe, writeFileAtomic } from "./atomic.js";
 import { parse, serialize, type Fields } from "./frontmatter.js";
 import * as p from "./paths.js";
@@ -25,7 +25,8 @@ export interface Store {
 export interface Board {
   projects: Project[];
   tasks: Task[];
-  updates: Update[];
+  posts: Post[];
+  comments: Comment[];
   summaries: Summary[];
   links: Link[];
   warnings: Warning[];
@@ -92,7 +93,7 @@ function readAll(dir: string): { fields: Fields; body: string; name: string }[] 
 }
 
 function loadBoard(root: string): Board {
-  const out: Board = { projects: [], tasks: [], updates: [], summaries: [], links: [], warnings: [], syncState: [], snapshots: [] };
+  const out: Board = { projects: [], tasks: [], posts: [], comments: [], summaries: [], links: [], warnings: [], syncState: [], snapshots: [] };
 
   for (const slug of readdirSyncSafe(p.projectsDir(root)).filter(p.isContent).sort()) {
     const doc = readDoc(p.projectFile(root, slug));
@@ -113,9 +114,14 @@ function loadBoard(root: string): Board {
       }
     }
 
-    for (const postId of readdirSyncSafe(p.postsDir(root, slug)).filter(p.isContent).sort()) {
-      const doc = readDoc(join(p.postsDir(root, slug), postId, "post.md"));
-      if (doc) out.updates.push({ ...(doc.fields as unknown as Update), projectId: id, body: doc.body });
+    for (const dirName of readdirSyncSafe(p.postsDir(root, slug)).filter(p.isContent).sort()) {
+      const doc = readDoc(join(p.postsDir(root, slug), dirName, "post.md"));
+      if (!doc) continue;
+      const post = { ...(doc.fields as unknown as Post), projectId: id, body: doc.body };
+      out.posts.push(post);
+      for (const { fields, body } of readAll(join(p.postsDir(root, slug), dirName, "comments"))) {
+        out.comments.push({ ...(fields as unknown as Comment), postId: post.id, projectId: id, body });
+      }
     }
 
     for (const { fields, body } of readAll(p.summariesDir(root, slug))) {
@@ -181,10 +187,19 @@ export function writeTask(store: Store, slug: string, task: Task): Task {
   return task;
 }
 
-export function writePost(store: Store, slug: string, update: Update): Update {
-  write(p.postFile(store.root, slug, update.id), split(update, "body", ["projectId"]));
+export function writePost(store: Store, slug: string, post: Post): Post {
+  write(p.postFile(store.root, slug, post.id), split(post, "body", ["projectId"]));
   invalidate(store);
-  return update;
+  return post;
+}
+
+export function writeComment(store: Store, slug: string, comment: Comment): Comment {
+  write(
+    join(p.commentsDir(store.root, slug, comment.postId), `${p.pad(comment.id)}.md`),
+    split(comment, "body", ["projectId", "postId"]),
+  );
+  invalidate(store);
+  return comment;
 }
 
 export function writeSummary(store: Store, slug: string | null, summary: Summary): Summary {

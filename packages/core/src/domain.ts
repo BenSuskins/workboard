@@ -11,7 +11,8 @@ export const CATEGORY_PRESETS = ["coding", "platform", "hiring", "process", "oth
 export const TASK_STATUSES = ["todo", "in_progress", "done"] as const;
 /** Null priority sorts last — unprioritized work trails prioritized work in the queue. */
 export const TASK_PRIORITIES = ["high", "medium", "low"] as const;
-export const UPDATE_TYPES = ["note", "status_change", "agent_update"] as const;
+/** A question expects an answer from the user; everything else is a report of work. */
+export const POST_TYPES = ["note", "status_change", "agent_update", "question"] as const;
 export const SUMMARY_KINDS = ["project_summary", "digest", "triage", "accomplishments"] as const;
 export const LINK_PROVIDERS = ["github", "jira", "gdoc", "url"] as const;
 export const LINK_KINDS = ["repo", "pr", "issue", "jira_project", "jira_issue", "doc", "url"] as const;
@@ -23,7 +24,7 @@ export type ProjectHealth = (typeof PROJECT_HEALTHS)[number];
 export type ProjectPriority = (typeof PROJECT_PRIORITIES)[number];
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 export type TaskPriority = (typeof TASK_PRIORITIES)[number];
-export type UpdateType = (typeof UPDATE_TYPES)[number];
+export type PostType = (typeof POST_TYPES)[number];
 export type SummaryKind = (typeof SUMMARY_KINDS)[number];
 export type LinkProvider = (typeof LINK_PROVIDERS)[number];
 export type LinkKind = (typeof LINK_KINDS)[number];
@@ -72,10 +73,23 @@ export interface Task {
   deletedAt: number | null;
 }
 
-export interface Update {
+export interface Post {
   id: number;
   projectId: number;
-  type: UpdateType;
+  type: PostType;
+  /** Long-form posts carry a headline; short notes and status changes leave it empty. */
+  title: string;
+  body: string;
+  author: string;
+  createdAt: number;
+  /** Set on a question once someone other than its author replies. */
+  answeredAt: number | null;
+}
+
+export interface Comment {
+  id: number;
+  postId: number;
+  projectId: number;
   body: string;
   author: string;
   createdAt: number;

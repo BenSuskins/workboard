@@ -10,8 +10,12 @@ import {
   deleteTask,
   getActivityCounts,
   getSyncHealth,
+  getPost,
   getTaskDetail,
+  listAnswers,
+  listComments,
   listDeleted,
+  listOpenQuestions,
   listQueuedTasks,
   listShelvedProjects,
   listSummaryHistory,
@@ -27,7 +31,8 @@ import {
 import {
   addLink,
   addTask,
-  addUpdate,
+  addComment,
+  addPost,
   createProject,
   findProject,
   getActivity,
@@ -70,8 +75,8 @@ describe("projects", () => {
     updateProject(db, p.id, { status: "blocked" }, "agent:tester");
     const detail = getProjectDetail(db, p.id)!;
     expect(detail.project.status).toBe("blocked");
-    expect(detail.updates[0].type).toBe("status_change");
-    expect(detail.updates[0].author).toBe("agent:tester");
+    expect(detail.posts[0].type).toBe("status_change");
+    expect(detail.posts[0].author).toBe("agent:tester");
   });
 
   it("filters archived out by default", () => {
@@ -164,11 +169,11 @@ describe("activity + reports", () => {
     const p = createProject(db, { name: "Alpha" });
     const link = addLink(db, p.id, { url: "https://github.com/acme/platform/pull/1" });
     saveSnapshot(db, link.id, { type: "pr", state: "open" });
-    addUpdate(db, p.id, "shipped a thing", { type: "agent_update", author: "agent:x" });
+    addPost(db, p.id, "shipped a thing", { type: "agent_update", author: "agent:x" });
     upsertSummary(db, p.id, "All good.");
     const feed = getActivity(db, Date.now() - 1000);
     expect(feed.projects).toHaveLength(1);
-    expect(feed.projects[0].updates).toHaveLength(1);
+    expect(feed.projects[0].posts).toHaveLength(1);
     expect(feed.projects[0].latestSummary).toBe("All good.");
     expect((feed.projects[0].links[0].snapshot as { state: string }).state).toBe("open");
   });
@@ -202,8 +207,8 @@ describe("warnings", () => {
     resolveWarning(db, w.id, { resolvedBy: "user", note: "decided option B" });
     expect(listWarnings(db, { projectId: p.id })).toHaveLength(0);
     const detail = getProjectDetail(db, p.id)!;
-    expect(detail.updates[0].body).toContain("Resolved warning");
-    expect(detail.updates[0].body).toContain("decided option B");
+    expect(detail.posts[0].body).toContain("Resolved warning");
+    expect(detail.posts[0].body).toContain("decided option B");
   });
 
   it("appears in the activity feed for digests/triage", () => {
@@ -334,8 +339,8 @@ describe("summary history", () => {
 describe("activity counts (sparkline data)", () => {
   it("buckets updates per day, oldest first", () => {
     const p = createProject(db, { name: "Alpha" });
-    addUpdate(db, p.id, "today 1");
-    addUpdate(db, p.id, "today 2");
+    addPost(db, p.id, "today 1");
+    addPost(db, p.id, "today 2");
     const counts = getActivityCounts(db, p.id, 14);
     expect(counts).toHaveLength(14);
     expect(counts[13]).toBe(2); // today is the last bucket
@@ -429,7 +434,7 @@ describe("agent task queue", () => {
     expect(listQueuedTasks(db).map((t) => t.title)).toEqual(["second"]);
 
     const detail = getProjectDetail(db, p.id)!;
-    const claimUpdate = detail.updates.find((u) => u.body.includes("first"));
+    const claimUpdate = detail.posts.find((u) => u.body.includes("first"));
     expect(claimUpdate?.type).toBe("agent_update");
     expect(claimUpdate?.author).toBe("agent:claude");
   });
@@ -478,6 +483,89 @@ describe("agent task queue", () => {
     const done = getProjectDetail(db, p.id)!.tasks.find((t) => t.id === task.id)!;
     expect(done.status).toBe("done");
     expect(done.claimedBy).toBe("agent:claude");
+  });
+});
+
+describe("posts, comments, and questions", () => {
+  it("gives every post a globally unique id, not one per project", () => {
+    const alpha = createProject(db, { name: "Alpha" });
+    const beta = createProject(db, { name: "Beta" });
+    const ids = [
+      addPost(db, alpha.id, "a").id,
+      addPost(db, beta.id, "b").id,
+      addPost(db, alpha.id, "c").id,
+      addPost(db, beta.id, "d").id,
+    ];
+    expect(new Set(ids).size).toBe(ids.length);
+    // A post is addressable by id alone, so a collision would resolve to the wrong project.
+    expect(ids.map((id) => getPost(db, id)!.projectId)).toEqual([alpha.id, beta.id, alpha.id, beta.id]);
+  });
+
+  it("keeps a long-form title alongside the body", () => {
+    const project = createProject(db, { name: "Alpha" });
+    const post = addPost(db, project.id, "## Where the cards stand\n\nSeven closed.", {
+      title: "Wave 1 shipped",
+      type: "agent_update",
+      author: "agent:builder",
+    });
+    const stored = getProjectDetail(db, project.id)!.posts[0];
+    expect([stored.title, stored.type, stored.author]).toEqual(["Wave 1 shipped", "agent_update", "agent:builder"]);
+    expect(stored.body).toContain("Seven closed.");
+    expect(stored.id).toBe(post.id);
+  });
+
+  it("threads comments onto a post in the order they arrive", () => {
+    const project = createProject(db, { name: "Alpha" });
+    const post = addPost(db, project.id, "body", { title: "T", author: "agent:builder" });
+    addComment(db, post.id, "first", "user");
+    addComment(db, post.id, "second", "agent:builder");
+    expect(listComments(db, post.id).map((c) => [c.author, c.body])).toEqual([
+      ["user", "first"],
+      ["agent:builder", "second"],
+    ]);
+  });
+
+  it("counts a question as open until somebody else answers it", () => {
+    const project = createProject(db, { name: "Alpha" });
+    const question = addPost(db, project.id, "Which database?", { type: "question", title: "Which database?", author: "agent:builder" });
+    expect(listOpenQuestions(db).map((q) => q.id)).toEqual([question.id]);
+
+    // The asker adding context does not answer their own question.
+    addComment(db, question.id, "context", "agent:builder");
+    expect(listOpenQuestions(db)).toHaveLength(1);
+
+    addComment(db, question.id, "Postgres", "user");
+    expect(listOpenQuestions(db)).toHaveLength(0);
+    expect(getPost(db, question.id)!.answeredAt).toBeTypeOf("number");
+  });
+
+  it("excludes questions on archived projects from the open count", () => {
+    const project = createProject(db, { name: "Alpha" });
+    addPost(db, project.id, "?", { type: "question", author: "agent:builder" });
+    updateProject(db, project.id, { status: "archived" });
+    expect(listOpenQuestions(db)).toHaveLength(0);
+  });
+
+  it("returns replies to an agent's own posts, and not its own replies", () => {
+    const project = createProject(db, { name: "Alpha" });
+    const mine = addPost(db, project.id, "body", { title: "Mine", author: "agent:builder" });
+    const theirs = addPost(db, project.id, "body", { title: "Theirs", author: "agent:other" });
+    addComment(db, mine.id, "user feedback", "user");
+    addComment(db, mine.id, "my own follow-up", "agent:builder");
+    addComment(db, theirs.id, "not for me", "user");
+
+    const answers = listAnswers(db, { agentName: "agent:builder" });
+    expect(answers.map((a) => a.comment.body)).toEqual(["user feedback"]);
+    expect(answers[0].post.id).toBe(mine.id);
+    expect(answers[0].projectSlug).toBe("alpha");
+  });
+
+  it("filters answers by timestamp so an agent only sees what is new", () => {
+    const project = createProject(db, { name: "Alpha" });
+    const post = addPost(db, project.id, "body", { author: "agent:builder" });
+    const old = addComment(db, post.id, "seen already", "user");
+    const fresh = addComment(db, post.id, "new", "user");
+    expect(listAnswers(db, { agentName: "agent:builder", since: old.createdAt }).map((a) => a.comment.id)).toEqual([fresh.id]);
   });
 });
 

@@ -146,10 +146,11 @@ for (const row of all<any>("sync_state")) {
 const ledgers: Record<string, number[]> = {
   projects: projects.map((r) => r.id),
   tasks: all<any>("tasks").map((r) => r.id),
-  updates: all<any>("updates").map((r) => r.id),
+  posts: all<any>("updates").map((r) => r.id),
   summaries: all<any>("summaries").map((r) => r.id),
   links: all<any>("links").map((r) => r.id),
   warnings: all<any>("warnings").map((r) => r.id),
+  comments: [] as number[],
   snapshots: all<any>("snapshots").map((r) => r.id),
   syncState: all<any>("sync_state").map((r) => r.id),
 };

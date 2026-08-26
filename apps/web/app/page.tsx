@@ -7,6 +7,7 @@ import {
   getSyncHealth,
   integrationStatus,
   latestReport,
+  listOpenQuestions,
   listProjects,
   type ProjectDetail,
   type ProjectHealth,
@@ -17,6 +18,7 @@ import { RefreshButton } from "@/components/refresh-button";
 import { refreshAllAction } from "@/lib/actions";
 import { FilterBar, type Filters } from "@/components/filter-bar";
 import { Markdown } from "@/components/markdown";
+import { Mermaid } from "@/components/mermaid";
 import { ProjectCard } from "@/components/project-card";
 import { ProjectRow } from "@/components/project-row";
 import { StatStrip } from "@/components/stat-strip";
@@ -91,7 +93,7 @@ export default async function Dashboard({
 
   const all = listProjects(database, {});
   const details = all
-    .map((p) => getProjectDetail(database, p.id, { updatesLimit: 1 }))
+    .map((p) => getProjectDetail(database, p.id, { postsLimit: 1 }))
     .filter((d): d is ProjectDetail => d !== undefined);
 
   const sorter = SORTERS[filters.sort ?? "activity"] ?? SORTERS.activity;
@@ -116,6 +118,7 @@ export default async function Dashboard({
     ciFailing += pipe.ciFailing;
   }
   const openWarnings = details.reduce((n, d) => n + d.openWarnings.length, 0);
+  const openQuestions = listOpenQuestions(database).length;
 
   const digest = latestReport(database, "digest");
   const triage = latestReport(database, "triage");
@@ -143,7 +146,7 @@ export default async function Dashboard({
 
       <StatStrip
         filters={filters}
-        stats={{ active, blocked, warnings: openWarnings, stale, openPrs, ciFailing }}
+        stats={{ active, blocked, questions: openQuestions, warnings: openWarnings, stale, openPrs, ciFailing }}
       />
 
       {(digest || triage) && (

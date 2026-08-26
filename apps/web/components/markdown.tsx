@@ -1,6 +1,5 @@
-import { marked } from "marked";
+import { renderMarkdown } from "./markdown-html.js";
 
 export function Markdown({ children, className = "" }: { children: string; className?: string }) {
-  const html = marked.parse(children, { async: false, gfm: true, breaks: true });
-  return <div className={`prose-wb ${className}`} dangerouslySetInnerHTML={{ __html: html }} />;
+  return <div className={`prose-wb ${className}`} dangerouslySetInnerHTML={{ __html: renderMarkdown(children) }} />;
 }
