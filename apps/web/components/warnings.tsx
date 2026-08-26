@@ -10,19 +10,28 @@ const SEVERITY: Record<WarningSeverity, { icon: string; label: string; cls: stri
   info: { icon: "ℹ️", label: "Info", cls: "border-accent/50 bg-accent/10 text-accent" },
 };
 
-/** Compact strip for dashboard cards: severity icon + label + message, worst first. */
+const STRIP_TONE: Record<WarningSeverity, { dot: string; text: string }> = {
+  critical: { dot: "bg-critical", text: "text-critical" },
+  warning: { dot: "bg-warning", text: "text-warning" },
+  info: { dot: "bg-accent", text: "text-accent" },
+};
+
+/**
+ * One line for a board card: a coloured dot, the severity, and the message
+ * truncated. A boxed panel here competed with the card's own border and made
+ * every warned project shout; the dot carries the same signal in a third of
+ * the height.
+ */
 export function WarningStrip({ warnings }: { warnings: Warning[] }) {
   if (warnings.length === 0) return null;
   const top = warnings[0];
-  const s = SEVERITY[top.severity];
+  const tone = STRIP_TONE[top.severity];
   return (
-    <div className={`flex items-start gap-1.5 rounded-control border px-2 py-1.5 text-meta leading-snug ${s.cls}`}>
-      <span aria-hidden>{s.icon}</span>
-      <span className="min-w-0 line-clamp-2" title={top.message}>
-        <span className="font-semibold">{s.label}: </span>
-        <span className="text-ink-2">{top.message}</span>
-        {warnings.length > 1 && <span className="text-muted"> · +{warnings.length - 1} more</span>}
-      </span>
+    <div className="flex min-w-0 items-center gap-2 text-meta" title={top.message}>
+      <span className={`size-1.5 shrink-0 rounded-full ${tone.dot}`} aria-hidden />
+      <span className={`shrink-0 font-medium ${tone.text}`}>{SEVERITY[top.severity].label}</span>
+      <span className="truncate text-ink-2">{top.message}</span>
+      {warnings.length > 1 && <span className="shrink-0 text-muted">+{warnings.length - 1}</span>}
     </div>
   );
 }

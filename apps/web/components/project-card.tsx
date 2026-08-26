@@ -2,10 +2,10 @@ import Link from "next/link";
 import type { ProjectDetail } from "@workboard/core";
 import { setProjectPinnedAction } from "@/lib/actions";
 import { hasPipeline, prPipeline } from "@/lib/pipeline";
+import { toPlainText } from "@/lib/format";
 import { AvatarStack } from "./avatar";
 import { DocChips, JiraChips, PipelineChip } from "./chips";
 import { ACCENT_BG, ACCENT_TEXT, STATUS_LABEL, STATUS_TONE, tileAccent, tileGlyph } from "./labels";
-import { Markdown } from "./markdown";
 import { Sparkline } from "./sparkline";
 import { WarningStrip } from "./warnings";
 
@@ -39,25 +39,35 @@ export function ProjectCard({
   const accent = tileAccent(project);
   const tone = STATUS_TONE[project.status];
 
+  // Plain text, not rendered markdown: prose-wb sets a reading size and line
+  // height that dwarf everything else once clamped into a card.
+  const blurb = latestSummary ? toPlainText(latestSummary.body) : project.description;
+
   return (
     <div
       data-row
-      className="relative flex flex-col gap-3 rounded-card border border-hairline bg-surface p-4 transition-colors hover:border-accent/40"
+      className="relative flex flex-col gap-2.5 rounded-card border border-hairline bg-surface p-4 transition-colors hover:border-accent/40"
     >
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-2.5">
         <span
-          className={`flex size-9 shrink-0 items-center justify-center rounded-control text-base font-semibold ${ACCENT_BG[accent]} ${ACCENT_TEXT[accent]}`}
+          className={`grid size-8 shrink-0 place-items-center rounded-control text-body font-semibold ${ACCENT_BG[accent]} ${ACCENT_TEXT[accent]}`}
           aria-hidden
         >
           {tileGlyph(project)}
         </span>
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-title font-semibold leading-snug">
-            <Link href={`/projects/${project.slug}`} className="text-ink after:absolute after:inset-0 after:content-[''] hover:text-accent">
+          <h3 className="truncate text-title font-semibold leading-tight">
+            <Link
+              href={`/projects/${project.slug}`}
+              className="text-ink after:absolute after:inset-0 after:content-[''] hover:text-accent"
+            >
               {project.name}
             </Link>
           </h3>
-          {project.description && <p className="truncate text-meta text-muted">{project.description}</p>}
+          <p className="mt-0.5 flex items-center gap-1.5 text-meta">
+            <span className={`font-medium ${tone.text}`}>{STATUS_LABEL[project.status]}</span>
+            {moving > 0 && <span className="text-muted">· {moving} in progress</span>}
+          </p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           <form action={setProjectPinnedAction}>
@@ -77,7 +87,7 @@ export function ProjectCard({
           </form>
           {index !== undefined && index <= 9 && (
             <span
-              className="inline-flex size-5 items-center justify-center rounded-chip bg-surface-2 text-[10px] font-medium text-muted"
+              className="grid size-5 place-items-center rounded-chip bg-surface-2 text-[11px] font-medium text-muted"
               title={`Press ${index} to open`}
             >
               {index}
@@ -86,20 +96,9 @@ export function ProjectCard({
         </div>
       </div>
 
-      <p className={`text-meta font-medium ${tone.text}`}>
-        {STATUS_LABEL[project.status]}
-        {moving > 0 && <span className="text-muted"> — {moving} in progress</span>}
-      </p>
-
       <WarningStrip warnings={openWarnings} />
 
-      {latestSummary ? (
-        <div className="line-clamp-2 text-body">
-          <Markdown>{latestSummary.body}</Markdown>
-        </div>
-      ) : (
-        <p className="line-clamp-2 text-body text-ink-2">No summary yet — an agent will write one.</p>
-      )}
+      {blurb && <p className="line-clamp-2 text-meta leading-relaxed text-ink-2">{blurb}</p>}
 
       {(hasPipeline(pipeline) || links.length > 0) && (
         <div className="flex flex-wrap items-center gap-1.5">
@@ -109,17 +108,18 @@ export function ProjectCard({
         </div>
       )}
 
-      {activityCounts && (
-        <div className="mt-auto">
-          <Sparkline counts={activityCounts} width={280} height={44} fill />
-        </div>
-      )}
-
-      <div className="flex items-center justify-between gap-2 text-meta text-muted">
-        <span>
-          <span className="font-semibold text-ink-2">{upForGrabs}</span> up for grabs ·{" "}
+      <div className="mt-auto flex items-center gap-3 border-t border-hairline pt-2.5 text-meta text-muted">
+        <span className="shrink-0">
+          <span className="font-semibold text-ink-2">{upForGrabs}</span> up for grabs
+        </span>
+        <span className="shrink-0">
           <span className="font-semibold text-ink-2">{done}</span> done
         </span>
+        {activityCounts && (
+          <span className="min-w-0 flex-1 opacity-60">
+            <Sparkline counts={activityCounts} width={90} height={16} />
+          </span>
+        )}
         <AvatarStack authors={recentAuthors(detail)} />
       </div>
     </div>

@@ -34,7 +34,7 @@ export function PulseCard({ pulse }: { pulse: Pulse }) {
           The workspace is <span className={tone}>{word}</span>
         </h2>
       </div>
-      <Sparkline counts={pulse.counts} width={640} height={110} fill className="w-full" />
+      <Sparkline counts={pulse.counts} width={640} height={72} fill className="w-full" />
       <div className="flex items-center justify-between text-meta text-muted">
         <span>posts · {pulse.counts.length} days</span>
         <span>

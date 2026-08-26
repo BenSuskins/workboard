@@ -77,7 +77,7 @@ export const ACCENT_BG: Record<ProjectAccent, string> = {
  * stays free of runtime imports. The Record types keep it honest: adding a hue
  * to the domain without a class here fails to compile.
  */
-const ACCENTS = Object.keys(ACCENT_TEXT) as ProjectAccent[];
+export const ACCENTS = Object.keys(ACCENT_TEXT) as ProjectAccent[];
 
 /**
  * A project's tile identity. Both fields are optional in the store, so an

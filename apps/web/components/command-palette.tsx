@@ -83,7 +83,14 @@ export function CommandPalette() {
     { key: "cmd-board", label: "Go to Board", hint: "navigate", run: () => go("/") },
     { key: "cmd-inbox", label: "Go to Inbox", hint: "navigate", run: () => go("/inbox") },
     { key: "cmd-prs", label: "Go to Pull requests", hint: "navigate", run: () => go("/prs") },
-    { key: "cmd-reports", label: "Go to Reports", hint: "navigate", run: () => go("/reports") },
+    { key: "cmd-digests", label: "Go to Digests", hint: "reports", run: () => go("/reports/digest") },
+    { key: "cmd-triage", label: "Go to Triage", hint: "reports", run: () => go("/reports/triage") },
+    {
+      key: "cmd-accomplishments",
+      label: "Go to Accomplishments",
+      hint: "reports",
+      run: () => go("/reports/accomplishments"),
+    },
     { key: "cmd-new", label: "New project", hint: "create", run: () => go("/projects/new") },
     {
       key: "cmd-refresh",

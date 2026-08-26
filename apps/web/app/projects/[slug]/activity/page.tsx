@@ -34,7 +34,7 @@ export default async function ProjectActivityPage({ params }: { params: Promise<
             </p>
           )}
         </div>
-        <Sparkline counts={activity} width={640} height={80} fill className="w-full" />
+        <Sparkline counts={activity} width={640} height={56} fill className="w-full" />
       </section>
 
       <PostComposer project={project} />

@@ -97,11 +97,8 @@ export async function addPostAction(formData: FormData) {
   const projectId = Number(formData.get("projectId"));
   const title = String(formData.get("title") ?? "").trim();
   const body = String(formData.get("body") ?? "").trim();
-  const database = db();
-  if (body || title) addPost(database, projectId, body, { type: "note", title, author: "user" });
-  // The board composer posts without knowing the slug, so resolve it here.
-  const slug = String(formData.get("slug") ?? "") || getProject(database, projectId)?.slug;
-  if (slug) revalidateProject(slug);
+  if (body || title) addPost(db(), projectId, body, { type: "note", title, author: "user" });
+  revalidateProject(String(formData.get("slug")));
   revalidatePath("/");
 }
 

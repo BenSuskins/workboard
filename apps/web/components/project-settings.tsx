@@ -3,86 +3,85 @@ import { STATUS_LABEL } from "./labels";
 import { TimeAgo } from "./time-ago";
 import { restoreLinkAction, restoreTaskAction, updateProjectAction } from "@/lib/actions";
 
-const inputCls =
-  "w-full rounded-control border border-hairline bg-page px-2.5 py-1.5 text-body text-ink placeholder:text-muted focus:border-accent focus:outline-none";
-const btnCls = "rounded-control bg-accent px-3.5 py-1.5 text-meta font-medium text-white transition-colors hover:bg-accent-deep";
+import { Field, fieldCls as inputCls, primaryButtonCls as btnCls, selectCls } from "./form";
 
 export function ProjectSettings({ project }: { project: Project }) {
   return (
-    <details className="rounded-card border border-hairline bg-surface">
-      <summary className="cursor-pointer select-none px-4 py-2.5 text-meta text-muted hover:text-ink [&::-webkit-details-marker]:hidden">
+    <details className="group rounded-card border border-hairline bg-surface">
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-body text-ink-2 transition-colors hover:text-ink [&::-webkit-details-marker]:hidden">
+        <span aria-hidden className="text-muted transition-transform group-open:rotate-90">
+          &#8250;
+        </span>
         Project settings
       </summary>
-      <form action={updateProjectAction} className="grid gap-3 border-t border-hairline p-4 sm:grid-cols-2">
+
+      <form action={updateProjectAction} className="flex flex-col gap-5 border-t border-hairline p-4">
         <input type="hidden" name="id" value={project.id} />
         <input type="hidden" name="slug" value={project.slug} />
-        <label className="flex flex-col gap-1 text-meta text-muted">
-          Name
-          <input name="name" defaultValue={project.name} className={inputCls} />
-        </label>
-        <label className="flex flex-col gap-1 text-meta text-muted">
-          Category
-          <input name="category" defaultValue={project.category} list="category-presets" className={inputCls} />
-          <datalist id="category-presets">
-            {CATEGORY_PRESETS.map((c) => (
-              <option key={c} value={c} />
-            ))}
-          </datalist>
-        </label>
-        <label className="flex flex-col gap-1 text-meta text-muted sm:col-span-2">
-          Description / goal (markdown)
-          <textarea name="description" defaultValue={project.description} rows={3} className={inputCls} />
-        </label>
-        <label className="flex flex-col gap-1 text-meta text-muted">
-          Status
-          <select name="status" defaultValue={project.status} className={inputCls}>
-            {(["active", "blocked", "on_hold", "done", "archived"] as const).map((s) => (
-              <option key={s} value={s}>
-                {STATUS_LABEL[s]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="grid grid-cols-2 gap-3">
-          <label className="flex flex-col gap-1 text-meta text-muted">
-            Priority
-            <select name="priority" defaultValue={project.priority} className={inputCls}>
-              {["high", "medium", "low"].map((p) => (
-                <option key={p} value={p}>
-                  {p}
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Name">
+            <input name="name" defaultValue={project.name} className={inputCls} />
+          </Field>
+          <Field label="Category">
+            <input name="category" defaultValue={project.category} list="category-presets" className={inputCls} />
+            <datalist id="category-presets">
+              {CATEGORY_PRESETS.map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
+          </Field>
+        </div>
+
+        <Field label="Description / goal" hint="Markdown renders on the project page.">
+          <textarea name="description" defaultValue={project.description} rows={4} className={inputCls} />
+        </Field>
+
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Field label="Status">
+            <select name="status" defaultValue={project.status} className={selectCls}>
+              {(["active", "blocked", "on_hold", "done", "archived"] as const).map((s) => (
+                <option key={s} value={s}>
+                  {STATUS_LABEL[s]}
                 </option>
               ))}
             </select>
-          </label>
-          <label className="flex flex-col gap-1 text-meta text-muted">
-            Health
-            <select name="health" defaultValue={project.health} className={inputCls}>
-              <option value="green">on track</option>
-              <option value="amber">at risk</option>
-              <option value="red">off track</option>
+          </Field>
+          <Field label="Priority">
+            <select name="priority" defaultValue={project.priority} className={selectCls}>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
             </select>
-          </label>
+          </Field>
+          <Field label="Health">
+            <select name="health" defaultValue={project.health} className={selectCls}>
+              <option value="green">On track</option>
+              <option value="amber">At risk</option>
+              <option value="red">Off track</option>
+            </select>
+          </Field>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <label className="flex flex-col gap-1 text-meta text-muted">
-            Icon (emoji)
-            <input name="icon" defaultValue={project.icon ?? ""} maxLength={4} placeholder="🚀" className={inputCls} />
-          </label>
-          <label className="flex flex-col gap-1 text-meta text-muted">
-            Tile colour
-            <select name="accent" defaultValue={project.accent ?? ""} className={inputCls}>
-              <option value="">from the name</option>
+
+        <div className="grid gap-4 sm:grid-cols-[6rem_1fr]">
+          <Field label="Icon">
+            <input name="icon" defaultValue={project.icon ?? ""} maxLength={4} placeholder="🚀" className={`${inputCls} text-center`} />
+          </Field>
+          <Field label="Tile colour" hint="Leave it derived and the colour follows the name.">
+            <select name="accent" defaultValue={project.accent ?? ""} className={selectCls}>
+              <option value="">Derived from the name</option>
               {PROJECT_ACCENTS.map((a) => (
-                <option key={a} value={a}>
+                <option key={a} value={a} className="capitalize">
                   {a}
                 </option>
               ))}
             </select>
-          </label>
+          </Field>
         </div>
-        <div className="sm:col-span-2">
+
+        <div>
           <button type="submit" className={btnCls}>
-            Save
+            Save changes
           </button>
         </div>
       </form>

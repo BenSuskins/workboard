@@ -114,7 +114,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
           <section className="flex flex-col gap-3">
             <SectionHeading title="Pulse" />
             <div className="rounded-card border border-hairline bg-surface p-4">
-              <Sparkline counts={activity} width={280} height={64} fill />
+              <Sparkline counts={activity} width={280} height={44} fill />
               <p className="mt-2 text-meta text-muted">posts · 30 days</p>
             </div>
           </section>
@@ -138,10 +138,13 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
               <LinksPanel links={links} project={project} />
             </div>
           </section>
-
-          <ProjectSettings project={project} />
-          <RecentlyDeleted project={project} tasks={deleted.tasks} links={deleted.links} />
         </div>
+      </div>
+
+      {/* Full width: these forms need room, and a 300px rail clips every select. */}
+      <div className="flex flex-col gap-3">
+        <ProjectSettings project={project} />
+        <RecentlyDeleted project={project} tasks={deleted.tasks} links={deleted.links} />
       </div>
     </div>
   );

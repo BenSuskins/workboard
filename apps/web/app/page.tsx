@@ -7,7 +7,6 @@ import {
   getSyncHealth,
   getWorkspaceActivityCounts,
   integrationStatus,
-  latestReport,
   listOpenQuestions,
   listProjects,
   type ProjectDetail,
@@ -16,11 +15,9 @@ import {
 } from "@workboard/core";
 import { AlertRow } from "@/components/alert-row";
 import { BoardKeynav } from "@/components/board-keynav";
-import { Composer } from "@/components/composer";
 import { RefreshButton } from "@/components/refresh-button";
 import { refreshAllAction } from "@/lib/actions";
 import { FilterBar, type Filters } from "@/components/filter-bar";
-import { Markdown } from "@/components/markdown";
 import { Mermaid } from "@/components/mermaid";
 import { ProjectCard } from "@/components/project-card";
 import { ProjectRow } from "@/components/project-row";
@@ -59,31 +56,6 @@ async function resolveView(filters: Filters): Promise<"cards" | "list"> {
   if (filters.view === "list" || filters.view === "cards") return filters.view;
   const cookieStore = await cookies();
   return cookieStore.get("wb-board-view")?.value === "list" ? "list" : "cards";
-}
-
-function CollapsedReport({ title, at, children, footer }: {
-  title: string;
-  at: number;
-  children: React.ReactNode;
-  footer?: React.ReactNode;
-}) {
-  return (
-    <details className="group rounded-card border border-hairline bg-surface">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2.5 text-body [&::-webkit-details-marker]:hidden">
-        <span className="flex items-center gap-1.5 font-medium text-ink">
-          <span aria-hidden className="text-muted transition-transform group-open:rotate-90">
-            ›
-          </span>
-          {title}
-        </span>
-        <span className="flex items-center gap-1.5 text-meta font-normal text-muted">
-          {<TimeAgo at={at} />}
-          {footer}
-        </span>
-      </summary>
-      <div className="border-t border-hairline px-3.5 py-3">{children}</div>
-    </details>
-  );
 }
 
 export default async function Dashboard({
@@ -125,8 +97,6 @@ export default async function Dashboard({
   const doneTasks = allTasks.filter((t) => t.status === "done").length;
   const pulseCounts = getWorkspaceActivityCounts(database, 30);
 
-  const digest = latestReport(database, "digest");
-  const triage = latestReport(database, "triage");
   const integrations = integrationStatus();
   const anyConfigured = integrations.github || integrations.jira || integrations.google;
   const lastSyncAt = getSyncHealth(database).lastSuccessAt;
@@ -157,32 +127,6 @@ export default async function Dashboard({
       <AlertRow filters={filters} alerts={{ blocked, warnings: openWarnings, stale, ciFailing }} />
 
       <PulseCard pulse={{ counts: pulseCounts, blocked, moving: active }} />
-
-      {(digest || triage) && (
-        <div className="grid gap-2 lg:grid-cols-2">
-          {digest && (
-            <CollapsedReport
-              title="Latest digest"
-              at={digest.createdAt}
-              footer={
-                <>
-                  ·{" "}
-                  <Link href="/reports" className="text-accent hover:underline">
-                    all reports
-                  </Link>
-                </>
-              }
-            >
-              <Markdown>{digest.body}</Markdown>
-            </CollapsedReport>
-          )}
-          {triage && (
-            <CollapsedReport title="Triage" at={triage.createdAt}>
-              <Markdown>{triage.body}</Markdown>
-            </CollapsedReport>
-          )}
-        </div>
-      )}
 
       <FilterBar filters={filters} categories={categories} />
 
@@ -219,8 +163,6 @@ export default async function Dashboard({
           ))}
         </BoardKeynav>
       )}
-
-      <Composer projects={all.map((p) => ({ id: p.id, slug: p.slug, name: p.name }))} />
     </div>
   );
 }

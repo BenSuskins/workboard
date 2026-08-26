@@ -5,48 +5,59 @@ import { UP_FOR_GRABS } from "./labels";
 import { addTaskAction, deleteTaskAction, setTaskAgentReadyAction, setTaskStatusAction } from "@/lib/actions";
 import { toPlainText } from "@/lib/format";
 
-const inputCls =
-  "w-full rounded-control border border-hairline bg-page px-2.5 py-1.5 text-body text-ink placeholder:text-muted focus:border-accent focus:outline-none";
-const btnCls = "rounded-control bg-accent px-3.5 py-1.5 text-meta font-medium text-white transition-colors hover:bg-accent-deep";
+import { fieldCls as inputCls, primaryButtonCls as btnCls, selectCls } from "./form";
 
+/**
+ * Writing a task is the main thing you do on this page, so it gets the shape of
+ * a document rather than a toolbar: the title leads at reading size with no box
+ * around it, the spec sits directly under it, and the metadata is a quiet
+ * footer. An agent works from the description, so it must be easy to write.
+ */
 export function TaskComposer({ project }: { project: Project }) {
   return (
-    <form action={addTaskAction} className="flex flex-col gap-2 rounded-card border border-hairline bg-surface p-3">
-      <div className="flex gap-2">
-        <input type="hidden" name="projectId" value={project.id} />
-        <input type="hidden" name="slug" value={project.slug} />
-        <input name="title" placeholder="Add a task…" className={inputCls} required />
-        <button type="submit" className={btnCls}>
-          Add
+    <form
+      action={addTaskAction}
+      className="flex flex-col rounded-card border border-hairline bg-surface transition-colors focus-within:border-accent/40"
+    >
+      <input type="hidden" name="projectId" value={project.id} />
+      <input type="hidden" name="slug" value={project.slug} />
+
+      <div className="flex flex-col gap-1 p-4 pb-3">
+        <input
+          name="title"
+          required
+          placeholder="Task title"
+          aria-label="Task title"
+          className="w-full bg-transparent text-title font-medium text-ink outline-none placeholder:font-normal placeholder:text-muted"
+        />
+        <textarea
+          name="description"
+          rows={2}
+          placeholder="Spec for whoever picks this up — problem, constraints, acceptance criteria. Markdown works."
+          aria-label="Task description"
+          className="w-full resize-y bg-transparent text-body leading-relaxed text-ink-2 outline-none placeholder:text-muted"
+        />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 border-t border-hairline px-3 py-2.5">
+        <select name="priority" defaultValue="" aria-label="Priority" className={`${selectCls} w-auto py-1.5 text-meta`}>
+          <option value="">No priority</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+
+        <input type="date" name="dueDate" aria-label="Due date" className={`${inputCls} w-auto py-1.5 text-meta`} />
+
+        <label className="inline-flex cursor-pointer items-center gap-2 rounded-control border border-hairline bg-surface-2 px-2.5 py-1.5 text-meta text-ink-2 transition-colors hover:border-grid has-checked:border-accent/50 has-checked:bg-accent/10 has-checked:text-accent">
+          <input type="checkbox" name="agentReady" className="size-3.5 accent-accent" />
+          Up for grabs
+        </label>
+
+        <button type="submit" className={`${btnCls} ml-auto py-1.5`}>
+          Add task
         </button>
       </div>
-      <details>
-        <summary className="cursor-pointer select-none text-meta text-muted hover:text-ink">
-          Description &amp; priority (optional)
-        </summary>
-        <div className="mt-2 flex flex-col gap-2">
-          <textarea
-            name="description"
-            rows={3}
-            placeholder="Spec for whoever picks this up — problem, constraints, acceptance criteria (markdown)…"
-            className={inputCls}
-          />
-          <div className="flex items-center justify-between gap-2">
-            <select name="priority" defaultValue="" className={`${inputCls} w-auto`}>
-              <option value="">no priority</option>
-              {["high", "medium", "low"].map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
-            <label className="flex items-center gap-1.5 whitespace-nowrap text-meta text-muted">
-              <input type="checkbox" name="agentReady" className="size-3 accent-accent" />
-              Put up for grabs
-            </label>
-          </div>
-        </div>
-      </details>
     </form>
   );
 }

@@ -6,9 +6,7 @@ import { UP_FOR_GRABS } from "./labels";
 import { authorLabel } from "@/lib/format";
 import { deleteTaskAction, setTaskAgentReadyAction, setTaskStatusAction, updateTaskDetailAction } from "@/lib/actions";
 
-const inputCls =
-  "w-full rounded-control border border-hairline bg-page px-2.5 py-1.5 text-body text-ink placeholder:text-muted focus:border-accent focus:outline-none";
-const btnCls = "rounded-control bg-accent px-3.5 py-1.5 text-meta font-medium text-white transition-colors hover:bg-accent-deep";
+import { fieldCls as inputCls, primaryButtonCls as btnCls } from "./form";
 
 /**
  * A task, its spec, and the controls that act on it. The full route and the

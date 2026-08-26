@@ -307,12 +307,18 @@ body {
   transition: padding-left 150ms;
 }
 :root[data-sidebar="collapsed"] .wb-content {
-  padding-left: 3.5rem;
+  padding-left: 52px;
 }
 @media (max-width: 640px) {
   .wb-content {
-    padding-left: 3.5rem;
+    padding-left: 52px;
   }
+}
+/* The rail carries no border of its own; the page edge draws the seam. */
+.wb-content > * {
+  min-height: 100vh;
+  border-left: 1px solid var(--wb-hairline);
+  background: var(--wb-page);
 }
 @media (prefers-reduced-motion: reduce) {
   .wb-content {

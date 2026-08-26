@@ -3,7 +3,7 @@ import type { GdocSnapshot, JiraIssueSnapshot, JiraProjectSnapshot, Link, Snapsh
 
 import { hasPipeline, type Pipeline } from "@/lib/pipeline";
 
-export function prStateDot(pr: Pipeline["prs"][number]): { cls: string; label: string } {
+function prStateDot(pr: Pipeline["prs"][number]): { cls: string; label: string } {
   if (pr.merged) return { cls: "bg-accent", label: "merged" };
   if (pr.state === "closed") return { cls: "bg-muted", label: "closed" };
   if (pr.draft) return { cls: "bg-muted", label: "draft" };

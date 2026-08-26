@@ -64,3 +64,18 @@ export function prPipeline(links: (Link & { snapshot: Snapshot | null })[]): Pip
 export function hasPipeline(p: Pipeline): boolean {
   return p.draft + p.inReview + p.approved + p.mergedRecently > 0;
 }
+
+export type PrBucket = "failing" | "approved" | "changes" | "review" | "draft";
+
+/**
+ * Which pile an open PR belongs in, in the order you act on them. Exactly one
+ * bucket per PR, first match wins — so a red build outranks review state, and a
+ * draft only counts as a draft once its checks are green.
+ */
+export function prBucket(pr: PrLite): PrBucket {
+  if (pr.ciStatus === "failing") return "failing";
+  if (pr.draft) return "draft";
+  if (pr.reviewDecision === "approved") return "approved";
+  if (pr.reviewDecision === "changes_requested") return "changes";
+  return "review";
+}
