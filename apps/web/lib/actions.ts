@@ -6,6 +6,8 @@ import {
   addComment,
   addPost,
   createProject,
+  PROJECT_ACCENTS,
+  type ProjectAccent,
   deleteLink,
   deleteTask,
   getProject,
@@ -30,6 +32,18 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "./db";
 
+/**
+ * A project now spans three routes, and the sidebar counts render in the root
+ * layout, so any write to a project has to refresh all of them together.
+ */
+function revalidateProject(slug: string): void {
+  if (!slug) return;
+  revalidatePath(`/projects/${slug}`);
+  revalidatePath(`/projects/${slug}/tasks`);
+  revalidatePath(`/projects/${slug}/activity`);
+  revalidatePath("/", "layout");
+}
+
 function csv(value: FormDataEntryValue | null): string[] | undefined {
   const items = String(value ?? "")
     .split(",")
@@ -38,12 +52,26 @@ function csv(value: FormDataEntryValue | null): string[] | undefined {
   return items.length ? items : undefined;
 }
 
+/** One emoji at most; an empty field leaves the tile on its initial-letter fallback. */
+function projectIcon(value: FormDataEntryValue | null): string | undefined {
+  const raw = String(value ?? "").trim();
+  return raw ? [...raw][0] : undefined;
+}
+
+/** Empty or unknown means "derive a hue from the slug", so the field stays null. */
+function projectAccent(value: FormDataEntryValue | null): ProjectAccent | undefined {
+  const raw = String(value ?? "").trim();
+  return (PROJECT_ACCENTS as readonly string[]).includes(raw) ? (raw as ProjectAccent) : undefined;
+}
+
 export async function createProjectAction(formData: FormData) {
   const project = createProject(db(), {
     name: String(formData.get("name") ?? "").trim() || "Untitled project",
     description: String(formData.get("description") ?? ""),
     category: String(formData.get("category") ?? "coding"),
     priority: (formData.get("priority") as ProjectPriority) || "medium",
+    icon: projectIcon(formData.get("icon")),
+    accent: projectAccent(formData.get("accent")),
   });
   revalidatePath("/");
   redirect(`/projects/${project.slug}`);
@@ -58,9 +86,11 @@ export async function updateProjectAction(formData: FormData) {
     status: (formData.get("status") as ProjectStatus) || undefined,
     priority: (formData.get("priority") as ProjectPriority) || undefined,
     health: (formData.get("health") as ProjectHealth) || undefined,
+    icon: projectIcon(formData.get("icon")),
+    accent: projectAccent(formData.get("accent")),
   });
   revalidatePath("/");
-  revalidatePath(`/projects/${String(formData.get("slug"))}`);
+  revalidateProject(String(formData.get("slug")));
 }
 
 export async function addPostAction(formData: FormData) {
@@ -68,7 +98,7 @@ export async function addPostAction(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
   const body = String(formData.get("body") ?? "").trim();
   if (body || title) addPost(db(), projectId, body, { type: "note", title, author: "user" });
-  revalidatePath(`/projects/${String(formData.get("slug"))}`);
+  revalidateProject(String(formData.get("slug")));
   revalidatePath("/");
 }
 
@@ -78,7 +108,7 @@ export async function addCommentAction(formData: FormData) {
   if (body) addComment(db(), postId, body, "user");
   const slug = String(formData.get("slug"));
   revalidatePath(`/projects/${slug}/posts/${postId}`);
-  revalidatePath(`/projects/${slug}`);
+  revalidateProject(slug);
   revalidatePath("/");
 }
 
@@ -101,7 +131,7 @@ export async function addTaskAction(formData: FormData) {
       author: "user",
       agentReady: formData.get("agentReady") === "on",
     });
-  revalidatePath(`/projects/${String(formData.get("slug"))}`);
+  revalidateProject(String(formData.get("slug")));
   revalidatePath("/");
 }
 
@@ -115,7 +145,7 @@ export async function updateTaskDetailAction(formData: FormData) {
   });
   const slug = String(formData.get("slug"));
   revalidatePath(`/projects/${slug}/tasks/${taskId}`);
-  revalidatePath(`/projects/${slug}`);
+  revalidateProject(slug);
   revalidatePath("/");
 }
 
@@ -124,7 +154,7 @@ export async function setTaskAgentReadyAction(formData: FormData) {
   setTaskAgentReady(db(), taskId, formData.get("ready") === "1");
   const slug = String(formData.get("slug"));
   revalidatePath(`/projects/${slug}/tasks/${taskId}`);
-  revalidatePath(`/projects/${slug}`);
+  revalidateProject(slug);
   revalidatePath("/");
 }
 
@@ -135,7 +165,7 @@ export async function setTaskStatusAction(formData: FormData) {
   });
   const slug = String(formData.get("slug"));
   revalidatePath(`/projects/${slug}/tasks/${taskId}`);
-  revalidatePath(`/projects/${slug}`);
+  revalidateProject(slug);
   revalidatePath("/");
 }
 
@@ -147,12 +177,12 @@ export async function deleteTaskAction(formData: FormData) {
 
 export async function restoreTaskAction(formData: FormData) {
   restoreTask(db(), Number(formData.get("taskId")));
-  revalidatePath(`/projects/${String(formData.get("slug"))}`);
+  revalidateProject(String(formData.get("slug")));
 }
 
 export async function restoreLinkAction(formData: FormData) {
   restoreLink(db(), Number(formData.get("linkId")));
-  revalidatePath(`/projects/${String(formData.get("slug"))}`);
+  revalidateProject(String(formData.get("slug")));
   revalidatePath("/");
 }
 
@@ -171,24 +201,26 @@ export async function addLinkAction(formData: FormData) {
     title: String(formData.get("title") ?? "").trim(),
     scope: hasScope ? scope : undefined,
   });
-  revalidatePath(`/projects/${String(formData.get("slug"))}`);
+  revalidateProject(String(formData.get("slug")));
 }
 
 export async function deleteLinkAction(formData: FormData) {
   deleteLink(db(), Number(formData.get("linkId")));
-  revalidatePath(`/projects/${String(formData.get("slug"))}`);
+  revalidateProject(String(formData.get("slug")));
 }
 
 export async function resolveWarningAction(formData: FormData) {
   resolveWarning(db(), Number(formData.get("warningId")), { resolvedBy: "user" });
-  revalidatePath(`/projects/${String(formData.get("slug"))}`);
+  revalidateProject(String(formData.get("slug")));
   revalidatePath("/");
+  // Resolving here empties a row of the inbox and decrements the sidebar badge.
+  revalidatePath("/inbox");
 }
 
 export async function setProjectPinnedAction(formData: FormData) {
   setProjectPinned(db(), Number(formData.get("projectId")), formData.get("pinned") === "1");
   revalidatePath("/");
-  revalidatePath(`/projects/${String(formData.get("slug"))}`);
+  revalidateProject(String(formData.get("slug")));
 }
 
 /** Bring a shelved (done or archived) project back onto the active board. */
@@ -202,7 +234,7 @@ export async function refreshProjectAction(formData: FormData) {
   const slug = String(formData.get("slug"));
   const project = getProject(db(), slug);
   if (project) await syncProject(db(), project.id);
-  revalidatePath(`/projects/${slug}`);
+  revalidateProject(slug);
   revalidatePath("/");
 }
 
@@ -215,6 +247,6 @@ export async function refreshAllAction() {
 export async function refreshProjectBySlug(slug: string) {
   const project = getProject(db(), slug);
   if (project) await syncProject(db(), project.id);
-  revalidatePath(`/projects/${slug}`);
+  revalidateProject(slug);
   revalidatePath("/");
 }

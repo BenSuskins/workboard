@@ -17,7 +17,7 @@ export function SyncBanner() {
   if (health.failing.length > 0) {
     const first = health.failing[0];
     return (
-      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-[10px] border border-critical/50 bg-critical/10 px-4 py-2.5 text-[13px]">
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-card border border-critical/50 bg-critical/10 px-4 py-2.5 text-body">
         <span className="font-semibold text-critical">
           ⚠ Live data sync failing for {health.failing.length} link{health.failing.length === 1 ? "" : "s"}
         </span>
@@ -43,7 +43,7 @@ export function SyncBanner() {
 
   if (anyConfigured && health.lastSuccessAt && Date.now() - health.lastSuccessAt > STALE_AFTER_MS) {
     return (
-      <div className="rounded-[10px] border border-warning/50 bg-warning/10 px-4 py-2.5 text-[13px]">
+      <div className="rounded-card border border-warning/50 bg-warning/10 px-4 py-2.5 text-body">
         <span className="font-semibold text-warning">⚠ Live data is stale</span>{" "}
         <span className="text-ink-2">
           — last successful sync {<TimeAgo at={health.lastSuccessAt} />}. Refresh a project or check the server logs.

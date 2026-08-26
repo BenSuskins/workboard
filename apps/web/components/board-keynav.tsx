@@ -3,8 +3,12 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 
-/** j/k moves a highlight across [data-row] children, Enter opens the highlighted row, Esc clears. */
-export function BoardKeynav({ children }: { children: React.ReactNode }) {
+/**
+ * j/k moves a highlight across [data-row] children, Enter opens the highlighted
+ * row, Esc clears, and 1–9 jumps straight to that position — which is what the
+ * index badge on each card is telling you.
+ */
+export function BoardKeynav({ children, grid = false }: { children: React.ReactNode; grid?: boolean }) {
   const router = useRouter();
   const listRef = useRef<HTMLDivElement>(null);
   const indexRef = useRef(-1);
@@ -13,6 +17,10 @@ export function BoardKeynav({ children }: { children: React.ReactNode }) {
     const rows = () => Array.from(listRef.current?.querySelectorAll<HTMLElement>("[data-row]") ?? []);
     const paint = () => {
       rows().forEach((el, i) => el.classList.toggle("keynav-active", i === indexRef.current));
+    };
+    const open = (index: number) => {
+      const link = rows()[index]?.querySelector<HTMLAnchorElement>("a[href]");
+      if (link) router.push(link.getAttribute("href") ?? "/");
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
@@ -24,10 +32,14 @@ export function BoardKeynav({ children }: { children: React.ReactNode }) {
       else if (event.key === "k") next = Math.max(indexRef.current - 1, 0);
       else if (event.key === "Escape") next = -1;
       else if (event.key === "Enter" && indexRef.current >= 0) {
-        const link = rows()[indexRef.current]?.querySelector<HTMLAnchorElement>("a[href]");
-        if (!link) return;
         event.preventDefault();
-        router.push(link.getAttribute("href") ?? "/");
+        open(indexRef.current);
+        return;
+      } else if (/^[1-9]$/.test(event.key)) {
+        const position = Number(event.key) - 1;
+        if (position >= rows().length) return;
+        event.preventDefault();
+        open(position);
         return;
       } else return;
       event.preventDefault();
@@ -44,7 +56,7 @@ export function BoardKeynav({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   return (
-    <div ref={listRef} className="divide-y divide-hairline">
+    <div ref={listRef} className={grid ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-3" : "divide-y divide-hairline"}>
       {children}
     </div>
   );

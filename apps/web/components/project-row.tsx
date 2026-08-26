@@ -14,7 +14,7 @@ export function ProjectRow({ detail }: { detail: ProjectDetail }) {
   const queuedTasks = tasks.filter((t) => t.agentReady && t.status === "todo" && !t.claimedAt).length;
   const context = toPlainText(latestSummary?.body ?? project.description);
   return (
-    <div data-row className="relative flex items-center gap-3 px-3 py-[7px] text-[13px] transition-colors">
+    <div data-row className="relative flex items-center gap-3 px-3 py-[7px] text-body transition-colors">
       <StatusDot status={project.status} />
       <h3 className="max-w-56 shrink-0 truncate font-medium text-ink">
         <Link
@@ -24,10 +24,10 @@ export function ProjectRow({ detail }: { detail: ProjectDetail }) {
           {project.name}
         </Link>
       </h3>
-      <p className="hidden min-w-0 flex-1 truncate text-[12.5px] text-muted sm:block">
+      <p className="hidden min-w-0 flex-1 truncate text-body text-muted sm:block">
         {context || "No summary yet"}
       </p>
-      <div className="flex shrink-0 items-center gap-3 whitespace-nowrap text-[11.5px] tabular-nums text-muted">
+      <div className="flex shrink-0 items-center gap-3 whitespace-nowrap text-meta tabular-nums text-muted">
         {openWarnings.length > 0 && (
           <span className="text-warning" title={openWarnings[0].message}>
             ⚠{openWarnings.length > 1 ? ` ${openWarnings.length}` : ""}

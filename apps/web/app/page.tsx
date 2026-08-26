@@ -5,22 +5,23 @@ import {
   getActivityCounts,
   getProjectDetail,
   getSyncHealth,
+  getWorkspaceActivityCounts,
   integrationStatus,
-  latestReport,
   listOpenQuestions,
   listProjects,
   type ProjectDetail,
   type ProjectHealth,
   type ProjectStatus,
 } from "@workboard/core";
+import { AlertRow } from "@/components/alert-row";
 import { BoardKeynav } from "@/components/board-keynav";
 import { RefreshButton } from "@/components/refresh-button";
 import { refreshAllAction } from "@/lib/actions";
 import { FilterBar, type Filters } from "@/components/filter-bar";
-import { Markdown } from "@/components/markdown";
 import { Mermaid } from "@/components/mermaid";
 import { ProjectCard } from "@/components/project-card";
 import { ProjectRow } from "@/components/project-row";
+import { PulseCard } from "@/components/pulse-card";
 import { StatStrip } from "@/components/stat-strip";
 import { SyncBanner } from "@/components/sync-banner";
 import { ViewToggle } from "@/components/view-toggle";
@@ -57,31 +58,6 @@ async function resolveView(filters: Filters): Promise<"cards" | "list"> {
   return cookieStore.get("wb-board-view")?.value === "list" ? "list" : "cards";
 }
 
-function CollapsedReport({ title, at, children, footer }: {
-  title: string;
-  at: number;
-  children: React.ReactNode;
-  footer?: React.ReactNode;
-}) {
-  return (
-    <details className="group rounded-[10px] border border-hairline bg-surface">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2.5 text-[13px] [&::-webkit-details-marker]:hidden">
-        <span className="flex items-center gap-1.5 font-medium text-ink">
-          <span aria-hidden className="text-muted transition-transform group-open:rotate-90">
-            ›
-          </span>
-          {title}
-        </span>
-        <span className="flex items-center gap-1.5 text-[11px] font-normal text-muted">
-          {<TimeAgo at={at} />}
-          {footer}
-        </span>
-      </summary>
-      <div className="border-t border-hairline px-3.5 py-3">{children}</div>
-    </details>
-  );
-}
-
 export default async function Dashboard({
   searchParams,
 }: {
@@ -93,7 +69,8 @@ export default async function Dashboard({
 
   const all = listProjects(database, {});
   const details = all
-    .map((p) => getProjectDetail(database, p.id, { postsLimit: 1 }))
+    // Enough posts to name everyone who has touched a project lately for the card's avatars.
+    .map((p) => getProjectDetail(database, p.id, { postsLimit: 20 }))
     .filter((d): d is ProjectDetail => d !== undefined);
 
   const sorter = SORTERS[filters.sort ?? "activity"] ?? SORTERS.activity;
@@ -110,18 +87,16 @@ export default async function Dashboard({
   const active = all.filter((p) => p.status === "active").length;
   const blocked = all.filter((p) => p.status === "blocked").length;
   const stale = all.filter((p) => p.status === "active" && Date.now() - p.lastActivityAt > STALE_MS).length;
-  let openPrs = 0;
   let ciFailing = 0;
-  for (const d of details) {
-    const pipe = prPipeline(d.links);
-    openPrs += pipe.draft + pipe.inReview + pipe.approved;
-    ciFailing += pipe.ciFailing;
-  }
+  for (const d of details) ciFailing += prPipeline(d.links).ciFailing;
   const openWarnings = details.reduce((n, d) => n + d.openWarnings.length, 0);
   const openQuestions = listOpenQuestions(database).length;
+  const allTasks = details.flatMap((d) => d.tasks);
+  const movingTasks = allTasks.filter((t) => t.status === "in_progress").length;
+  const upForGrabs = allTasks.filter((t) => t.agentReady && t.status === "todo" && !t.claimedAt).length;
+  const doneTasks = allTasks.filter((t) => t.status === "done").length;
+  const pulseCounts = getWorkspaceActivityCounts(database, 30);
 
-  const digest = latestReport(database, "digest");
-  const triage = latestReport(database, "triage");
   const integrations = integrationStatus();
   const anyConfigured = integrations.github || integrations.jira || integrations.google;
   const lastSyncAt = getSyncHealth(database).lastSuccessAt;
@@ -130,13 +105,13 @@ export default async function Dashboard({
     <div className="flex flex-col gap-6">
       <SyncBanner />
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-lg font-semibold tracking-tight text-ink">Board</h1>
+        <h1 className="text-heading font-semibold tracking-tight text-ink">Board</h1>
         <div className="flex items-center gap-2.5">
-          {lastSyncAt && <span className="text-[11px] text-muted">data synced {<TimeAgo at={lastSyncAt} />}</span>}
+          {lastSyncAt && <span className="text-meta text-muted">data synced {<TimeAgo at={lastSyncAt} />}</span>}
           {anyConfigured ? (
             <RefreshButton action={refreshAllAction} label="Refresh data" />
           ) : (
-            <span className="text-[11px] text-muted" title="Set GITHUB_TOKEN / JIRA_* / GOOGLE_* in .env to enable live data">
+            <span className="text-meta text-muted" title="Set GITHUB_TOKEN / JIRA_* / GOOGLE_* in .env to enable live data">
               no integrations configured
             </span>
           )}
@@ -146,39 +121,22 @@ export default async function Dashboard({
 
       <StatStrip
         filters={filters}
-        stats={{ active, blocked, questions: openQuestions, warnings: openWarnings, stale, openPrs, ciFailing }}
+        stats={{ projects: all.length, moving: movingTasks, upForGrabs, questions: openQuestions, done: doneTasks }}
       />
 
-      {(digest || triage) && (
-        <div className="grid gap-2 lg:grid-cols-2">
-          {digest && (
-            <CollapsedReport
-              title="Latest digest"
-              at={digest.createdAt}
-              footer={
-                <>
-                  ·{" "}
-                  <Link href="/reports" className="text-accent hover:underline">
-                    all reports
-                  </Link>
-                </>
-              }
-            >
-              <Markdown>{digest.body}</Markdown>
-            </CollapsedReport>
-          )}
-          {triage && (
-            <CollapsedReport title="Triage" at={triage.createdAt}>
-              <Markdown>{triage.body}</Markdown>
-            </CollapsedReport>
-          )}
-        </div>
-      )}
+      <AlertRow filters={filters} alerts={{ blocked, warnings: openWarnings, stale, ciFailing }} />
+
+      <PulseCard pulse={{ counts: pulseCounts, blocked, moving: active }} />
 
       <FilterBar filters={filters} categories={categories} />
 
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-title font-semibold text-ink">Projects</h2>
+        <span className="text-meta tabular-nums text-muted">{filtered.length}</span>
+      </div>
+
       {filtered.length === 0 ? (
-        <div className="rounded-[10px] border border-dashed border-grid px-6 py-16 text-center text-sm text-muted">
+        <div className="rounded-card border border-dashed border-grid px-6 py-16 text-center text-body text-muted">
           No projects match.{" "}
           <Link href="/projects/new" className="text-accent hover:underline">
             Create one
@@ -186,7 +144,7 @@ export default async function Dashboard({
           or connect a coding agent to the MCP server.
         </div>
       ) : view === "list" ? (
-        <div className="overflow-hidden rounded-[10px] border border-hairline bg-surface">
+        <div className="overflow-hidden rounded-card border border-hairline bg-surface">
           <BoardKeynav>
             {filtered.map((d) => (
               <ProjectRow key={d.project.id} detail={d} />
@@ -194,11 +152,16 @@ export default async function Dashboard({
           </BoardKeynav>
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((d) => (
-            <ProjectCard key={d.project.id} detail={d} activityCounts={getActivityCounts(database, d.project.id)} />
+        <BoardKeynav grid>
+          {filtered.map((d, i) => (
+            <ProjectCard
+              key={d.project.id}
+              detail={d}
+              index={i + 1}
+              activityCounts={getActivityCounts(database, d.project.id)}
+            />
           ))}
-        </div>
+        </BoardKeynav>
       )}
     </div>
   );

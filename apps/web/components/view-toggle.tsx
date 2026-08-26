@@ -18,14 +18,14 @@ function hrefFor(filters: Filters, view: BoardView): string {
 /** Segmented List ⇄ Cards control. Explicit ?view= wins; otherwise the cookie picks the default. */
 export function ViewToggle({ filters, view }: { filters: Filters; view: BoardView }) {
   return (
-    <div className="flex items-center rounded-lg border border-hairline p-0.5" role="group" aria-label="Board layout">
+    <div className="flex items-center rounded-control border border-hairline p-0.5" role="group" aria-label="Board layout">
       {(["list", "cards"] as const).map((option) => (
         <Link
           key={option}
           href={hrefFor(filters, option)}
           onClick={() => persist(option)}
           aria-pressed={view === option}
-          className={`rounded-md px-2 py-0.5 text-xs font-medium capitalize transition-colors ${
+          className={`rounded-chip px-2 py-0.5 text-meta font-medium capitalize transition-colors ${
             view === option ? "bg-accent/15 text-accent" : "text-ink-2 hover:text-ink"
           }`}
         >

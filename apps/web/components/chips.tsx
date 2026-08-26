@@ -26,12 +26,12 @@ export function PipelineChip({ pipeline }: { pipeline: Pipeline }) {
   const popoverPrs = pipeline.prs.slice(0, 6);
   return (
     <span className="group/chip relative inline-flex" tabIndex={0}>
-      <span className="inline-flex cursor-default items-center gap-1.5 rounded-md border border-hairline bg-surface-2 px-2 py-0.5 text-[11px] text-ink-2">
+      <span className="inline-flex cursor-default items-center gap-1.5 rounded-chip border border-hairline bg-surface-2 px-2 py-0.5 text-meta text-ink-2">
         <GitHubMark />
         {parts.join(" · ")}
         {pipeline.ciFailing > 0 && <span className="font-semibold text-critical">✗ {pipeline.ciFailing} CI failing</span>}
       </span>
-      <span className="invisible absolute left-0 top-full z-50 mt-1.5 w-80 rounded-[10px] border border-hairline bg-surface p-2 opacity-0 shadow-lg transition-opacity duration-100 group-hover/chip:visible group-hover/chip:opacity-100 group-focus-within/chip:visible group-focus-within/chip:opacity-100">
+      <span className="invisible absolute left-0 top-full z-50 mt-1.5 w-80 rounded-card border border-hairline bg-surface p-2 opacity-0 shadow-lg transition-opacity duration-100 group-hover/chip:visible group-hover/chip:opacity-100 group-focus-within/chip:visible group-focus-within/chip:opacity-100">
         <span className="flex flex-col gap-1">
           {popoverPrs.map((pr) => {
             const dot = prStateDot(pr);
@@ -42,7 +42,7 @@ export function PipelineChip({ pipeline }: { pipeline: Pipeline }) {
                 href={pr.url}
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center gap-2 rounded-lg px-2 py-1 text-[12px] text-ink-2 hover:bg-surface-2 hover:text-ink"
+                className="flex items-center gap-2 rounded-control px-2 py-1 text-meta text-ink-2 hover:bg-surface-2 hover:text-ink"
               >
                 <span className={`size-2 shrink-0 rounded-full ${dot.cls}`} title={dot.label} aria-hidden />
                 <span className="truncate">
@@ -88,14 +88,14 @@ export function JiraChips({ links }: { links: (Link & { snapshot: Snapshot | nul
       const done = data.byStatusCategory["Done"] ?? 0;
       const inProgress = data.byStatusCategory["In Progress"] ?? 0;
       chips.push(
-        <span key={link.id} className="inline-flex items-center gap-1.5 rounded-md border border-hairline bg-surface-2 px-2 py-0.5 text-[11px] text-ink-2">
+        <span key={link.id} className="inline-flex items-center gap-1.5 rounded-chip border border-hairline bg-surface-2 px-2 py-0.5 text-meta text-ink-2">
           <JiraMark />
           {data.key}: {inProgress} in progress · {done}/{data.total} done
         </span>,
       );
     } else if (data.type === "jira_issue") {
       chips.push(
-        <span key={link.id} className="inline-flex items-center gap-1.5 rounded-md border border-hairline bg-surface-2 px-2 py-0.5 text-[11px] text-ink-2">
+        <span key={link.id} className="inline-flex items-center gap-1.5 rounded-chip border border-hairline bg-surface-2 px-2 py-0.5 text-meta text-ink-2">
           <JiraMark />
           {data.key} · {data.status}
         </span>,
@@ -111,7 +111,7 @@ export function DocChips({ links }: { links: (Link & { snapshot: Snapshot | null
     const data = link.snapshot?.data as GdocSnapshot | undefined;
     if (!data || typeof data !== "object" || data.type !== "gdoc") continue;
     chips.push(
-      <span key={link.id} className="inline-flex items-center gap-1.5 rounded-md border border-hairline bg-surface-2 px-2 py-0.5 text-[11px] text-ink-2">
+      <span key={link.id} className="inline-flex items-center gap-1.5 rounded-chip border border-hairline bg-surface-2 px-2 py-0.5 text-meta text-ink-2">
         <DocMark />
         {data.name} · edited {<TimeAgo at={data.modifiedAt} />}
       </span>,

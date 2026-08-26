@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
-import Link from "next/link";
-import { CommandPalette, PaletteHint } from "@/components/command-palette";
-import { NavLinks } from "@/components/nav-links";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { listOpenQuestions, listProjects, getProjectDetail, type ProjectDetail } from "@workboard/core";
+import { CommandPalette } from "@/components/command-palette";
+import { Sidebar, type SidebarProject } from "@/components/sidebar";
+import { db } from "@/lib/db";
+import { prPipeline } from "@/lib/pipeline";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-inter" });
@@ -14,37 +15,47 @@ export const metadata: Metadata = {
   description: "AI-native dashboard for all your work projects",
 };
 
-// Runs before paint: honor saved theme, else system preference. Kept inline to avoid FOUC.
-const themeInit = `try{var t=localStorage.getItem("wb-theme");if(!t)t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme="dark"}`;
+// Runs before paint: honor saved theme and sidebar width. Kept inline to avoid FOUC.
+const shellInit = `try{var t=localStorage.getItem("wb-theme");if(!t)t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.dataset.theme=t;document.documentElement.dataset.sidebar=localStorage.getItem("wb-sidebar")==="collapsed"?"collapsed":"expanded"}catch(e){document.documentElement.dataset.theme="dark";document.documentElement.dataset.sidebar="expanded"}`;
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children, panel }: { children: React.ReactNode; panel: React.ReactNode }) {
+  const database = db();
+  const projects = listProjects(database, {});
+  const details = projects
+    .map((project) => getProjectDetail(database, project.id, { postsLimit: 0 }))
+    .filter((detail): detail is ProjectDetail => detail !== undefined);
+
+  const sidebarProjects: SidebarProject[] = details.map(({ project, tasks, posts }) => ({
+    id: project.id,
+    slug: project.slug,
+    name: project.name,
+    icon: project.icon,
+    accent: project.accent,
+    openTasks: tasks.filter((task) => task.status !== "done").length,
+    upForGrabs: tasks.filter((task) => task.agentReady && task.status === "todo" && !task.claimedAt).length,
+    questions: posts.filter((post) => post.type === "question" && !post.answeredAt).length,
+  }));
+
+  const openWarnings = details.reduce((total, detail) => total + detail.openWarnings.length, 0);
+  const inboxCount = listOpenQuestions(database).length + openWarnings;
+  const prCount = details.reduce((total, detail) => {
+    const pipeline = prPipeline(detail.links);
+    return total + pipeline.draft + pipeline.inReview + pipeline.approved;
+  }, 0);
+
   return (
     <html lang="en" suppressHydrationWarning className={`${inter.variable} ${jetbrainsMono.variable}`}>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeInit }} />
+        <script dangerouslySetInnerHTML={{ __html: shellInit }} />
       </head>
       <body className="min-h-screen">
-        <header className="sticky top-0 z-10 border-b border-hairline bg-page/80 backdrop-blur">
-          <div className="mx-auto flex h-14 max-w-6xl items-center gap-7 px-4">
-            <Link href="/" className="flex items-center gap-2 text-[14.5px] font-semibold tracking-tight text-ink">
-              <span className="grid size-[22px] place-items-center rounded-md bg-accent text-[12px] font-bold text-white">W</span>
-              Workboard
-            </Link>
-            <NavLinks />
-            <div className="ml-auto flex items-center gap-2.5">
-              <PaletteHint />
-              <ThemeToggle />
-              <Link
-                href="/projects/new"
-                className="rounded-lg bg-accent px-3.5 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-accent-deep"
-              >
-                New project
-              </Link>
-            </div>
-          </div>
-        </header>
+        <Sidebar projects={sidebarProjects} inboxCount={inboxCount} prCount={prCount} />
         <CommandPalette />
-        <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
+        {/* The rail is fixed, so the content pane owns the matching offset. */}
+        <div className="wb-content min-h-screen">
+          <main className="mx-auto max-w-6xl px-6 py-7">{children}</main>
+        </div>
+        {panel}
       </body>
     </html>
   );

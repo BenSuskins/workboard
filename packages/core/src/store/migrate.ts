@@ -76,6 +76,9 @@ export function convertLegacyDb(dbPath: string, root: string): Record<string, nu
         name: str(row.name),
         description: str(row.description),
         category: str(row.category),
+        // The SQLite schema predates tile identity; both fall back at render time.
+        icon: null,
+        accent: null,
         status: str(row.status) as never,
         priority: str(row.priority) as never,
         health: str(row.health) as never,

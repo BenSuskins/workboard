@@ -1,75 +1,69 @@
 import Link from "next/link";
 import { boardHref, type Filters } from "./filter-bar";
 
-interface BoardStats {
-  active: number;
-  blocked: number;
-  questions: number;
-  warnings: number;
-  stale: number;
-  openPrs: number;
-  ciFailing: number;
-}
-
-const TONE_CLS = {
-  critical: "text-critical",
-  serious: "text-serious",
-  warning: "text-warning",
-} as const;
-
-type Tone = keyof typeof TONE_CLS;
-
-interface Item {
+export interface StatCell {
   label: string;
-  value: number;
-  tone?: Tone;
+  value: number | string;
   href?: string;
+  tone?: string;
 }
 
-/** One-line metric strip replacing the stat tile grid; linked entries jump to their filter. */
-export function StatStrip({ filters, stats }: { filters: Filters; stats: BoardStats }) {
-  const items: Item[] = [
-    { label: "active", value: stats.active },
-    {
-      label: "blocked",
-      value: stats.blocked,
-      tone: stats.blocked > 0 ? "critical" : undefined,
-      href: boardHref({ ...filters, status: "blocked" }),
-    },
-    {
-      label: stats.questions === 1 ? "open question" : "open questions",
-      value: stats.questions,
-      // A question blocks an agent until the user replies, so it reads as work, not noise.
-      tone: stats.questions > 0 ? "serious" : undefined,
-    },
-    { label: "warnings", value: stats.warnings, tone: stats.warnings > 0 ? "warning" : undefined },
-    {
-      label: "stale 7d+",
-      value: stats.stale,
-      tone: stats.stale > 0 ? "warning" : undefined,
-      href: boardHref({ ...filters, sort: "stale" }),
-    },
-    { label: "open PRs", value: stats.openPrs },
-    { label: "CI failing", value: stats.ciFailing, tone: stats.ciFailing > 0 ? "critical" : undefined },
-  ];
+/**
+ * A row of headline numbers in divided cells. The board and a project page both
+ * open with one, so the two read as the same kind of surface.
+ */
+export function StatCells({ items }: { items: StatCell[] }) {
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+    <div
+      className="grid grid-cols-2 divide-x divide-y divide-hairline overflow-hidden rounded-card border border-hairline bg-surface sm:grid-cols-3 lg:divide-y-0"
+      style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}
+    >
       {items.map((item) => {
-        const toneCls = item.tone ? TONE_CLS[item.tone] : "";
-        const content = (
+        const body = (
           <>
-            <span className={`font-semibold tabular-nums ${toneCls || "text-ink"}`}>{item.value}</span>{" "}
-            <span className={toneCls || "text-muted"}>{item.label}</span>
+            <span className="text-meta text-muted">{item.label}</span>
+            <span className={`text-heading font-semibold tabular-nums ${item.tone ?? "text-ink"}`}>{item.value}</span>
           </>
         );
+        const cls = "flex flex-col items-center gap-1 px-4 py-3.5 text-center";
         return item.href ? (
-          <Link key={item.label} href={item.href} className="transition-opacity hover:opacity-70">
-            {content}
+          <Link key={item.label} href={item.href} className={`${cls} transition-colors hover:bg-surface-2`}>
+            {body}
           </Link>
         ) : (
-          <span key={item.label}>{content}</span>
+          <span key={item.label} className={cls}>
+            {body}
+          </span>
         );
       })}
     </div>
+  );
+}
+
+export interface BoardStats {
+  projects: number;
+  moving: number;
+  upForGrabs: number;
+  questions: number;
+  done: number;
+}
+
+/**
+ * The board's headline numbers. Anything that means something is *wrong* lives
+ * in AlertRow instead, so a problem stands out rather than hiding in a row of
+ * counts.
+ */
+export function StatStrip({ filters, stats }: { filters: Filters; stats: BoardStats }) {
+  return (
+    <StatCells
+      items={[
+        { label: "Projects", value: stats.projects, href: boardHref({ ...filters, status: undefined }) },
+        { label: "Moving", value: stats.moving, href: boardHref({ ...filters, status: "active" }) },
+        { label: "Up for grabs", value: stats.upForGrabs },
+        // A question blocks an agent until the user replies, so it reads as work, not noise.
+        { label: "Open questions", value: stats.questions, tone: stats.questions > 0 ? "text-serious" : undefined },
+        { label: "Done", value: stats.done },
+      ]}
+    />
   );
 }

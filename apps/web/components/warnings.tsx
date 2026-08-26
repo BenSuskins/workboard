@@ -10,19 +10,28 @@ const SEVERITY: Record<WarningSeverity, { icon: string; label: string; cls: stri
   info: { icon: "ℹ️", label: "Info", cls: "border-accent/50 bg-accent/10 text-accent" },
 };
 
-/** Compact strip for dashboard cards: severity icon + label + message, worst first. */
+const STRIP_TONE: Record<WarningSeverity, { dot: string; text: string }> = {
+  critical: { dot: "bg-critical", text: "text-critical" },
+  warning: { dot: "bg-warning", text: "text-warning" },
+  info: { dot: "bg-accent", text: "text-accent" },
+};
+
+/**
+ * One line for a board card: a coloured dot, the severity, and the message
+ * truncated. A boxed panel here competed with the card's own border and made
+ * every warned project shout; the dot carries the same signal in a third of
+ * the height.
+ */
 export function WarningStrip({ warnings }: { warnings: Warning[] }) {
   if (warnings.length === 0) return null;
   const top = warnings[0];
-  const s = SEVERITY[top.severity];
+  const tone = STRIP_TONE[top.severity];
   return (
-    <div className={`flex items-start gap-1.5 rounded-lg border px-2 py-1.5 text-[12px] leading-snug ${s.cls}`}>
-      <span aria-hidden>{s.icon}</span>
-      <span className="min-w-0 line-clamp-2" title={top.message}>
-        <span className="font-semibold">{s.label}: </span>
-        <span className="text-ink-2">{top.message}</span>
-        {warnings.length > 1 && <span className="text-muted"> · +{warnings.length - 1} more</span>}
-      </span>
+    <div className="flex min-w-0 items-center gap-2 text-meta" title={top.message}>
+      <span className={`size-1.5 shrink-0 rounded-full ${tone.dot}`} aria-hidden />
+      <span className={`shrink-0 font-medium ${tone.text}`}>{SEVERITY[top.severity].label}</span>
+      <span className="truncate text-ink-2">{top.message}</span>
+      {warnings.length > 1 && <span className="shrink-0 text-muted">+{warnings.length - 1}</span>}
     </div>
   );
 }
@@ -35,10 +44,10 @@ export function WarningsPanel({ warnings, slug }: { warnings: Warning[]; slug: s
       {warnings.map((w) => {
         const s = SEVERITY[w.severity];
         return (
-          <div key={w.id} className={`rounded-[10px] border p-3.5 ${s.cls}`}>
+          <div key={w.id} className={`rounded-card border p-3.5 ${s.cls}`}>
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px]">
+                <div className="mb-1 flex flex-wrap items-center gap-2 text-meta">
                   <span className="font-semibold uppercase tracking-wide">
                     {s.icon} {s.label}
                   </span>
@@ -48,7 +57,7 @@ export function WarningsPanel({ warnings, slug }: { warnings: Warning[]; slug: s
                 </div>
                 <Markdown>{w.message}</Markdown>
                 {w.suggestedAction && (
-                  <p className="mt-1.5 text-[12px] text-ink-2">
+                  <p className="mt-1.5 text-meta text-ink-2">
                     <span className="font-semibold text-ink">Suggested action:</span> {w.suggestedAction}
                   </p>
                 )}
@@ -58,7 +67,7 @@ export function WarningsPanel({ warnings, slug }: { warnings: Warning[]; slug: s
                 <input type="hidden" name="slug" value={slug} />
                 <button
                   type="submit"
-                  className="rounded-lg border border-hairline px-2.5 py-1 text-xs text-ink-2 transition-colors hover:border-muted hover:text-ink"
+                  className="rounded-control border border-hairline px-2.5 py-1 text-meta text-ink-2 transition-colors hover:border-muted hover:text-ink"
                 >
                   Resolve
                 </button>
