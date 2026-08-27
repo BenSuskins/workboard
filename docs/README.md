@@ -38,6 +38,13 @@ flowchart LR
   the thread.
 - **Live read-only sync** — PR/review/CI state, Jira issue status, Google Doc
   titles and last-edited times, all degrading gracefully without credentials.
+- **Your pull requests, not everyone's** — the PR view asks GitHub for the open
+  PRs *you* authored, wherever they live, grouped by what to do about them
+  (failing checks → approved → changes requested → ready for review → draft). A
+  PR shows a project only when the board tracks it; the rest are still yours to
+  see. Without a token it falls back to the PRs the board has synced.
+- **The board remembers its filters** — status, category, health, and sort stay
+  put between navigations, while every filter is still a shareable URL.
 - **Monorepo-aware** — projects ≠ repos; link individual PRs/issues or give a
   repo link a scope (labels, path prefixes, branch prefix) for auto-discovery.
 - **Agent warnings** — agents flag things they can't fix with a severity and a
@@ -103,7 +110,7 @@ credentials. Copy `.env.example` to `.env` and fill in what you use.
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `GITHUB_TOKEN` | no | — | Live PR state, review status, CI checks on in-flight PRs; monorepo-scoped PR discovery |
+| `GITHUB_TOKEN` | no | — | Live PR state, review status, CI checks on in-flight PRs; monorepo-scoped PR discovery. A **user** token (classic or fine-grained PAT) also names you, which is what `/prs` filters by — an app or installation token cannot |
 | `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` | no | — | Jira Cloud issue status and per-epic/project counts |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | no | — | Google Doc titles + last-edited times (run `npm run google:auth` once) |
 | `WORKBOARD_MCP_TOKEN` | no | — | Require a bearer token on the HTTP MCP transport |

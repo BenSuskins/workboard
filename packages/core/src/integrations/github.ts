@@ -152,6 +152,57 @@ export async function fetchPr(externalId: string): Promise<PrSnapshot> {
   return { type: "pr", reviewDecision, ciStatus, ...toPr(repo, pr) };
 }
 
+/** The token's own open pull requests, and who the token belongs to. */
+export interface ViewerPrs {
+  login: string;
+  prs: PrSnapshot[];
+  /** GitHub had more than the page we asked for — the list is the most recently updated slice. */
+  truncated: boolean;
+}
+
+/** The token's owner. Cached for the life of the process: a token does not change hands. */
+let viewerLogin: string | null = null;
+
+export async function fetchViewerLogin(): Promise<string> {
+  if (!viewerLogin) viewerLogin = (await gh<{ login: string }>("/user")).login;
+  return viewerLogin;
+}
+
+const MY_PRS_LIMIT = 25;
+const MY_PRS_TTL_MS = 5 * 60 * 1000;
+
+let myPrsCache: { at: number; value: ViewerPrs } | null = null;
+
+/** Drops the cached list so the next read goes back to GitHub. */
+export function clearMyOpenPrs(): void {
+  myPrsCache = null;
+}
+
+/**
+ * Every open PR the token's owner has authored, anywhere on GitHub — not only
+ * in repos a project happens to link. Search returns the list; each hit is then
+ * read in full, because search carries neither the head commit (no CI) nor
+ * reviews, and this view sorts PRs by exactly those.
+ *
+ * That is a handful of calls per PR, so the result is cached: the page renders
+ * on every navigation, and a personal PR list does not change by the second.
+ */
+export async function fetchMyOpenPrs(maxAgeMs = MY_PRS_TTL_MS): Promise<ViewerPrs> {
+  if (myPrsCache && Date.now() - myPrsCache.at < maxAgeMs) return myPrsCache.value;
+  const login = await fetchViewerLogin();
+  const query = encodeURIComponent(`is:pr is:open archived:false author:${login}`);
+  const found = await gh<{ total_count: number; items: { number: number; repository_url: string }[] }>(
+    `/search/issues?q=${query}&sort=updated&order=desc&per_page=${MY_PRS_LIMIT}`,
+  );
+  const prs: PrSnapshot[] = [];
+  for (const item of found.items) {
+    prs.push(await fetchPr(`${item.repository_url.replace(`${API}/repos/`, "")}#${item.number}`));
+  }
+  const value: ViewerPrs = { login, prs, truncated: found.total_count > found.items.length };
+  myPrsCache = { at: Date.now(), value };
+  return value;
+}
+
 export async function fetchIssue(externalId: string): Promise<IssueSnapshot> {
   const [repo, num] = externalId.split("#");
   const issue = await gh<{

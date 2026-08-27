@@ -6,6 +6,7 @@ import {
   addTaskComment,
   addComment,
   addPost,
+  clearMyOpenPrs,
   createProject,
   PROJECT_ACCENTS,
   type ProjectAccent,
@@ -289,6 +290,13 @@ export async function refreshProjectAction(formData: FormData) {
 export async function refreshAllAction() {
   await syncAll(db());
   revalidatePath("/");
+}
+
+/** The PR view reads GitHub directly through a short-lived cache; refreshing means dropping it. */
+export async function refreshMyPrsAction() {
+  clearMyOpenPrs();
+  revalidatePath("/prs");
+  revalidatePath("/", "layout");
 }
 
 /** Bindable variant for the RefreshButton: refreshProjectBySlug.bind(null, slug). */

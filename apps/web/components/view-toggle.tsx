@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { boardHref, type Filters } from "./filter-bar";
+import { boardHref, type Filters } from "@/lib/board-filters";
 
 type BoardView = "cards" | "list";
 

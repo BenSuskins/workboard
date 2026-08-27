@@ -1,25 +1,22 @@
 import Link from "next/link";
 import { getProjectDetail, listProjects, type ProjectDetail } from "@workboard/core";
 import { ciLabel, GitHubMark } from "@/components/chips";
+import { RefreshButton } from "@/components/refresh-button";
 import { SectionHeading } from "@/components/section";
+import { refreshMyPrsAction } from "@/lib/actions";
 import { db } from "@/lib/db";
-import { prBucket, prPipeline, type PrBucket, type PrLite } from "@/lib/pipeline";
+import { prBucket, type PrBucket } from "@/lib/pipeline";
+import { loadPullRequests } from "@/lib/prs";
 import { relativeTime } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
-
-interface Row {
-  pr: PrLite;
-  projectName: string;
-  projectSlug: string;
-}
 
 /** Display for each bucket. The rules themselves live in lib/pipeline. */
 const BUCKETS = [
   {
     key: "failing",
     title: "Failing checks",
-    blurb: "CI is red \u2014 these need a fix before review matters.",
+    blurb: "CI is red — these need a fix before review matters.",
     tone: "text-critical",
     dot: "bg-critical",
   },
@@ -54,9 +51,10 @@ const BUCKETS = [
 ] as const satisfies readonly { key: PrBucket; title: string; blurb: string; tone: string; dot: string }[];
 
 /**
- * Every open pull request across the board, grouped by what you would do about
- * it. GitHub gives us a token, not a login, so this cannot honestly claim to
- * show "mine" — it shows what is open on the projects you track.
+ * Your open pull requests, grouped by what you would do about them. The token
+ * names you, so this is authored-by-you across all of GitHub — a project only
+ * appears on a row when the board happens to track that PR. Without a token it
+ * falls back to every open PR the board has synced, whoever wrote it.
  */
 export default async function PullRequestsPage() {
   const database = db();
@@ -64,32 +62,47 @@ export default async function PullRequestsPage() {
     .map((project) => getProjectDetail(database, project.id, { postsLimit: 0 }))
     .filter((detail): detail is ProjectDetail => detail !== undefined);
 
-  const rows: Row[] = [];
-  for (const detail of details) {
-    for (const pr of prPipeline(detail.links).prs) {
-      if (pr.state !== "open") continue;
-      rows.push({ pr, projectName: detail.project.name, projectSlug: detail.project.slug });
-    }
-  }
-  rows.sort((a, b) => b.pr.updatedAt.localeCompare(a.pr.updatedAt));
-
+  const { mode, rows, login, truncated, error } = await loadPullRequests(details);
   const grouped = BUCKETS.map((bucket) => ({
     ...bucket,
     rows: rows.filter((row) => prBucket(row.pr) === bucket.key),
   }));
 
+  const subtitle =
+    mode === "mine"
+      ? rows.length === 0
+        ? `Nothing open under ${login}.`
+        : `${rows.length}${truncated ? "+" : ""} open, authored by ${login}`
+      : rows.length === 0
+        ? "No open pull requests tracked."
+        : `${rows.length} open across your projects`;
+
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-heading font-semibold tracking-tight text-ink">Pull requests</h1>
-        <p className="text-meta text-muted">
-          {rows.length === 0 ? "No open pull requests tracked." : `${rows.length} open across your projects`}
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-heading font-semibold tracking-tight text-ink">Pull requests</h1>
+          <p className="text-meta text-muted">{subtitle}</p>
+        </div>
+        {mode === "mine" && <RefreshButton action={refreshMyPrsAction} label="Refresh" />}
       </div>
+
+      {error && (
+        <div className="rounded-card border border-critical/25 bg-critical/[0.06] px-4 py-3 text-meta text-ink-2">
+          GitHub would not say which PRs are yours, so this is what the board has synced instead.{" "}
+          <span className="text-muted">{error}</span>
+        </div>
+      )}
 
       {rows.length === 0 ? (
         <div className="rounded-card border border-dashed border-grid px-6 py-16 text-center text-body text-muted">
-          Nothing open. Link a repo or a PR to a project, and set <code>GITHUB_TOKEN</code> so Workboard can sync it.
+          {mode === "mine" ? (
+            "No open pull requests. Nothing waiting on you here."
+          ) : (
+            <>
+              Nothing open. Set <code>GITHUB_TOKEN</code> to see the PRs you have open, or link a repo to a project.
+            </>
+          )}
         </div>
       ) : (
         <>
@@ -111,7 +124,7 @@ export default async function PullRequestsPage() {
                 <SectionHeading title={bucket.title} count={bucket.rows.length} />
                 <p className="-mt-2 text-meta text-muted">{bucket.blurb}</p>
                 <ul className="overflow-hidden rounded-card border border-hairline bg-surface">
-                  {bucket.rows.map(({ pr, projectName, projectSlug }) => {
+                  {bucket.rows.map(({ pr, project }) => {
                     const ci = ciLabel(pr.ciStatus);
                     return (
                       <li
@@ -133,11 +146,15 @@ export default async function PullRequestsPage() {
                               <GitHubMark />
                               {pr.repo} #{pr.number}
                             </span>
-                            <span>·</span>
-                            <Link href={`/projects/${projectSlug}`} className="hover:text-ink">
-                              {projectName}
-                            </Link>
-                            {pr.author && (
+                            {project && (
+                              <>
+                                <span>·</span>
+                                <Link href={`/projects/${project.slug}`} className="hover:text-ink">
+                                  {project.name}
+                                </Link>
+                              </>
+                            )}
+                            {mode === "tracked" && pr.author && (
                               <>
                                 <span>·</span>
                                 <span>{pr.author}</span>
@@ -167,6 +184,12 @@ export default async function PullRequestsPage() {
                 </ul>
               </section>
             ),
+          )}
+
+          {truncated && (
+            <p className="text-meta text-muted">
+              Showing the most recently updated. GitHub has more open under {login}.
+            </p>
           )}
         </>
       )}

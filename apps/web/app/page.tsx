@@ -17,7 +17,8 @@ import { AlertRow } from "@/components/alert-row";
 import { BoardKeynav } from "@/components/board-keynav";
 import { RefreshButton } from "@/components/refresh-button";
 import { refreshAllAction } from "@/lib/actions";
-import { FilterBar, type Filters } from "@/components/filter-bar";
+import { FilterBar } from "@/components/filter-bar";
+import { FilterMemory } from "@/components/filter-memory";
 import { Mermaid } from "@/components/mermaid";
 import { ProjectCard } from "@/components/project-card";
 import { ProjectRow } from "@/components/project-row";
@@ -25,10 +26,19 @@ import { PulseCard } from "@/components/pulse-card";
 import { StatStrip } from "@/components/stat-strip";
 import { SyncBanner } from "@/components/sync-banner";
 import { ViewToggle } from "@/components/view-toggle";
+import {
+  FILTERS_COOKIE,
+  resolveFilters,
+  serializeFilters,
+  type BoardParams,
+  type Filters,
+} from "@/lib/board-filters";
 import { db } from "@/lib/db";
 import { prPipeline } from "@/lib/pipeline";
 
 export const dynamic = "force-dynamic";
+
+type BoardCookies = Awaited<ReturnType<typeof cookies>>;
 
 const STALE_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -52,19 +62,16 @@ const SORTERS: Record<string, (a: ProjectDetail, b: ProjectDetail) => number> = 
 };
 
 /** Explicit ?view= wins; otherwise the wb-board-view cookie; otherwise cards. */
-async function resolveView(filters: Filters): Promise<"cards" | "list"> {
+function resolveView(filters: Filters, cookieStore: BoardCookies): "cards" | "list" {
   if (filters.view === "list" || filters.view === "cards") return filters.view;
-  const cookieStore = await cookies();
   return cookieStore.get("wb-board-view")?.value === "list" ? "list" : "cards";
 }
 
-export default async function Dashboard({
-  searchParams,
-}: {
-  searchParams: Promise<{ category?: string; status?: string; health?: string; sort?: string; view?: string }>;
-}) {
-  const filters: Filters = await searchParams;
-  const view = await resolveView(filters);
+export default async function Dashboard({ searchParams }: { searchParams: Promise<BoardParams> }) {
+  const cookieStore = await cookies();
+  // The URL describes the filters whenever it mentions any; otherwise the last set is restored.
+  const filters = resolveFilters(await searchParams, cookieStore.get(FILTERS_COOKIE)?.value);
+  const view = resolveView(filters, cookieStore);
   const database = db();
 
   const all = listProjects(database, {});
@@ -103,6 +110,7 @@ export default async function Dashboard({
 
   return (
     <div className="flex flex-col gap-6">
+      <FilterMemory serialized={serializeFilters(filters)} />
       <SyncBanner />
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-heading font-semibold tracking-tight text-ink">Board</h1>

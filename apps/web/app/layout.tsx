@@ -4,7 +4,7 @@ import { listOpenQuestions, listProjects, getProjectDetail, type ProjectDetail }
 import { CommandPalette } from "@/components/command-palette";
 import { Sidebar, type SidebarProject } from "@/components/sidebar";
 import { db } from "@/lib/db";
-import { prPipeline } from "@/lib/pipeline";
+import { loadPullRequests } from "@/lib/prs";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-inter" });
@@ -38,10 +38,8 @@ export default async function RootLayout({ children, panel }: { children: React.
 
   const openWarnings = details.reduce((total, detail) => total + detail.openWarnings.length, 0);
   const inboxCount = listOpenQuestions(database).length + openWarnings;
-  const prCount = details.reduce((total, detail) => {
-    const pipeline = prPipeline(detail.links);
-    return total + pipeline.draft + pipeline.inReview + pipeline.approved;
-  }, 0);
+  // Same source as /prs — a badge that disagreed with the page it links to would be worse than none.
+  const prCount = (await loadPullRequests(details)).rows.length;
 
   return (
     <html lang="en" suppressHydrationWarning className={`${inter.variable} ${jetbrainsMono.variable}`}>
