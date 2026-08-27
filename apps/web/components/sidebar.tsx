@@ -14,6 +14,7 @@ import {
   ComposeIcon,
   DigestIcon,
   InboxIcon,
+  IssuesIcon,
   PullRequestIcon,
   SearchIcon,
   TriageIcon,
@@ -43,10 +44,13 @@ interface NavItem {
 export function Sidebar({
   projects,
   inboxCount,
+  openIssueCount,
   prCount,
 }: {
   projects: SidebarProject[];
   inboxCount: number;
+  /** Issues still to do — the badge is "work outstanding", not "issues that exist". */
+  openIssueCount: number;
   prCount: number;
 }) {
   const pathname = usePathname();
@@ -103,6 +107,7 @@ export function Sidebar({
 
   const nav: NavItem[] = [
     { href: "/", label: "Board", icon: <BoardIcon />, exact: true },
+    { href: "/issues", label: "Issues", icon: <IssuesIcon />, badge: openIssueCount },
     { href: "/inbox", label: "Inbox", icon: <InboxIcon />, badge: inboxCount },
     { href: "/prs", label: "Pull requests", icon: <PullRequestIcon />, badge: prCount },
   ];

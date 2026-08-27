@@ -45,6 +45,11 @@ export interface RepoScope {
 export interface Project {
   id: number;
   slug: string;
+  /**
+   * Short uppercase prefix on every issue identifier in this project — `ENG` in
+   * `ENG-12`. Unique across the board, so an identifier names exactly one issue.
+   */
+  key: string;
   name: string;
   description: string;
   category: string;
@@ -63,13 +68,27 @@ export interface Project {
 }
 
 export interface Task {
+  /** Board-wide, and what every file and API takes. */
   id: number;
   projectId: number;
+  /**
+   * Position in this project's own sequence — the `12` in `ENG-12`. Separate
+   * from `id` so the name a person says stays short and stays with the project.
+   */
+  number: number;
   title: string;
   /** Markdown spec a claiming agent works from. */
   description: string;
   status: TaskStatus;
   priority: TaskPriority | null;
+  /**
+   * Who owns this — `"user"` for you, or an agent's name. Workboard is one
+   * person plus agents, so this is a plain name rather than a member reference.
+   * A claim sets it, which is why `claimedBy` and this never disagree.
+   */
+  assignee: string | null;
+  /** Free-form tags, normalized lowercase and deduped. No label entity to keep in sync. */
+  labels: string[];
   /** 0 or 1 — queued for agents to claim. */
   agentReady: number;
   claimedBy: string | null;

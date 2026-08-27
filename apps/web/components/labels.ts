@@ -89,6 +89,18 @@ export const ACCENT_TEXT: Record<ProjectAccent, string> = {
   red: "text-tile-red",
 };
 
+/** The hue as a dot — for places where the hue must not carry text. */
+export const ACCENT_DOT: Record<ProjectAccent, string> = {
+  orange: "bg-tile-orange",
+  purple: "bg-tile-purple",
+  green: "bg-tile-green",
+  blue: "bg-tile-blue",
+  pink: "bg-tile-pink",
+  amber: "bg-tile-amber",
+  teal: "bg-tile-teal",
+  red: "bg-tile-red",
+};
+
 export const ACCENT_BG: Record<ProjectAccent, string> = {
   orange: "bg-tile-orange/15",
   purple: "bg-tile-purple/15",
@@ -116,6 +128,17 @@ export function tileAccent(project: Pick<Project, "slug" | "accent">): ProjectAc
   if (project.accent) return project.accent;
   let hash = 0;
   for (const char of project.slug) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return ACCENTS[hash % ACCENTS.length];
+}
+
+/**
+ * A label's hue. Labels are free text with nothing stored beside them, so the
+ * colour comes from the text itself — the same label reads the same on every
+ * card, and a new one needs no setup.
+ */
+export function labelAccent(label: string): ProjectAccent {
+  let hash = 0;
+  for (const char of label) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
   return ACCENTS[hash % ACCENTS.length];
 }
 

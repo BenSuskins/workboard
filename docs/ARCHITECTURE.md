@@ -41,6 +41,8 @@ flowchart TB
 |-----------|---------------|----------|
 | Domain | Entity shapes + enums, storage-independent | `packages/core/src/domain.ts` |
 | Board lanes | Derives a task's column and moves it between them | `packages/core/src/services.ts` (`taskLane` / `setTaskLane`) |
+| Identifiers | `ENG-12` — a project key plus a per-project task number | `packages/core/src/identifiers.ts`, backfilled by `store/backfill.ts` |
+| Issue queries | One filtered cross-project task query behind the issues view, ⌘K and `list_tasks` | `packages/core/src/services.ts` (`listTasks` / `listLabels`) |
 | Store | Tree layout, frontmatter, atomic writes, id allocation, locks | `packages/core/src/store/` |
 | Services | Domain operations (projects, tasks, posts, comments, summaries, links, warnings, reports) | `packages/core/src/services.ts` |
 | Integration clients | GitHub / Jira / Google Docs read-only fetchers | `packages/core/src/integrations/{github,jira,gdrive}.ts` |
@@ -55,7 +57,7 @@ flowchart TB
 The agent-facing API, defined in `packages/mcp/src/tools.ts`:
 
 `list_projects` · `get_project` · `find_project` · `create_project` ·
-`update_project` · `add_post` · `add_task` · `update_task` ·
+`update_project` · `add_post` · `add_task` · `update_task` · `list_tasks` ·
 `list_queued_tasks` · `claim_task` · `add_task_comment` ·
 `list_task_comments` · `add_link` ·
 `upsert_summary` · `raise_warning` · `resolve_warning` · `get_activity` ·
@@ -194,6 +196,14 @@ Ids are integers and globally unique per entity type, so a post or task is
 addressable by id alone. The slug in a filename is for hand-browsing only and
 may go stale after a rename; lookups match the `<id>-` prefix.
 
+A task also carries a `number`, allocated from its project's own ledger
+(`.seq/task-numbers/<projectId>/`). With the project's `key` that makes the
+identifier a person uses — `ENG-12` — which is what belongs in a branch name, a
+commit, or a PR title. Numbers are stable and never reused: a deleted task keeps
+its number so restoring it restores its name. A board written before identifiers
+existed is backfilled once on open (`store/backfill.ts`), in creation order,
+behind a `.identifiers` stamp so the work happens exactly once.
+
 External state lives under `.cache/` as JSON rather than markdown: it is a
 ten-minute cache of GitHub/Jira/Docs, not prose, and rebuilding it is one sync.
 
@@ -208,6 +218,7 @@ The web and MCP servers are separate processes writing one tree, so the store
 | Two agents never claim one task | `open(claim, "wx")` — `O_CREAT\|O_EXCL` succeeds for exactly one caller |
 | Two writers never get the same id | Same exclusive create against `.seq/<entity>/<n>`, retrying upward |
 | Two creators never take one slug | `mkdir` without `recursive` fails with `EEXIST` |
+| Two boots never number one task twice | The identifier backfill runs inside the store's file lock, behind a `.identifiers` stamp |
 | Concurrent edits to one file don't lose each other | A `<file>.lock`, broken after 10s so a crashed writer can't wedge the board |
 
 The claim marker is why the pull queue is still exactly-once: claiming creates a

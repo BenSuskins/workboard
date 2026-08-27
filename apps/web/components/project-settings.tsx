@@ -19,9 +19,17 @@ export function ProjectSettings({ project }: { project: Project }) {
         <input type="hidden" name="id" value={project.id} />
         <input type="hidden" name="slug" value={project.slug} />
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Name">
             <input name="name" defaultValue={project.name} className={inputCls} />
+          </Field>
+          <Field label="Issue key" hint="The prefix on every issue here, e.g. ENG-12.">
+            <input
+              name="key"
+              defaultValue={project.key}
+              maxLength={6}
+              className={`${inputCls} font-mono uppercase`}
+            />
           </Field>
           <Field label="Category">
             <input name="category" defaultValue={project.category} list="category-presets" className={inputCls} />

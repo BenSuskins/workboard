@@ -38,15 +38,27 @@ import { db } from "./db";
 import { laneParam } from "./lanes";
 
 /**
- * A project now spans three routes, and the sidebar counts render in the root
- * layout, so any write to a project has to refresh all of them together.
+ * A project now spans three routes, the issues view lists every project's tasks,
+ * and the sidebar counts render in the root layout, so any write to a project
+ * has to refresh all of them together.
  */
 function revalidateProject(slug: string): void {
   if (!slug) return;
   revalidatePath(`/projects/${slug}`);
   revalidatePath(`/projects/${slug}/tasks`);
   revalidatePath(`/projects/${slug}/activity`);
+  revalidatePath("/issues");
   revalidatePath("/", "layout");
+}
+
+/**
+ * Who a form is assigning to. The checkbox and the button both post a name, and
+ * an empty field means unassigned — never "leave it alone", which is what an
+ * absent field means.
+ */
+function assigneeField(formData: FormData): string | null | undefined {
+  if (!formData.has("assignee")) return undefined;
+  return String(formData.get("assignee") ?? "").trim() || null;
 }
 
 function csv(value: FormDataEntryValue | null): string[] | undefined {
@@ -86,6 +98,8 @@ export async function updateProjectAction(formData: FormData) {
   const id = Number(formData.get("id"));
   updateProject(db(), id, {
     name: String(formData.get("name") ?? "").trim() || undefined,
+    // An empty key means "leave it alone" — a project always has one.
+    key: String(formData.get("key") ?? "").trim() || undefined,
     description: String(formData.get("description") ?? ""),
     category: String(formData.get("category") ?? "") || undefined,
     status: (formData.get("status") as ProjectStatus) || undefined,
@@ -148,6 +162,8 @@ export async function addTaskAction(formData: FormData) {
       author: "user",
       status: start.status,
       agentReady: start.agentReady,
+      assignee: assigneeField(formData),
+      labels: csv(formData.get("labels")),
     });
   const slug = String(formData.get("slug"));
   revalidateProject(slug);
@@ -164,6 +180,8 @@ export async function updateTaskDetailAction(formData: FormData) {
     description: String(formData.get("description") ?? ""),
     priority: taskPriority(formData.get("priority")),
     dueDate: String(formData.get("dueDate") ?? "").trim() || null,
+    assignee: assigneeField(formData),
+    labels: csv(formData.get("labels")) ?? [],
   });
   const slug = String(formData.get("slug"));
   revalidatePath(`/projects/${slug}/tasks/${taskId}`);
@@ -174,6 +192,16 @@ export async function updateTaskDetailAction(formData: FormData) {
 export async function setTaskAgentReadyAction(formData: FormData) {
   const taskId = Number(formData.get("taskId"));
   setTaskAgentReady(db(), taskId, formData.get("ready") === "1");
+  const slug = String(formData.get("slug"));
+  revalidatePath(`/projects/${slug}/tasks/${taskId}`);
+  revalidateProject(slug);
+  revalidatePath("/");
+}
+
+/** Assign or unassign in one click — an empty `assignee` field means nobody. */
+export async function setTaskAssigneeAction(formData: FormData) {
+  const taskId = Number(formData.get("taskId"));
+  updateTask(db(), taskId, { assignee: assigneeField(formData) ?? null });
   const slug = String(formData.get("slug"));
   revalidatePath(`/projects/${slug}/tasks/${taskId}`);
   revalidateProject(slug);
@@ -220,8 +248,10 @@ export async function addTaskCommentAction(formData: FormData) {
 
 export async function deleteTaskAction(formData: FormData) {
   deleteTask(db(), Number(formData.get("taskId")));
-  // Redirecting also covers deletion from the task's own page.
-  redirect(`/projects/${String(formData.get("slug"))}`);
+  // Redirecting also covers deletion from the task's own page. A row deleted
+  // from the issues view says so, so you land back on the list you were reading.
+  const returnTo = String(formData.get("returnTo") ?? "");
+  redirect(returnTo.startsWith("/") ? returnTo : `/projects/${String(formData.get("slug"))}`);
 }
 
 export async function restoreTaskAction(formData: FormData) {

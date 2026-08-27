@@ -13,6 +13,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import type { Comment, Link, Post, Project, Snapshot, Summary, SyncState, Task, Warning } from "../domain.js";
 import { allocateId, readdirSyncSafe, readFileSyncSafe, writeFileAtomic } from "./atomic.js";
+import { backfillIdentifiersIfNeeded } from "./backfill.js";
 import { parse, serialize, type Fields } from "./frontmatter.js";
 import { migrateLegacyIfNeeded } from "./migrate.js";
 import * as p from "./paths.js";
@@ -63,6 +64,8 @@ export function openStore(root: string = defaultDataDir()): Store {
   mkdirSync(root, { recursive: true });
   // A deployment upgrading from the SQLite build converts itself on first open.
   migrateLegacyIfNeeded(root);
+  // A board written before issue identifiers gets its keys and numbers, once.
+  backfillIdentifiersIfNeeded(root);
   return { root };
 }
 
@@ -101,7 +104,10 @@ function loadBoard(root: string): Board {
   for (const slug of readdirSyncSafe(p.projectsDir(root)).filter(p.isContent).sort()) {
     const doc = readDoc(p.projectFile(root, slug));
     if (!doc) continue;
-    const project = { ...(doc.fields as unknown as Project), slug, description: doc.body };
+    // `key` and a task's `number` are backfilled on open (see backfill.ts); the
+    // fallbacks here only cover a tree read before that ever ran.
+    const stored = doc.fields as unknown as Project;
+    const project = { ...stored, key: stored.key ?? "", slug, description: doc.body };
     out.projects.push(project);
     const id = project.id;
 
@@ -111,7 +117,14 @@ function loadBoard(root: string): Board {
     for (const live of [true, false]) {
       const dir = live ? p.tasksDir(root, slug) : p.deletedTasksDir(root, slug);
       for (const { fields, body } of readAll(dir)) {
-        const task = { ...(fields as unknown as Task), projectId: id, description: body };
+        const stored = fields as unknown as Task;
+        const task: Task = {
+          ...stored,
+          projectId: id,
+          description: body,
+          assignee: stored.assignee ?? null,
+          labels: stored.labels ?? [],
+        };
         const claimedBy = claims.get(task.id);
         out.tasks.push(claimedBy !== undefined ? { ...task, claimedBy: claimedBy || task.claimedBy } : task);
       }
