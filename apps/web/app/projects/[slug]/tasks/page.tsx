@@ -1,9 +1,10 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getProjectDetail, integrationStatus, taskLane, taskReplyCounts } from "@workboard/core";
 import { Mermaid } from "@/components/mermaid";
 import { ProjectHeader } from "@/components/project-header";
 import { TaskBoard, type BoardCard } from "@/components/task-board";
-import { TaskComposer } from "@/components/task-list";
+import { primaryButtonCls } from "@/components/form";
 import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -35,16 +36,13 @@ export default async function ProjectTasksPage({ params }: { params: Promise<{ s
       <Mermaid />
       <ProjectHeader project={project} active="/tasks" configured={anyConfigured} />
 
-      {/* A column's quick-add takes a title; this one has room for the description
-          an agent works from, so it stays, folded away until someone is writing one. */}
-      <details className="group rounded-card border border-hairline bg-surface open:bg-transparent open:border-transparent">
-        <summary className="cursor-pointer select-none px-4 py-2.5 text-body text-ink-2 transition-colors hover:text-ink group-open:hidden">
-          + New task
-        </summary>
-        <TaskComposer project={project} />
-      </details>
+      <div className="flex justify-end">
+        <Link href={`/projects/${project.slug}/tasks/new`} className={primaryButtonCls}>
+          New task
+        </Link>
+      </div>
 
-      <TaskBoard cards={cards} projectId={project.id} slug={project.slug} />
+      <TaskBoard cards={cards} slug={project.slug} />
     </div>
   );
 }

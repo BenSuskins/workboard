@@ -1,19 +1,23 @@
 import Link from "next/link";
-import type { Project, Task } from "@workboard/core";
+import type { Project, Task, TaskLane } from "@workboard/core";
 import { TaskPriorityDot } from "./badges";
-import { UP_FOR_GRABS } from "./labels";
+import { TASK_LANE_LABEL, TASK_LANE_ORDER, UP_FOR_GRABS } from "./labels";
 import { addTaskAction, deleteTaskAction, setTaskAgentReadyAction, setTaskStatusAction } from "@/lib/actions";
 import { toPlainText } from "@/lib/format";
 
-import { fieldCls as inputCls, primaryButtonCls as btnCls, selectCls } from "./form";
+import { Field, fieldCls as inputCls, primaryButtonCls as btnCls, selectCls } from "./form";
 
 /**
- * Writing a task is the main thing you do on this page, so it gets the shape of
- * a document rather than a toolbar: the title leads at reading size with no box
+ * Writing a task is the main thing this form is for, so it keeps the shape of a
+ * document rather than a toolbar: the title leads at reading size with no box
  * around it, the spec sits directly under it, and the metadata is a quiet
  * footer. An agent works from the description, so it must be easy to write.
+ *
+ * `lane` is the column the composer was opened from — it preselects the picker
+ * without locking it, so "+ Add task" under Up for grabs queues by default and
+ * you can still change your mind here.
  */
-export function TaskComposer({ project }: { project: Project }) {
+export function TaskComposer({ project, lane = "backlog" }: { project: Project; lane?: TaskLane }) {
   return (
     <form
       action={addTaskAction}
@@ -26,35 +30,47 @@ export function TaskComposer({ project }: { project: Project }) {
         <input
           name="title"
           required
+          autoFocus
           placeholder="Task title"
           aria-label="Task title"
           className="w-full bg-transparent text-title font-medium text-ink outline-none placeholder:font-normal placeholder:text-muted"
         />
         <textarea
           name="description"
-          rows={2}
+          rows={6}
           placeholder="Spec for whoever picks this up — problem, constraints, acceptance criteria. Markdown works."
           aria-label="Task description"
           className="w-full resize-y bg-transparent text-body leading-relaxed text-ink-2 outline-none placeholder:text-muted"
         />
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 border-t border-hairline px-3 py-2.5">
-        <select name="priority" defaultValue="" aria-label="Priority" className={`${selectCls} w-auto py-1.5 text-meta`}>
-          <option value="">No priority</option>
-          <option value="high">High</option>
-          <option value="medium">Medium</option>
-          <option value="low">Low</option>
-        </select>
+      <div className="grid gap-3 border-t border-hairline px-4 py-3 sm:grid-cols-3">
+        <Field label="Column">
+          <select name="lane" defaultValue={lane} className={selectCls}>
+            {TASK_LANE_ORDER.map((option) => (
+              <option key={option} value={option}>
+                {TASK_LANE_LABEL[option]}
+              </option>
+            ))}
+          </select>
+        </Field>
 
-        <input type="date" name="dueDate" aria-label="Due date" className={`${inputCls} w-auto py-1.5 text-meta`} />
+        <Field label="Priority">
+          <select name="priority" defaultValue="" className={selectCls}>
+            <option value="">No priority</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+        </Field>
 
-        <label className="inline-flex cursor-pointer items-center gap-2 rounded-control border border-hairline bg-surface-2 px-2.5 py-1.5 text-meta text-ink-2 transition-colors hover:border-grid has-checked:border-accent/50 has-checked:bg-accent/10 has-checked:text-accent">
-          <input type="checkbox" name="agentReady" className="size-3.5 accent-accent" />
-          Up for grabs
-        </label>
+        <Field label="Due date">
+          <input type="date" name="dueDate" className={inputCls} />
+        </Field>
+      </div>
 
-        <button type="submit" className={`${btnCls} ml-auto py-1.5`}>
+      <div className="flex justify-end border-t border-hairline px-4 py-3">
+        <button type="submit" className={btnCls}>
           Add task
         </button>
       </div>

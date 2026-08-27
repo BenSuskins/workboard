@@ -20,7 +20,6 @@ import {
   setTaskLane,
   syncAll,
   syncProject,
-  TASK_LANES,
   TASK_PRIORITIES,
   updateProject,
   updateTask,
@@ -35,6 +34,7 @@ import {
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "./db";
+import { laneParam } from "./lanes";
 
 /**
  * A project now spans three routes, and the sidebar counts render in the root
@@ -122,12 +122,6 @@ function taskPriority(value: FormDataEntryValue | null): TaskPriority | null {
   return (TASK_PRIORITIES as readonly string[]).includes(raw) ? (raw as TaskPriority) : null;
 }
 
-/** A lane arrives from a drop target or a select, so it is never trusted without checking. */
-function taskLaneOf(value: FormDataEntryValue | null): TaskLane | null {
-  const raw = String(value ?? "").trim();
-  return (TASK_LANES as readonly string[]).includes(raw) ? (raw as TaskLane) : null;
-}
-
 /** Where a task filed straight into a column starts out. */
 const LANE_START: Record<TaskLane, { status: TaskStatus; agentReady: boolean }> = {
   backlog: { status: "todo", agentReady: false },
@@ -142,9 +136,9 @@ export async function addTaskAction(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
   const dueDate = String(formData.get("dueDate") ?? "").trim();
-  // The per-column composer names its lane; the full composer uses its checkbox instead.
-  const lane = taskLaneOf(formData.get("lane"));
-  const start = lane ? LANE_START[lane] : { status: undefined, agentReady: formData.get("agentReady") === "on" };
+  // The composer's column picker decides where a new task lands; an absent or
+  // unrecognised lane files it in the backlog.
+  const start = LANE_START[laneParam(String(formData.get("lane") ?? "")) ?? "backlog"];
   if (title)
     addTask(db(), projectId, title, {
       description,
@@ -154,8 +148,12 @@ export async function addTaskAction(formData: FormData) {
       status: start.status,
       agentReady: start.agentReady,
     });
-  revalidateProject(String(formData.get("slug")));
+  const slug = String(formData.get("slug"));
+  revalidateProject(slug);
   revalidatePath("/");
+  // The composer is its own route, so creating has to land you back on the board —
+  // this also closes the slide-over when it was opened over one.
+  redirect(`/projects/${slug}/tasks`);
 }
 
 export async function updateTaskDetailAction(formData: FormData) {
@@ -198,7 +196,9 @@ export async function setTaskStatusAction(formData: FormData) {
  */
 export async function moveTaskAction(formData: FormData) {
   const taskId = Number(formData.get("taskId"));
-  const lane = taskLaneOf(formData.get("lane"));
+  const lane = laneParam(String(formData.get("lane") ?? ""));
+  // A move with no recognisable target does nothing; filing it in the backlog
+  // would be a silent wrong answer.
   if (!lane) return;
   setTaskLane(db(), taskId, lane);
   const slug = String(formData.get("slug"));

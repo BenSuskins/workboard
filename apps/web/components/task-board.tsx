@@ -4,7 +4,7 @@ import { useOptimistic, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import type { TaskLane, TaskPriority } from "@workboard/core";
 import { TASK_LANE_BLURB, TASK_LANE_LABEL, TASK_LANE_ORDER, TASK_LANE_TONE } from "./labels";
-import { addTaskAction, moveTaskAction } from "@/lib/actions";
+import { moveTaskAction } from "@/lib/actions";
 
 /**
  * One task, flattened for the client. The lane is derived on the server by
@@ -38,15 +38,7 @@ export interface BoardCard {
  * `moveTaskAction` as the per-card lane select, so the pointer path and the
  * keyboard path cannot drift.
  */
-export function TaskBoard({
-  cards,
-  projectId,
-  slug,
-}: {
-  cards: BoardCard[];
-  projectId: number;
-  slug: string;
-}) {
+export function TaskBoard({ cards, slug }: { cards: BoardCard[]; slug: string }) {
   const [, startTransition] = useTransition();
   // The write is a server action behind a revalidate, so the card has to move
   // now and reconcile when the page data comes back.
@@ -123,7 +115,12 @@ export function TaskBoard({
                 {laneCards.length === 0 && (
                   <p className="px-1 py-3 text-center text-meta text-muted">Nothing here.</p>
                 )}
-                <QuickAdd lane={lane} projectId={projectId} slug={slug} />
+                <Link
+                  href={`/projects/${slug}/tasks/new?lane=${lane}`}
+                  className="rounded-control px-2 py-1.5 text-meta text-muted transition-colors hover:bg-surface-2 hover:text-ink"
+                >
+                  + Add task
+                </Link>
               </div>
             </section>
           );
@@ -199,51 +196,5 @@ function Card({
         </select>
       </label>
     </article>
-  );
-}
-
-/** Title-only composer at the foot of a column. The lane decides where the task lands. */
-function QuickAdd({ lane, projectId, slug }: { lane: TaskLane; projectId: number; slug: string }) {
-  const [open, setOpen] = useState(false);
-
-  if (!open)
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="rounded-control px-2 py-1.5 text-left text-meta text-muted transition-colors hover:bg-surface-2 hover:text-ink"
-      >
-        + Add task
-      </button>
-    );
-
-  return (
-    <form
-      action={(formData) => {
-        setOpen(false);
-        return addTaskAction(formData);
-      }}
-      className="flex flex-col gap-1.5 rounded-control border border-accent/40 bg-surface-2 p-2"
-    >
-      <input type="hidden" name="projectId" value={projectId} />
-      <input type="hidden" name="slug" value={slug} />
-      <input type="hidden" name="lane" value={lane} />
-      <input
-        name="title"
-        required
-        autoFocus
-        placeholder={`New task in ${TASK_LANE_LABEL[lane]}`}
-        aria-label={`New task in ${TASK_LANE_LABEL[lane]}`}
-        className="w-full bg-transparent text-body text-ink outline-none placeholder:text-muted"
-      />
-      <div className="flex items-center gap-1.5">
-        <button type="submit" className="rounded-chip bg-accent px-2 py-0.5 text-meta font-medium text-white hover:opacity-90">
-          Add
-        </button>
-        <button type="button" onClick={() => setOpen(false)} className="text-meta text-muted hover:text-ink">
-          Cancel
-        </button>
-      </div>
-    </form>
   );
 }

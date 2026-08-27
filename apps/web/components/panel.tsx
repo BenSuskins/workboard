@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 
 /**
@@ -24,9 +24,19 @@ export function Panel({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const panelRef = useRef<HTMLDivElement>(null);
 
+  /**
+   * A server action can redirect out from under an intercepted route — creating
+   * a task sends you back to the board. Next keeps the parallel-route slot
+   * mounted through that, leaving an invisible scrim over the page that eats
+   * every click, so the panel drops itself once the URL has moved on.
+   */
+  const stale = pathname !== href.split("?")[0];
+
   useEffect(() => {
+    if (stale) return;
     const previous = document.activeElement as HTMLElement | null;
     panelRef.current?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
@@ -59,7 +69,9 @@ export function Panel({
       document.body.style.overflow = overflow;
       previous?.focus();
     };
-  }, [router]);
+  }, [router, stale]);
+
+  if (stale) return null;
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
