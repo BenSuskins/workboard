@@ -12,7 +12,9 @@
   --wb-surface-2: #f2f3f5;
   --wb-ink: #14151a;
   --wb-ink-2: #55575d;
-  --wb-muted: #8a8f98;
+  /* muted is the 12px metadata tone, so it has to clear WCAG AA (4.5:1) against
+     the lightest surface it sits on, not merely look recessive */
+  --wb-muted: #6a6e75;
   --wb-hairline: rgba(20, 21, 26, 0.09);
   --wb-grid: rgba(20, 21, 26, 0.14);
   --wb-overlay: rgba(20, 21, 26, 0.28);
@@ -43,7 +45,7 @@
   --wb-surface-2: #1a1a1d;
   --wb-ink: #f7f8f8;
   --wb-ink-2: #b4b8bf;
-  --wb-muted: #6f757e;
+  --wb-muted: #7d838b;
   --wb-hairline: rgba(255, 255, 255, 0.08);
   --wb-grid: rgba(255, 255, 255, 0.12);
   --wb-overlay: rgba(0, 0, 0, 0.62);

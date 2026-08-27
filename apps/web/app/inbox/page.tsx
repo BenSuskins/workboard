@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 const SEVERITY_TONE: Record<Warning["severity"], string> = {
   critical: "text-critical",
   warning: "text-warning",
-  info: "text-muted",
+  info: "text-ink-2",
 };
 
 /**
@@ -60,7 +60,7 @@ export default async function InboxPage() {
                     href={`/projects/${project.slug}/posts/${post.id}`}
                     className="flex flex-col gap-1.5 rounded-card border border-hairline bg-surface p-4 transition-colors hover:border-accent/40"
                   >
-                    <div className="flex flex-wrap items-center gap-2 text-meta text-muted">
+                    <div className="flex flex-wrap items-center gap-2 text-meta font-medium text-muted">
                       <Avatar author={post.author} size="sm" />
                       <span className="font-medium text-ink-2">{authorLabel(post.author)}</span>
                       <span className="rounded-chip bg-serious/15 px-1.5 py-0.5 font-medium text-serious">asked</span>
@@ -92,7 +92,7 @@ export default async function InboxPage() {
                   ⚠
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2 text-meta text-muted">
+                  <div className="flex flex-wrap items-center gap-2 text-meta font-medium text-muted">
                     <span className={`font-medium capitalize ${SEVERITY_TONE[warning.severity]}`}>{warning.severity}</span>
                     <Link href={`/projects/${project.slug}`} className="hover:text-ink">
                       {project.name}
