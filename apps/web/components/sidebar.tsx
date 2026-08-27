@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { openPalette } from "./command-palette";
 import { ACCENT_BG, ACCENT_TEXT, tileAccent, tileGlyph } from "./labels";
+import { ResizeHandle } from "./resize-handle";
 import {
   AccomplishmentsIcon,
   BoardIcon,
@@ -120,13 +121,14 @@ export function Sidebar({
 
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-30 flex flex-col bg-surface transition-[width] duration-150 ${
-        collapsed ? "w-[52px]" : "w-60"
+      className={`wb-sidebar fixed inset-y-0 left-0 z-30 flex flex-col bg-surface transition-[width] duration-150 ${
+        collapsed ? "w-[52px]" : ""
       }`}
+      style={collapsed ? undefined : { width: "var(--wb-sidebar-w)" }}
     >
       <div className={`flex h-14 shrink-0 items-center gap-1 px-3 ${collapsed ? "justify-center" : ""}`}>
         <Link href="/" className="flex min-w-0 items-center gap-2" title="Workboard">
-          <span className="grid size-[22px] shrink-0 place-items-center rounded-md bg-accent text-[11px] font-bold text-white">
+          <span className="grid size-[22px] shrink-0 place-items-center rounded-md bg-accent text-[11px] font-bold text-on-accent">
             W
           </span>
           {!collapsed && <span className="truncate text-body font-semibold tracking-tight text-ink">Workboard</span>}
@@ -271,6 +273,21 @@ export function Sidebar({
           <CollapseIcon />
         </IconButton>
       </div>
+
+      {/* A collapsed rail is a fixed 52px of icons — there is nothing to size. */}
+      {!collapsed && (
+        <ResizeHandle
+          label="Resize sidebar"
+          storageKey="wb-sidebar-width"
+          cssVar="--wb-sidebar-w"
+          defaultWidth={240}
+          min={180}
+          // Never let the rail crowd the page out on a small window.
+          max={() => Math.min(420, window.innerWidth - 320)}
+          edge="right"
+          className="-right-1"
+        />
+      )}
     </aside>
   );
 }

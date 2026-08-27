@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { TaskRow } from "@workboard/core";
 import { Avatar } from "./avatar";
 import { TaskPriorityDot } from "./badges";
-import { ACCENT_BG, ACCENT_TEXT, labelAccent, TASK_LANE_LABEL, TASK_LANE_TONE, UP_FOR_GRABS } from "./labels";
+import { ACCENT_DOT, labelAccent, TASK_LANE_LABEL, TASK_LANE_TONE, UP_FOR_GRABS } from "./labels";
 import { deleteTaskAction, setTaskAgentReadyAction, setTaskStatusAction } from "@/lib/actions";
 import { issuesHref } from "@/lib/issue-filters";
 import { toPlainText } from "@/lib/format";
@@ -30,10 +30,7 @@ export function IssueRow({
   const href = `/projects/${project.slug}/tasks/${task.id}`;
 
   return (
-    <li
-      data-row
-      className="group flex items-start gap-3 border-b border-hairline px-4 py-3 last:border-b-0 hover:bg-surface-2"
-    >
+    <li className="group flex items-start gap-3 border-b border-hairline px-4 py-3 last:border-b-0 hover:bg-surface-2">
       <form action={setTaskStatusAction} className="pt-0.5">
         <input type="hidden" name="taskId" value={task.id} />
         <input type="hidden" name="slug" value={project.slug} />
@@ -94,12 +91,10 @@ export function IssueRow({
         {task.assignee ? (
           <Avatar author={task.assignee} size="sm" />
         ) : (
-          <span
-            className="grid size-5 place-items-center rounded-full border border-dashed border-grid text-[9px] text-muted"
-            title="Unassigned"
-            aria-label="Unassigned"
-          >
-            ?
+          // A dashed ring rather than a glyph: 12px is the smallest text the app
+          // renders, and this slot is avatar-sized.
+          <span className="size-5 rounded-full border border-dashed border-grid" title="Unassigned">
+            <span className="sr-only">Unassigned</span>
           </span>
         )}
         <div className="flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
@@ -130,25 +125,30 @@ export function IssueRow({
   );
 }
 
-/** A label is a filter you can see: clicking one narrows the issues view to it. */
+/**
+ * A label is a filter you can see: clicking one narrows the issues view to it.
+ *
+ * The hue is a dot rather than the text colour. A label reads at 10px, and the
+ * tile hues only clear the palette's 4.5:1 floor at reading sizes on a plain
+ * surface — as chip text on a tint of themselves they land near 3.2:1. The dot
+ * carries the identity and the neutral ramp carries the word.
+ */
 export function LabelChips({ labels, max = 3 }: { labels: string[]; max?: number }) {
   if (labels.length === 0) return null;
   const shown = labels.slice(0, max);
   return (
     <span className="flex shrink-0 flex-wrap items-center gap-1">
-      {shown.map((label) => {
-        const accent = labelAccent(label);
-        return (
-          <Link
-            key={label}
-            href={issuesHref({ label })}
-            title={`Show issues labelled ${label}`}
-            className={`rounded-chip px-1.5 py-0.5 text-[10px] font-medium ${ACCENT_BG[accent]} ${ACCENT_TEXT[accent]}`}
-          >
-            {label}
-          </Link>
-        );
-      })}
+      {shown.map((label) => (
+        <Link
+          key={label}
+          href={issuesHref({ label })}
+          title={`Show issues labelled ${label}`}
+          className="inline-flex items-center gap-1 rounded-chip bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium text-ink-2 transition-colors hover:text-ink"
+        >
+          <span className={`size-1.5 rounded-full ${ACCENT_DOT[labelAccent(label)]}`} aria-hidden />
+          {label}
+        </Link>
+      ))}
       {labels.length > shown.length && (
         <span className="text-[10px] text-muted">+{labels.length - shown.length}</span>
       )}

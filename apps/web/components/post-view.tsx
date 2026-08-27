@@ -72,7 +72,7 @@ export function PostView({ post, project, comments }: { post: Post; project: Pro
           <button
             type="submit"
             title={isOpenQuestion ? "Answer" : "Reply"}
-            className="grid size-9 shrink-0 place-items-center rounded-control bg-accent text-white transition-opacity hover:opacity-90"
+            className="grid size-9 shrink-0 place-items-center rounded-control bg-accent text-on-accent transition-opacity hover:opacity-90"
           >
             <span aria-hidden>➤</span>
             <span className="sr-only">{isOpenQuestion ? "Answer" : "Reply"}</span>

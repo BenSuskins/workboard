@@ -4,7 +4,7 @@ import { useOptimistic, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import type { TaskLane, TaskPriority } from "@workboard/core";
 import { Avatar } from "./avatar";
-import { ACCENT_BG, ACCENT_TEXT, labelAccent, TASK_LANE_BLURB, TASK_LANE_LABEL, TASK_LANE_ORDER, TASK_LANE_TONE } from "./labels";
+import { ACCENT_DOT, labelAccent, TASK_LANE_BLURB, TASK_LANE_LABEL, TASK_LANE_ORDER, TASK_LANE_TONE } from "./labels";
 import { moveTaskAction } from "@/lib/actions";
 
 /**
@@ -177,17 +177,16 @@ function Card({
 
       {card.labels.length > 0 && (
         <div className="flex flex-wrap items-center gap-1">
-          {card.labels.map((label) => {
-            const accent = labelAccent(label);
-            return (
-              <span
-                key={label}
-                className={`rounded-chip px-1.5 py-0.5 text-[10px] font-medium ${ACCENT_BG[accent]} ${ACCENT_TEXT[accent]}`}
-              >
-                {label}
-              </span>
-            );
-          })}
+          {/* Same chip as the issue row: hue in the dot, word in the neutral ramp. */}
+          {card.labels.map((label) => (
+            <span
+              key={label}
+              className="inline-flex items-center gap-1 rounded-chip bg-surface px-1.5 py-0.5 text-[10px] font-medium text-ink-2"
+            >
+              <span className={`size-1.5 rounded-full ${ACCENT_DOT[labelAccent(label)]}`} aria-hidden />
+              {label}
+            </span>
+          ))}
         </div>
       )}
 

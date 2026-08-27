@@ -37,9 +37,10 @@ flowchart LR
   `/i/ENG-12` to land back on the work. Existing boards are numbered on first
   start, in the order things were filed.
 - **One list for every issue** — `/issues` spans projects: filter by column,
-  assignee, label, priority or project, search identifiers, titles and specs, and
-  walk the results with `j`/`k`. Mine, Up for grabs, and Everything are one click,
-  and the filter set is both remembered and shareable as a URL.
+  assignee, label, priority or project, and search identifiers, titles and specs.
+  Mine, Up for grabs, and Everything are one click, and the filter set is both
+  remembered and shareable as a URL. ⌘K reaches any issue by identifier or title
+  from anywhere.
 - **Assignees and labels** — one person and their agents, so assignment is a
   button rather than a picker: claiming a task through the queue assigns the agent
   that took it. Labels are free text, coloured from the name, and clicking one

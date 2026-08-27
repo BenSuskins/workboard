@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Dropdown, MenuLink, Segmented } from "./filter-controls";
 import { boardHref, type Filters } from "@/lib/board-filters";
 import { STATUS_LABEL } from "./labels";
 
@@ -11,26 +11,6 @@ export const SORT_OPTIONS = [
 ] as const;
 
 export type SortKey = (typeof SORT_OPTIONS)[number][0];
-
-/** A segmented pill group — the same control language as the panel's rendered/raw switch. */
-function Segmented({ options }: { options: { key: string; href: string; label: string; active: boolean }[] }) {
-  return (
-    <div className="flex items-center gap-0.5 rounded-pill bg-surface-2 p-0.5">
-      {options.map((option) => (
-        <Link
-          key={option.key}
-          href={option.href}
-          aria-current={option.active ? "true" : undefined}
-          className={`rounded-pill px-2.5 py-1 text-meta font-medium capitalize transition-colors ${
-            option.active ? "bg-surface text-ink" : "text-muted hover:text-ink-2"
-          }`}
-        >
-          {option.label}
-        </Link>
-      ))}
-    </div>
-  );
-}
 
 const HEALTH_OPTIONS = [
   ["green", "on track"],
@@ -104,50 +84,5 @@ export function FilterBar({ filters, categories }: { filters: Filters; categorie
         </Dropdown>
       </div>
     </div>
-  );
-}
-
-/** Native disclosure, so the menu works without JavaScript like the rest of the board. */
-function Dropdown({
-  label,
-  value,
-  active,
-  children,
-}: {
-  label: string;
-  value: string;
-  active: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <details className="group relative">
-      <summary
-        className={`flex cursor-pointer list-none items-center gap-1.5 rounded-control border border-hairline px-2.5 py-1 text-meta transition-colors hover:border-muted [&::-webkit-details-marker]:hidden ${
-          active ? "text-ink" : "text-ink-2"
-        }`}
-      >
-        <span className="text-muted">{label}</span>
-        <span className="font-medium">{value}</span>
-        <span aria-hidden className="text-muted transition-transform group-open:rotate-180">
-          ⌄
-        </span>
-      </summary>
-      <div className="absolute right-0 z-20 mt-1 flex min-w-40 flex-col rounded-control border border-hairline bg-surface p-1 shadow-lg">
-        {children}
-      </div>
-    </details>
-  );
-}
-
-function MenuLink({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
-  return (
-    <Link
-      href={href}
-      className={`rounded-chip px-2.5 py-1.5 text-meta transition-colors ${
-        active ? "bg-accent/15 text-accent" : "text-ink-2 hover:bg-surface-2 hover:text-ink"
-      }`}
-    >
-      {children}
-    </Link>
   );
 }

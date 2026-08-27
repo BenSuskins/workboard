@@ -89,6 +89,18 @@ export const ACCENT_TEXT: Record<ProjectAccent, string> = {
   red: "text-tile-red",
 };
 
+/** The hue as a dot — for places where the hue must not carry text. */
+export const ACCENT_DOT: Record<ProjectAccent, string> = {
+  orange: "bg-tile-orange",
+  purple: "bg-tile-purple",
+  green: "bg-tile-green",
+  blue: "bg-tile-blue",
+  pink: "bg-tile-pink",
+  amber: "bg-tile-amber",
+  teal: "bg-tile-teal",
+  red: "bg-tile-red",
+};
+
 export const ACCENT_BG: Record<ProjectAccent, string> = {
   orange: "bg-tile-orange/15",
   purple: "bg-tile-purple/15",

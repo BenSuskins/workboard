@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { listLabels, listProjects, listTasks, TASK_LANES, type TaskLane, type TaskPriority, type TaskRow } from "@workboard/core";
-import { BoardKeynav } from "@/components/board-keynav";
 import { FilterMemory } from "@/components/filter-memory";
 import { IssueFilterBar } from "@/components/issue-filter-bar";
 import { IssueRow } from "@/components/issue-row";
@@ -26,9 +25,8 @@ const priorityOf = (value: string | undefined): TaskPriority | undefined =>
 
 /**
  * Every issue on the board, in one place. The project pages own the kanban; this
- * is the flat list you filter, search, and work your way down with j/k — the view
- * you live in when the question is "what is on my plate", not "how is this
- * project doing".
+ * is the flat list you filter and search — the view you live in when the question
+ * is "what is on my plate", not "how is this project doing".
  */
 export default async function IssuesPage({ searchParams }: { searchParams: Promise<IssueParams> }) {
   const cookieStore = await cookies();
@@ -91,13 +89,11 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
           see the whole board.
         </div>
       ) : (
-        // One keynav over every group, so j/k walks the whole list rather than
-        // each column keeping its own cursor.
-        <BoardKeynav className="flex flex-col gap-5">
+        <div className="flex flex-col gap-5">
           {grouped.map((group) => (
             <LaneGroup key={group.lane} lane={group.lane} rows={group.rows} filters={filters} />
           ))}
-        </BoardKeynav>
+        </div>
       )}
     </div>
   );

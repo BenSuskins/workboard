@@ -14,7 +14,6 @@ import {
   type ProjectStatus,
 } from "@workboard/core";
 import { AlertRow } from "@/components/alert-row";
-import { BoardKeynav } from "@/components/board-keynav";
 import { RefreshButton } from "@/components/refresh-button";
 import { refreshAllAction } from "@/lib/actions";
 import { FilterBar } from "@/components/filter-bar";
@@ -152,24 +151,21 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
           or connect a coding agent to the MCP server.
         </div>
       ) : view === "list" ? (
-        <div className="overflow-hidden rounded-card border border-hairline bg-surface">
-          <BoardKeynav>
-            {filtered.map((d) => (
-              <ProjectRow key={d.project.id} detail={d} />
-            ))}
-          </BoardKeynav>
+        <div className="divide-y divide-hairline overflow-hidden rounded-card border border-hairline bg-surface">
+          {filtered.map((d) => (
+            <ProjectRow key={d.project.id} detail={d} />
+          ))}
         </div>
       ) : (
-        <BoardKeynav grid>
-          {filtered.map((d, i) => (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {filtered.map((d) => (
             <ProjectCard
               key={d.project.id}
               detail={d}
-              index={i + 1}
               activityCounts={getActivityCounts(database, d.project.id)}
             />
           ))}
-        </BoardKeynav>
+        </div>
       )}
     </div>
   );

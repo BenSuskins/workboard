@@ -15,8 +15,9 @@ export const metadata: Metadata = {
   description: "AI-native dashboard for all your work projects",
 };
 
-// Runs before paint: honor saved theme and sidebar width. Kept inline to avoid FOUC.
-const shellInit = `try{var t=localStorage.getItem("wb-theme");if(!t)t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.dataset.theme=t;document.documentElement.dataset.sidebar=localStorage.getItem("wb-sidebar")==="collapsed"?"collapsed":"expanded"}catch(e){document.documentElement.dataset.theme="dark";document.documentElement.dataset.sidebar="expanded"}`;
+// Runs before paint: honor saved theme, sidebar state, and the two dragged
+// pane widths. Kept inline to avoid FOUC and a first-frame layout shift.
+const shellInit = `try{var t=localStorage.getItem("wb-theme");if(!t)t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";var r=document.documentElement;r.dataset.theme=t;r.dataset.sidebar=localStorage.getItem("wb-sidebar")==="collapsed"?"collapsed":"expanded";[["wb-sidebar-width","--wb-sidebar-w"],["wb-panel-width","--wb-panel-w"]].forEach(function(p){var w=parseInt(localStorage.getItem(p[0]),10);if(w>0)r.style.setProperty(p[1],w+"px")})}catch(e){document.documentElement.dataset.theme="dark";document.documentElement.dataset.sidebar="expanded"}`;
 
 export default async function RootLayout({ children, panel }: { children: React.ReactNode; panel: React.ReactNode }) {
   const database = db();
