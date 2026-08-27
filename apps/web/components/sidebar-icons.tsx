@@ -30,6 +30,15 @@ export function BoardIcon() {
   );
 }
 
+export function IssuesIcon() {
+  return (
+    <Icon>
+      <circle cx="8" cy="8" r="5.5" />
+      <circle cx="8" cy="8" r="1.75" />
+    </Icon>
+  );
+}
+
 export function InboxIcon() {
   return (
     <Icon>

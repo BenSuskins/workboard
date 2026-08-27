@@ -13,8 +13,10 @@ import {
   getSyncHealth,
   getPost,
   getTaskDetail,
+  findTaskByIdentifier,
   listAnswers,
   listComments,
+  listLabels,
   listDeleted,
   listOpenQuestions,
   listQueuedTasks,
@@ -22,6 +24,7 @@ import {
   listTaskComments,
   listTaskReplies,
   listSummaryHistory,
+  listTasks,
   listWarnings,
   raiseWarning,
   recordSyncResult,
@@ -31,6 +34,7 @@ import {
   setProjectPinned,
   setTaskAgentReady,
   setTaskLane,
+  taskIdentifier,
   taskLane,
   taskReplyCounts,
 } from "./services.js";
@@ -827,5 +831,147 @@ describe("blocked tasks", () => {
     const stuck = addTask(db, p.id, "stuck");
     updateTask(db, stuck.id, { status: "blocked" });
     expect(getProjectDetail(db, p.id)?.tasks.map((t) => t.title)).toEqual(["stuck", "todo"]);
+  });
+});
+
+describe("issue identifiers", () => {
+  it("names issues per project, from 1, and resolves the name back to the task", () => {
+    const eng = createProject(db, { name: "Engineering Platform" });
+    const design = createProject(db, { name: "Design System" });
+    expect(eng.key).toBe("EP");
+    expect(design.key).toBe("DS");
+
+    const first = addTask(db, eng.id, "first");
+    const second = addTask(db, eng.id, "second");
+    const other = addTask(db, design.id, "elsewhere");
+
+    // Numbers are per project, so a second project starts at 1 again.
+    expect(taskIdentifier(eng, first)).toBe("EP-1");
+    expect(taskIdentifier(eng, second)).toBe("EP-2");
+    expect(taskIdentifier(design, other)).toBe("DS-1");
+
+    expect(findTaskByIdentifier(db, "EP-2")!.task.id).toBe(second.id);
+    // Case and spacing are how a person types it, not a different issue.
+    expect(findTaskByIdentifier(db, " ep-2 ")!.task.id).toBe(second.id);
+    expect(findTaskByIdentifier(db, "EP-99")).toBeUndefined();
+    expect(findTaskByIdentifier(db, "not an identifier")).toBeUndefined();
+  });
+
+  it("keeps keys unique, so an identifier names exactly one issue", () => {
+    const first = createProject(db, { name: "Design System" });
+    const second = createProject(db, { name: "Data Science" });
+    expect(first.key).toBe("DS");
+    expect(second.key).toBe("DS2");
+  });
+
+  it("cleans a key a person typed, and keeps it unique", () => {
+    createProject(db, { name: "Engineering" });
+    const other = createProject(db, { name: "Something else" });
+    expect(updateProject(db, other.id, { key: "  ops-1 " }).key).toBe("OPS1");
+    // Colliding with the first project's key gets disambiguated rather than shadowing it.
+    expect(updateProject(db, other.id, { key: "eng" }).key).toBe("ENG2");
+  });
+
+  it("keeps a deleted task's number, so restoring it restores its name", () => {
+    const p = createProject(db, { name: "Alpha" });
+    const task = addTask(db, p.id, "gone");
+    addTask(db, p.id, "still here");
+    deleteTask(db, task.id);
+    expect(addTask(db, p.id, "new one").number).toBe(3);
+    expect(restoreTask(db, task.id).number).toBe(1);
+  });
+});
+
+describe("assignees", () => {
+  it("carries an assignee through create, update, and unassign", () => {
+    const p = createProject(db, { name: "Alpha" });
+    const task = addTask(db, p.id, "mine", { assignee: "user" });
+    expect(task.assignee).toBe("user");
+    expect(updateTask(db, task.id, { assignee: null }).assignee).toBeNull();
+  });
+
+  it("a claim owns the task, and releasing it hands ownership back to nobody", () => {
+    const p = createProject(db, { name: "Alpha" });
+    const task = addTask(db, p.id, "queued work", { agentReady: true });
+    const claimed = claimTask(db, task.id, "agent:claude");
+    expect(claimed.assignee).toBe("agent:claude");
+
+    expect(setTaskAgentReady(db, task.id, false).assignee).toBeNull();
+  });
+
+  it("leaves ownership you set yourself alone when a claim is released", () => {
+    const p = createProject(db, { name: "Alpha" });
+    const task = addTask(db, p.id, "yours", { agentReady: true, assignee: "user" });
+    claimTask(db, task.id, "agent:claude");
+    // The claim took ownership, but reverting to todo hands it back to you rather
+    // than to nobody — you are still the one who asked for it.
+    updateTask(db, task.id, { assignee: "user" });
+    expect(updateTask(db, task.id, { status: "todo" }).assignee).toBe("user");
+  });
+});
+
+describe("labels", () => {
+  it("normalizes labels on the way in", () => {
+    const p = createProject(db, { name: "Alpha" });
+    const task = addTask(db, p.id, "tagged", { labels: ["  Bug ", "bug", "Needs   Design", ""] });
+    expect(task.labels).toEqual(["bug", "needs design"]);
+    expect(updateTask(db, task.id, { labels: ["INFRA"] }).labels).toEqual(["infra"]);
+  });
+
+  it("counts the labels in use, most used first", () => {
+    const p = createProject(db, { name: "Alpha" });
+    addTask(db, p.id, "one", { labels: ["bug"] });
+    addTask(db, p.id, "two", { labels: ["bug", "infra"] });
+    const deleted = addTask(db, p.id, "three", { labels: ["gone"] });
+    deleteTask(db, deleted.id);
+    expect(listLabels(db)).toEqual([
+      { label: "bug", count: 2 },
+      { label: "infra", count: 1 },
+    ]);
+  });
+});
+
+describe("listTasks (the issues view)", () => {
+  it("spans projects and filters by lane, assignee, label, priority and text", () => {
+    const alpha = createProject(db, { name: "Alpha" });
+    const beta = createProject(db, { name: "Beta" });
+    const mine = addTask(db, alpha.id, "fix the sync loop", {
+      assignee: "user",
+      labels: ["bug"],
+      priority: "high",
+      description: "the poller drifts",
+    });
+    addTask(db, alpha.id, "queued work", { agentReady: true });
+    addTask(db, beta.id, "unrelated", { labels: ["infra"] });
+
+    expect(listTasks(db).length).toBe(3);
+    expect(listTasks(db, { projectId: beta.id }).map((r) => r.task.title)).toEqual(["unrelated"]);
+    expect(listTasks(db, { lane: "queued" }).map((r) => r.task.title)).toEqual(["queued work"]);
+    expect(listTasks(db, { assignee: "user" }).map((r) => r.task.id)).toEqual([mine.id]);
+    expect(listTasks(db, { assignee: null }).length).toBe(2);
+    expect(listTasks(db, { label: "bug" }).map((r) => r.task.id)).toEqual([mine.id]);
+    expect(listTasks(db, { priority: "high" }).map((r) => r.task.id)).toEqual([mine.id]);
+    // Search covers the spec and the identifier, not just the title.
+    expect(listTasks(db, { query: "poller" }).map((r) => r.task.id)).toEqual([mine.id]);
+    expect(listTasks(db, { query: "ALP-1" }).map((r) => r.task.id)).toEqual([mine.id]);
+    // Filters combine rather than replace one another.
+    expect(listTasks(db, { label: "bug", lane: "queued" })).toEqual([]);
+  });
+
+  it("carries the project and identifier on every row, and leaves out deleted work", () => {
+    const p = createProject(db, { name: "Alpha" });
+    addTask(db, p.id, "kept");
+    deleteTask(db, addTask(db, p.id, "dropped").id);
+    const rows = listTasks(db);
+    expect(rows.map((r) => r.identifier)).toEqual(["ALP-1"]);
+    expect(rows[0].project.slug).toBe("alpha");
+    expect(rows[0].lane).toBe("backlog");
+  });
+
+  it("honours a limit, after ordering", () => {
+    const p = createProject(db, { name: "Alpha" });
+    addTask(db, p.id, "low", { priority: "low" });
+    addTask(db, p.id, "high", { priority: "high" });
+    expect(listTasks(db, { limit: 1 }).map((r) => r.task.title)).toEqual(["high"]);
   });
 });

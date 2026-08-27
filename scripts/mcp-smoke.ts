@@ -57,7 +57,7 @@ const expected = [
   "add_post", "add_task", "update_task", "add_link", "upsert_summary",
   "raise_warning", "resolve_warning",
   "get_activity", "save_report", "list_reports", "refresh_project",
-  "list_queued_tasks", "claim_task", "add_task_comment", "list_task_comments",
+  "list_queued_tasks", "list_tasks", "claim_task", "add_task_comment", "list_task_comments",
   "ask_question", "add_comment", "list_answers", "list_open_questions",
 ];
 
@@ -104,14 +104,43 @@ await step("add_post + add_task + update_task", async () => {
     body: "## What landed\n\n| thing | state |\n| --- | --- |\n| splice | done |\n\n```mermaid\nflowchart LR\n  A-->B\n```\n",
     agent_name: "smoke-agent",
   });
-  const task = await call("add_task", { project: "smoke-project", title: "Follow-up", agent_name: "smoke-agent" });
-  const updated = await call("update_task", { task_id: task.created.id, status: "done" });
+  const task = await call("add_task", {
+    project: "smoke-project",
+    title: "Follow-up",
+    agent_name: "smoke-agent",
+    labels: ["Smoke", "smoke"],
+    assignee: "user",
+  });
+  // Every task an agent is handed carries the name a person uses for it.
+  if (!/^SP-\d+$/.test(task.created.identifier)) throw new Error(JSON.stringify(task));
+  if (task.created.labels.join() !== "smoke") throw new Error(JSON.stringify(task));
+  if (task.created.assignee !== "user") throw new Error(JSON.stringify(task));
+
+  const updated = await call("update_task", { task_id: task.created.id, status: "done", assignee: null });
   if (updated.updated.status !== "done") throw new Error(JSON.stringify(updated));
+  if (updated.updated.assignee !== null) throw new Error(JSON.stringify(updated));
+});
+
+await step("list_tasks searches the whole board by identifier, label and assignee", async () => {
+  const tagged = await call("add_task", { project: "smoke-project", title: "Findable", labels: ["needle"] });
+
+  const byLabel = await call("list_tasks", { label: "needle" });
+  if (byLabel.tasks.length !== 1 || byLabel.tasks[0].id !== tagged.created.id) throw new Error(JSON.stringify(byLabel));
+
+  const byIdentifier = await call("list_tasks", { query: tagged.created.identifier });
+  if (byIdentifier.tasks[0]?.id !== tagged.created.id) throw new Error(JSON.stringify(byIdentifier));
+
+  const byLane = await call("list_tasks", { project: "smoke-project", lane: "backlog" });
+  if (!byLane.tasks.some((t: any) => t.id === tagged.created.id)) throw new Error(JSON.stringify(byLane));
+
+  if (!byLabel.labels_in_use.includes("needle")) throw new Error(JSON.stringify(byLabel));
 });
 
 await step("task threads: reply, read back, and reach the claiming agent", async () => {
   const task = await call("add_task", { project: "smoke-project", title: "Thread me", agent_ready: true });
-  await call("claim_task", { task_id: task.created.id, agent_name: "smoke-agent" });
+  const claimed = await call("claim_task", { task_id: task.created.id, agent_name: "smoke-agent" });
+  // Claiming is what assigns it — the board shows the agent holding the work.
+  if (claimed.claimed.assignee !== "agent:smoke-agent") throw new Error(JSON.stringify(claimed));
 
   await call("add_task_comment", { task_id: task.created.id, body: "Blocked on staging data.", agent_name: "smoke-agent" });
 

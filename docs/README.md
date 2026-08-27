@@ -32,6 +32,18 @@ flowchart LR
 - **A kanban board for tasks** — five columns tracking how work reaches an agent
   and how it goes: Backlog, Up for grabs, Moving, Blocked, Done. File a task in a
   column, drag it between columns, open one to read the thread and reply.
+- **Every issue has a name** — `ENG-12`, a project key plus a per-project number.
+  Put it in a branch, a commit, or a PR title; paste it into ⌘K or visit
+  `/i/ENG-12` to land back on the work. Existing boards are numbered on first
+  start, in the order things were filed.
+- **One list for every issue** — `/issues` spans projects: filter by column,
+  assignee, label, priority or project, search identifiers, titles and specs, and
+  walk the results with `j`/`k`. Mine, Up for grabs, and Everything are one click,
+  and the filter set is both remembered and shareable as a URL.
+- **Assignees and labels** — one person and their agents, so assignment is a
+  button rather than a picker: claiming a task through the queue assigns the agent
+  that took it. Labels are free text, coloured from the name, and clicking one
+  filters the issues list to it.
 - **Agent task queue** — the Up for grabs column *is* the queue; any agent session
   claims work over MCP (`list_queued_tasks` / `claim_task`) with atomic claims and
   attribution. An agent that gets stuck moves its task to Blocked and says why in
@@ -170,8 +182,10 @@ its MCP server (server name: `workboard`). Workboard is the source of truth for
 
 - At the **end of a working session**, run `/workboard-status` to resolve the
   current project, post what you did, link any new PRs, and refresh the summary.
-- Before starting, you may call the `find_project` / `get_project` MCP tools to
-  load existing context for the repo you're in.
+- Before starting, you may call the `find_project` / `get_project` / `list_tasks`
+  MCP tools to load existing context for the repo you're in. Put an issue's
+  identifier (e.g. `ENG-12`) in the branch name and PR title when the work maps
+  to one.
 - If you hit something you can't fix (blocked, needs a human, external outage),
   raise it with the `raise_warning` MCP tool instead of silently moving on.
 - Do **not** create a new project for work that already maps to an existing one

@@ -119,6 +119,17 @@ export function tileAccent(project: Pick<Project, "slug" | "accent">): ProjectAc
   return ACCENTS[hash % ACCENTS.length];
 }
 
+/**
+ * A label's hue. Labels are free text with nothing stored beside them, so the
+ * colour comes from the text itself — the same label reads the same on every
+ * card, and a new one needs no setup.
+ */
+export function labelAccent(label: string): ProjectAccent {
+  let hash = 0;
+  for (const char of label) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return ACCENTS[hash % ACCENTS.length];
+}
+
 export function tileGlyph(project: Pick<Project, "name" | "icon">): string {
   return project.icon?.trim() || project.name.trim().charAt(0).toUpperCase() || "?";
 }

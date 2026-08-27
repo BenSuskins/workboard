@@ -28,7 +28,9 @@ import type {
   WarningSeverity,
 } from "./domain.js";
 import { rmSync } from "node:fs";
+import { deriveProjectKey, normalizeLabels, parseIdentifier, taskIdentifier, uniqueKey } from "./identifiers.js";
 import { createExclusive, mkdirExclusive, readFileSyncSafe, withFileLock } from "./store/atomic.js";
+import { taskNumberLedger } from "./store/backfill.js";
 import * as p from "./store/paths.js";
 import {
   board,
@@ -47,6 +49,7 @@ import {
 } from "./store/store.js";
 
 export { slugify };
+export { deriveProjectKey, normalizeLabels, parseIdentifier, taskIdentifier, uniqueKey } from "./identifiers.js";
 export type { Store };
 
 const now = () => Date.now();
@@ -77,6 +80,8 @@ function touchProject(store: Store, projectId: number): void {
 
 export interface CreateProjectInput {
   name: string;
+  /** Identifier prefix. Derived from the name when omitted. */
+  key?: string;
   description?: string;
   category?: string;
   status?: ProjectStatus;
@@ -94,6 +99,9 @@ export function createProject(store: Store, input: CreateProjectInput): Project 
   return writeProject(store, {
     id: nextId(store, "projects"),
     slug,
+    // Identifiers have to name one issue board-wide, so a key is disambiguated
+    // against the keys already out there, whether typed or derived from the name.
+    key: input.key ? cleanKey(input.key, projectKeys(store)) : deriveProjectKey(input.name, projectKeys(store)),
     name: input.name,
     description: input.description ?? "",
     category: input.category ?? "coding",
@@ -109,8 +117,29 @@ export function createProject(store: Store, input: CreateProjectInput): Project 
   });
 }
 
+/** The keys already spoken for. A project may be excluded — its own key is not a collision. */
+function projectKeys(store: Store, exceptId?: number): string[] {
+  return board(store)
+    .projects.filter((project) => project.id !== exceptId)
+    .map((project) => project.key);
+}
+
+/**
+ * A key a person typed: letters and digits only, uppercased, and kept unique —
+ * two projects sharing a key would make an identifier ambiguous.
+ */
+function cleanKey(key: string, taken: Iterable<string>): string {
+  const base = key.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, KEY_MAX_TYPED);
+  if (!base) throw new Error("A project key needs at least one letter or digit");
+  return uniqueKey(base, taken);
+}
+
+/** Longer than a derived key, because someone typing one has a reason. */
+const KEY_MAX_TYPED = 6;
+
 export interface UpdateProjectInput {
   name?: string;
+  key?: string;
   description?: string;
   category?: string;
   status?: ProjectStatus;
@@ -124,7 +153,8 @@ export function updateProject(store: Store, id: number, input: UpdateProjectInpu
   const existing = getProject(store, id);
   if (!existing) throw new Error(`Project ${id} not found`);
   const t = now();
-  const updated = writeProject(store, { ...existing, ...defined(input), updatedAt: t, lastActivityAt: t });
+  const key = input.key === undefined ? undefined : cleanKey(input.key, projectKeys(store, id));
+  const updated = writeProject(store, { ...existing, ...defined({ ...input, key }), updatedAt: t, lastActivityAt: t });
   if (input.status && input.status !== existing.status) {
     addPost(store, id, `Status changed from **${existing.status}** to **${input.status}**`, {
       type: "status_change",
@@ -193,19 +223,18 @@ const TASK_STATUS_RANK = { in_progress: 0, blocked: 1, todo: 2, done: 3 } as con
 const TASK_PRIORITY_RANK = { high: 0, medium: 1, low: 2 } as const;
 const taskPriorityRank = (priority: TaskPriority | null) => (priority ? TASK_PRIORITY_RANK[priority] : 3);
 
+/** In-flight work first, then priority, then most recently touched. */
+const byWorkOrder = (a: Task, b: Task): number =>
+  TASK_STATUS_RANK[a.status] - TASK_STATUS_RANK[b.status] ||
+  taskPriorityRank(a.priority) - taskPriorityRank(b.priority) ||
+  b.updatedAt - a.updatedAt;
+
 export function getProjectDetail(store: Store, ref: number | string, opts: { postsLimit?: number } = {}): ProjectDetail | undefined {
   const project = getProject(store, ref);
   if (!project) return undefined;
   const data = board(store);
 
-  const projectTasks = data.tasks
-    .filter((task) => task.projectId === project.id && !task.deletedAt)
-    .sort(
-      (a, b) =>
-        TASK_STATUS_RANK[a.status] - TASK_STATUS_RANK[b.status] ||
-        taskPriorityRank(a.priority) - taskPriorityRank(b.priority) ||
-        b.updatedAt - a.updatedAt,
-    );
+  const projectTasks = data.tasks.filter((task) => task.projectId === project.id && !task.deletedAt).sort(byWorkOrder);
 
   const projectPosts = data.posts
     .filter((post) => post.projectId === project.id)
@@ -247,6 +276,9 @@ export interface AddTaskOptions {
   author?: string;
   status?: TaskStatus;
   agentReady?: boolean;
+  /** `"user"` for you, or an agent name. */
+  assignee?: string | null;
+  labels?: string[];
 }
 
 export function addTask(store: Store, projectId: number, title: string, opts: AddTaskOptions = {}): Task {
@@ -254,10 +286,15 @@ export function addTask(store: Store, projectId: number, title: string, opts: Ad
   const task: Task = {
     id: nextId(store, "tasks"),
     projectId,
+    // Numbers come from the project's own ledger, so `ENG-1` is the first task
+    // filed in that project however many exist elsewhere on the board.
+    number: nextId(store, taskNumberLedger(projectId)),
     title,
     description: opts.description ?? "",
     status: opts.status ?? "todo",
     priority: opts.priority ?? null,
+    assignee: opts.assignee ?? null,
+    labels: normalizeLabels(opts.labels),
     agentReady: opts.agentReady ? 1 : 0,
     claimedBy: null,
     claimedAt: null,
@@ -295,6 +332,8 @@ export interface UpdateTaskInput {
   status?: TaskStatus;
   priority?: TaskPriority | null;
   dueDate?: string | null;
+  assignee?: string | null;
+  labels?: string[];
 }
 
 export function updateTask(store: Store, id: number, input: UpdateTaskInput): Task {
@@ -304,8 +343,10 @@ export function updateTask(store: Store, id: number, input: UpdateTaskInput): Ta
     if (input.status === "todo") releaseClaim(store, projectSlug(store, current.projectId), id);
     return {
       ...current,
-      ...defined(input),
-      ...(input.status === "todo" ? { claimedBy: null, claimedAt: null } : {}),
+      ...defined({ ...input, labels: input.labels && normalizeLabels(input.labels) }),
+      ...(input.status === "todo"
+        ? { claimedBy: null, claimedAt: null, assignee: releasedAssignee(current, input.assignee) }
+        : {}),
       updatedAt: now(),
     };
   });
@@ -328,6 +369,16 @@ export function restoreTask(store: Store, id: number): Task {
 
 // ---------- agent task queue (shared pull queue — no named assignees) ----------
 
+/**
+ * Who owns a task once its claim is dropped. An agent's ownership goes with the
+ * claim; ownership you set yourself is yours to keep, and an explicit assignee
+ * in the same edit wins over both.
+ */
+function releasedAssignee(current: Task, explicit: string | null | undefined): string | null {
+  if (explicit !== undefined) return explicit;
+  return current.assignee === current.claimedBy ? null : current.assignee;
+}
+
 /** Drop the claim marker so the task can be queued and claimed again. */
 function releaseClaim(store: Store, slug: string, id: number): void {
   rmSync(p.claimFile(store.root, slug, id), { force: true });
@@ -341,7 +392,9 @@ export function setTaskAgentReady(store: Store, id: number, ready: boolean): Tas
     return {
       ...current,
       agentReady: ready ? 1 : 0,
-      ...(!ready && current.claimedBy ? { claimedBy: null, claimedAt: null } : {}),
+      ...(!ready && current.claimedBy
+        ? { claimedBy: null, claimedAt: null, assignee: releasedAssignee(current, undefined) }
+        : {}),
       ...(!ready && current.status === "in_progress" ? { status: "todo" as TaskStatus } : {}),
       updatedAt: now(),
     };
@@ -397,7 +450,16 @@ export function claimTask(store: Store, id: number, claimedBy: string): Task {
 
   invalidate(store);
   const t = now();
-  const claimed = writeTask(store, slug, { ...existing, status: "in_progress", claimedBy, claimedAt: t, updatedAt: t });
+  // The claim is the ownership, so the field a person reads and the marker the
+  // queue enforces are written together and cannot disagree.
+  const claimed = writeTask(store, slug, {
+    ...existing,
+    status: "in_progress",
+    claimedBy,
+    claimedAt: t,
+    assignee: claimedBy,
+    updatedAt: t,
+  });
   addPost(store, claimed.projectId, `Claimed task **${claimed.title}**`, { type: "agent_update", author: claimedBy });
   return claimed;
 }
@@ -440,6 +502,86 @@ export function setTaskLane(store: Store, id: number, lane: TaskLane): Task {
     case "done":
       return updateTask(store, id, { status: "done" });
   }
+}
+
+// ---------- issues across the board ----------
+
+/** A task with everything a row needs to render without resolving the project again. */
+export interface TaskRow {
+  task: Task;
+  project: Project;
+  identifier: string;
+  lane: TaskLane;
+}
+
+export interface ListTasksFilter {
+  projectId?: number;
+  /** One lane or a set of them — the board's columns are how work is filtered. */
+  lane?: TaskLane | TaskLane[];
+  /** `"user"` for yours, an agent name for theirs, `null` for unassigned. */
+  assignee?: string | null;
+  label?: string;
+  priority?: TaskPriority;
+  /** Substring over identifier, title and description. */
+  query?: string;
+  limit?: number;
+}
+
+/**
+ * Every task on the board, filtered. One query behind the issues view, its
+ * filters, the ⌘K index and the `list_tasks` MCP tool, so what a person sees and
+ * what an agent is told can never be assembled two different ways.
+ */
+export function listTasks(store: Store, filter: ListTasksFilter = {}): TaskRow[] {
+  const data = board(store);
+  const projects = new Map(data.projects.map((project) => [project.id, project]));
+  const lanes = filter.lane ? new Set(Array.isArray(filter.lane) ? filter.lane : [filter.lane]) : undefined;
+  const label = filter.label?.trim().toLowerCase();
+  const query = filter.query?.trim().toLowerCase();
+
+  const rows = data.tasks
+    .filter((task) => !task.deletedAt)
+    .filter((task) => filter.projectId === undefined || task.projectId === filter.projectId)
+    .filter((task) => !lanes || lanes.has(taskLane(task)))
+    .filter((task) => filter.assignee === undefined || task.assignee === filter.assignee)
+    .filter((task) => !label || task.labels.includes(label))
+    .filter((task) => !filter.priority || task.priority === filter.priority)
+    .sort(byWorkOrder)
+    .flatMap((task) => {
+      const project = projects.get(task.projectId);
+      if (!project) return [];
+      const row: TaskRow = { task, project, identifier: taskIdentifier(project, task), lane: taskLane(task) };
+      if (query && !`${row.identifier} ${task.title} ${task.description}`.toLowerCase().includes(query)) return [];
+      return [row];
+    });
+
+  return filter.limit === undefined ? rows : rows.slice(0, filter.limit);
+}
+
+/** Every label in use, most-used first — what the label filter offers. */
+export function listLabels(store: Store, opts: { projectId?: number } = {}): { label: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const task of board(store).tasks) {
+    if (task.deletedAt) continue;
+    if (opts.projectId !== undefined && task.projectId !== opts.projectId) continue;
+    for (const label of task.labels) counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  return [...counts]
+    .map(([label, count]) => ({ label, count }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+}
+
+/** Resolve `ENG-12` — what the ⌘K palette and the /i/ shortcut look up. */
+export function findTaskByIdentifier(store: Store, text: string): TaskRow | undefined {
+  const parsed = parseIdentifier(text);
+  if (!parsed) return undefined;
+  const data = board(store);
+  const project = data.projects.find((candidate) => candidate.key.toUpperCase() === parsed.key);
+  if (!project) return undefined;
+  const task = data.tasks.find(
+    (candidate) => candidate.projectId === project.id && candidate.number === parsed.number && !candidate.deletedAt,
+  );
+  return task ? { task, project, identifier: taskIdentifier(project, task), lane: taskLane(task) } : undefined;
 }
 
 // ---------- posts, comments, questions ----------

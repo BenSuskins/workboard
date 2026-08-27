@@ -42,9 +42,22 @@ addLink(db, payments.id, {
 addLink(db, payments.id, { url: "https://github.com/acme/platform/pull/4821", title: "Ledger write-path cutover" });
 addLink(db, payments.id, { url: "https://github.com/acme/platform/pull/4876", title: "Dual-write reconciliation job" });
 addLink(db, payments.id, { url: "https://acme.atlassian.net/browse/PAY-312", title: "Epic: v2 migration" });
-addTask(db, payments.id, "Cut over read path behind flag", { status: "in_progress", author: "user" });
-addTask(db, payments.id, "Delete legacy charge pipeline", { author: "user" });
-const doneTask = addTask(db, payments.id, "Ship dual-write mode", { author: "user" });
+addTask(db, payments.id, "Cut over read path behind flag", {
+  status: "in_progress",
+  author: "user",
+  assignee: "user",
+  labels: ["migration", "risky"],
+});
+addTask(db, payments.id, "Delete legacy charge pipeline", { author: "user", labels: ["cleanup"] });
+// One task sitting in the queue, so "Up for grabs" is not an empty column on a fresh board.
+addTask(db, payments.id, "Backfill ledger ids for pre-cutover charges", {
+  description: "## Problem\n\nRows written before the cutover have no v2 ledger id.\n\n**Accept:** every charge row resolves to a ledger entry.",
+  author: "user",
+  agentReady: true,
+  priority: "medium",
+  labels: ["migration"],
+});
+const doneTask = addTask(db, payments.id, "Ship dual-write mode", { author: "user", assignee: "user" });
 updateTask(db, doneTask.id, { status: "done" });
 addPost(db, payments.id, "Dual-write shipped to prod behind `payments_v2_dual_write`. Reconciliation job green for 48h.", {
   type: "agent_update",
@@ -78,7 +91,12 @@ addLink(db, search.id, {
 });
 addLink(db, search.id, { url: "https://github.com/acme/platform/pull/4903", title: "Re-ranker shadow mode" });
 addLink(db, search.id, { url: "https://acme.atlassian.net/browse/SRCH-88", title: "Epic: learned re-ranking" });
-addTask(db, search.id, "Run shadow-mode A/B for a week", { status: "in_progress", author: "agent:claude-code" });
+addTask(db, search.id, "Run shadow-mode A/B for a week", {
+  status: "in_progress",
+  author: "agent:claude-code",
+  assignee: "agent:claude-code",
+  labels: ["experiment"],
+});
 addPost(db, search.id, "Shadow mode deployed; collecting CTR deltas. Early numbers show +3.8% on head queries.", {
   type: "agent_update",
   author: "agent:claude-code",
@@ -102,8 +120,14 @@ addLink(db, hiring.id, {
   url: "https://docs.google.com/document/d/1AbCdEfGhIjKlMnOpQrStUvWxYz1234567890/edit",
   title: "Interview loop rubric",
 });
-addTask(db, hiring.id, "Debrief for candidate #2", { dueDate: "2026-07-11", status: "in_progress", author: "user" });
-addTask(db, hiring.id, "Source 10 new candidates", { author: "user" });
+addTask(db, hiring.id, "Debrief for candidate #2", {
+  dueDate: "2026-07-11",
+  status: "in_progress",
+  author: "user",
+  assignee: "user",
+  labels: ["interviews"],
+});
+addTask(db, hiring.id, "Source 10 new candidates", { author: "user", labels: ["sourcing"] });
 addPost(db, hiring.id, "Candidate #1 declined — comp gap. Candidate #2 onsite completed, debrief Friday.", { author: "user" });
 upsertSummary(
   db,
@@ -125,7 +149,7 @@ addLink(db, oncall.id, {
   url: "https://docs.google.com/document/d/1ZyXwVuTsRqPoNmLkJiHgFeDcBa0987654321/edit",
   title: "On-call proposal draft",
 });
-addTask(db, oncall.id, "Get sign-off from infra leads", { author: "user" });
+addTask(db, oncall.id, "Get sign-off from infra leads", { author: "user", assignee: "user", labels: ["process"] });
 addPost(db, oncall.id, "Blocked on infra leads sign-off — meeting pushed twice.", { type: "status_change", author: "user" });
 upsertSummary(
   db,

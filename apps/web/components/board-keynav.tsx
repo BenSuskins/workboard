@@ -8,7 +8,16 @@ import { useRouter } from "next/navigation";
  * row, Esc clears, and 1–9 jumps straight to that position — which is what the
  * index badge on each card is telling you.
  */
-export function BoardKeynav({ children, grid = false }: { children: React.ReactNode; grid?: boolean }) {
+export function BoardKeynav({
+  children,
+  grid = false,
+  className,
+}: {
+  children: React.ReactNode;
+  grid?: boolean;
+  /** Overrides the layout when the rows are already grouped by the caller. */
+  className?: string;
+}) {
   const router = useRouter();
   const listRef = useRef<HTMLDivElement>(null);
   const indexRef = useRef(-1);
@@ -56,7 +65,7 @@ export function BoardKeynav({ children, grid = false }: { children: React.ReactN
   }, [router]);
 
   return (
-    <div ref={listRef} className={grid ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-3" : "divide-y divide-hairline"}>
+    <div ref={listRef} className={className ?? (grid ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-3" : "divide-y divide-hairline")}>
       {children}
     </div>
   );

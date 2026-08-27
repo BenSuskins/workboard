@@ -18,8 +18,10 @@ import {
   listProjects,
   listAnswers,
   listOpenQuestions,
+  listLabels,
   listQueuedTasks,
   listReports,
+  listTasks,
   listTaskComments,
   listTaskReplies,
   listSummaryHistory,
@@ -31,14 +33,18 @@ import {
   resolveWarning,
   saveReport,
   syncProject,
+  TASK_LANES,
   TASK_PRIORITIES,
   TASK_STATUSES,
+  taskIdentifier,
   updateProject,
   updateTask,
   upsertSummary,
   WARNING_SEVERITIES,
   type Store,
   type Project,
+  type Task,
+  type TaskRow,
   type Warning,
 } from "@workboard/core";
 
@@ -48,6 +54,7 @@ const priorityEnum = z.enum(PROJECT_PRIORITIES);
 const accentEnum = z.enum(PROJECT_ACCENTS);
 const taskStatusEnum = z.enum(TASK_STATUSES);
 const taskPriorityEnum = z.enum(TASK_PRIORITIES);
+const taskLaneEnum = z.enum(TASK_LANES);
 
 const projectRef = z
   .union([z.number(), z.string()])
@@ -71,6 +78,31 @@ function warningCard(w: Warning) {
     suggestedAction: w.suggestedAction,
     raisedBy: w.raisedBy,
     at: new Date(w.createdAt).toISOString(),
+  };
+}
+
+/**
+ * The shape every tool reports a task in. `identifier` is the name a person uses
+ * for it — put it in branch names, commit messages and PR titles so the work and
+ * the board can be matched up later.
+ */
+function taskCard(db: Store, t: Task) {
+  const project = getProject(db, t.projectId);
+  return {
+    id: t.id,
+    identifier: project ? taskIdentifier(project, t) : null,
+    project: t.projectId,
+    project_slug: project?.slug ?? null,
+    title: t.title,
+    description: t.description,
+    status: t.status,
+    priority: t.priority,
+    assignee: t.assignee,
+    labels: t.labels,
+    agent_ready: Boolean(t.agentReady),
+    claimed_by: t.claimedBy,
+    due_date: t.dueDate,
+    updated_at: new Date(t.updatedAt).toISOString(),
   };
 }
 
@@ -405,10 +437,12 @@ export function registerTools(server: McpServer, db: Store): void {
         priority: taskPriorityEnum.nullable().optional().describe("Queue order: high before medium before low before unprioritized"),
         due_date: z.string().optional().describe("ISO date, e.g. 2026-07-15"),
         agent_ready: z.boolean().optional().describe("Queue the task for agents to claim (list_queued_tasks / claim_task)"),
+        assignee: z.string().nullable().optional().describe("Who owns it: \"user\" for the person, or an agent name"),
+        labels: z.array(z.string()).optional().describe("Free-form tags, e.g. [\"bug\", \"infra\"]"),
         agent_name: z.string().optional(),
       },
     },
-    async ({ project, title, description, priority, due_date, agent_ready, agent_name }) => {
+    async ({ project, title, description, priority, due_date, agent_ready, assignee, labels, agent_name }) => {
       const target = resolveProject(db, project);
       const task = addTask(db, target.id, title, {
         description,
@@ -416,17 +450,10 @@ export function registerTools(server: McpServer, db: Store): void {
         dueDate: due_date,
         author: agent_name ? `agent:${agent_name}` : "agent",
         agentReady: agent_ready,
+        assignee,
+        labels,
       });
-      return json({
-        created: {
-          id: task.id,
-          title: task.title,
-          status: task.status,
-          priority: task.priority,
-          agent_ready: Boolean(task.agentReady),
-          project: target.slug,
-        },
-      });
+      return json({ created: taskCard(db, task) });
     },
   );
 
@@ -445,11 +472,13 @@ export function registerTools(server: McpServer, db: Store): void {
         description: z.string().optional(),
         priority: taskPriorityEnum.nullable().optional(),
         due_date: z.string().nullable().optional(),
+        assignee: z.string().nullable().optional().describe("Who owns it. null unassigns"),
+        labels: z.array(z.string()).optional().describe("Replaces the task's labels"),
       },
     },
-    async ({ task_id, status, title, description, priority, due_date }) => {
-      const task = updateTask(db, task_id, { status, title, description, priority, dueDate: due_date });
-      return json({ updated: { id: task.id, title: task.title, status: task.status, priority: task.priority } });
+    async ({ task_id, status, title, description, priority, due_date, assignee, labels }) => {
+      const task = updateTask(db, task_id, { status, title, description, priority, dueDate: due_date, assignee, labels });
+      return json({ updated: taskCard(db, task) });
     },
   );
 
@@ -467,16 +496,43 @@ export function registerTools(server: McpServer, db: Store): void {
       const projectId = project !== undefined ? resolveProject(db, project).id : undefined;
       const queued = listQueuedTasks(db, { projectId });
       return json({
-        queued: queued.map((t) => ({
-          id: t.id,
-          project: t.projectId,
-          title: t.title,
-          description: t.description,
-          status: t.status,
-          priority: t.priority,
-          due_date: t.dueDate,
-          queued_at: new Date(t.createdAt).toISOString(),
-        })),
+        queued: queued.map((t) => ({ ...taskCard(db, t), queued_at: new Date(t.createdAt).toISOString() })),
+      });
+    },
+  );
+
+  server.registerTool(
+    "list_tasks",
+    {
+      title: "List tasks",
+      description:
+        "Search tasks across the whole board — not just the agent queue. Filter by project, board column (backlog | queued | moving | blocked | done), " +
+        "assignee, label, or priority, or pass query to match an identifier, title, or spec. Use this to find the issue a piece of work belongs to " +
+        "before starting; use list_queued_tasks when you want work to claim.",
+      inputSchema: {
+        project: projectRef.optional().describe("Scope to one project (id or slug)"),
+        lane: taskLaneEnum.optional().describe("Board column: backlog | queued | moving | blocked | done"),
+        assignee: z.string().nullable().optional().describe("\"user\" for the person's own, an agent name, or null for unassigned"),
+        label: z.string().optional(),
+        priority: taskPriorityEnum.optional(),
+        query: z.string().optional().describe("Substring of an identifier (ENG-12), title, or description"),
+        limit: z.number().optional().describe("Defaults to 50"),
+      },
+    },
+    async ({ project, lane, assignee, label, priority, query, limit }) => {
+      const projectId = project !== undefined ? resolveProject(db, project).id : undefined;
+      const rows: TaskRow[] = listTasks(db, {
+        projectId,
+        lane,
+        assignee,
+        label,
+        priority,
+        query,
+        limit: limit ?? 50,
+      });
+      return json({
+        tasks: rows.map((row) => ({ ...taskCard(db, row.task), identifier: row.identifier, lane: row.lane })),
+        labels_in_use: listLabels(db, { projectId }).map((entry) => entry.label),
       });
     },
   );
@@ -494,16 +550,7 @@ export function registerTools(server: McpServer, db: Store): void {
     },
     async ({ task_id, agent_name }) => {
       const task = claimTask(db, task_id, `agent:${agent_name}`);
-      return json({
-        claimed: {
-          id: task.id,
-          title: task.title,
-          description: task.description,
-          status: task.status,
-          priority: task.priority,
-          claimed_by: task.claimedBy,
-        },
-      });
+      return json({ claimed: taskCard(db, task) });
     },
   );
 
