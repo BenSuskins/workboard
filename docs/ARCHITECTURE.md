@@ -114,6 +114,17 @@ sequenceDiagram
   the remembered set is known before the HTML is built, so nothing flashes
   unfiltered first. An empty query string means "restore", so clearing the last
   filter says so explicitly with `?filters=none`.
+- **Resizable chrome rides a CSS variable, not React state** — the sidebar and
+  the detail panel are sized by `--wb-sidebar-w` / `--wb-panel-w` on `<html>`,
+  which the pre-paint script stamps from `localStorage` alongside the theme. The
+  board renders on the server, so a width restored after mount would shift the
+  whole page on the first frame; stamping it before paint means the shell is
+  already the right size. Dragging writes the custom property directly, so a
+  drag repaints CSS rather than re-rendering the sidebar tree, and only the
+  handle itself carries React state (for `aria-valuenow`). Widths are re-clamped
+  against the viewport on resize, so one saved on a wide monitor cannot leave a
+  narrow window with no room for the page.
+
 - **Visible sync health** — every attempt is recorded per link in `sync_state`;
   a dashboard banner surfaces failing or stale syncs, and GitHub rate limits
   trigger a cooldown rather than hammering the API.

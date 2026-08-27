@@ -299,12 +299,28 @@ body {
 
 /*
  * The sidebar is fixed, so the content pane carries its width as padding. The
- * pre-paint script stamps data-sidebar, which keeps the offset correct on the
- * first frame instead of shifting once React mounts.
+ * pre-paint script stamps data-sidebar and, when they have been resized, the
+ * two widths below — which keeps the offset correct on the first frame instead
+ * of shifting once React mounts.
  */
 .wb-content {
-  padding-left: 15rem;
+  padding-left: var(--wb-sidebar-w);
   transition: padding-left 150ms;
+}
+/* Defaults for the two resizable panes; the drag handles overwrite these on <html>. */
+:root {
+  --wb-sidebar-w: 15rem;
+  --wb-panel-w: 42rem;
+}
+/* A drag must track the pointer exactly, so the easing that smooths the
+   collapse toggle has to sit out — and nothing may select under the cursor. */
+:root[data-resizing] .wb-content,
+:root[data-resizing] .wb-sidebar {
+  transition: none;
+}
+:root[data-resizing] body {
+  cursor: col-resize;
+  user-select: none;
 }
 :root[data-sidebar="collapsed"] .wb-content {
   padding-left: 52px;
@@ -324,11 +340,6 @@ body {
   .wb-content {
     transition: none;
   }
-}
-
-/* Keyboard-navigated row highlight (BoardKeynav); unlayered so it wins over utility backgrounds */
-.keynav-active {
-  background: color-mix(in srgb, var(--wb-surface-2) 55%, transparent);
 }
 
 /* The detail panel slides in from the right; the scrim fades with it. */

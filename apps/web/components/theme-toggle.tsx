@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { DarkModeIcon, LightModeIcon, ThemePendingIcon } from "./sidebar-icons";
 
 export function applyTheme(theme: "light" | "dark") {
   document.documentElement.dataset.theme = theme;
@@ -30,7 +31,7 @@ export function ThemeToggle() {
       onClick={() => setTheme(toggleTheme())}
       className="grid size-7 place-items-center rounded-md text-muted transition-colors hover:bg-surface-2 hover:text-ink"
     >
-      <span aria-hidden>{theme === null ? "◐" : theme === "dark" ? "☀" : "☾"}</span>
+      {theme === null ? <ThemePendingIcon /> : theme === "dark" ? <LightModeIcon /> : <DarkModeIcon />}
     </button>
   );
 }
