@@ -25,11 +25,9 @@ function recentAuthors(detail: ProjectDetail): string[] {
 export function ProjectCard({
   detail,
   activityCounts,
-  index,
 }: {
   detail: ProjectDetail;
   activityCounts?: number[];
-  index?: number;
 }) {
   const { project, latestSummary, links, tasks, openWarnings } = detail;
   const pipeline = prPipeline(links);
@@ -46,7 +44,6 @@ export function ProjectCard({
 
   return (
     <div
-      data-row
       className="relative flex flex-col gap-2.5 rounded-card border border-hairline bg-surface p-4 transition-colors hover:border-accent/40"
     >
       <div className="flex items-start gap-2.5">
@@ -87,14 +84,6 @@ export function ProjectCard({
               ★
             </button>
           </form>
-          {index !== undefined && index <= 9 && (
-            <span
-              className="grid size-5 place-items-center rounded-chip bg-surface-2 text-[11px] font-medium text-muted"
-              title={`Press ${index} to open`}
-            >
-              {index}
-            </span>
-          )}
         </div>
       </div>
 

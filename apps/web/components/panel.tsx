@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
+import { ResizeHandle } from "./resize-handle";
 
 /**
  * The slide-over detail view. It renders only on soft navigation, through the
@@ -87,8 +88,20 @@ export function Panel({
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className="wb-panel relative flex h-full w-full max-w-2xl flex-col border-l border-hairline bg-page outline-none"
+        className="wb-panel relative flex h-full max-w-full flex-col border-l border-hairline bg-page outline-none"
+        style={{ width: "var(--wb-panel-w)" }}
       >
+        <ResizeHandle
+          label="Resize panel"
+          storageKey="wb-panel-width"
+          cssVar="--wb-panel-w"
+          defaultWidth={672}
+          min={360}
+          // Leave a strip of the page behind the panel to click away on.
+          max={() => Math.min(1200, window.innerWidth - 120)}
+          edge="left"
+          className="-left-1"
+        />
         <div className="flex h-14 shrink-0 items-center gap-2 border-b border-hairline px-4">
           <button
             type="button"

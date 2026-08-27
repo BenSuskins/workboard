@@ -15,7 +15,7 @@ export function ProjectRow({ detail }: { detail: ProjectDetail }) {
   const blockedTasks = tasks.filter((t) => t.status === "blocked").length;
   const context = toPlainText(latestSummary?.body ?? project.description);
   return (
-    <div data-row className="relative flex items-center gap-3 px-3 py-[7px] text-body transition-colors">
+    <div className="relative flex items-center gap-3 px-3 py-[7px] text-body transition-colors">
       <StatusDot status={project.status} />
       <h3 className="max-w-56 shrink-0 truncate font-medium text-ink">
         <Link

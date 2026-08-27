@@ -37,7 +37,7 @@ export function PostComposer({ project }: { project: Project }) {
       <div className="flex justify-end">
         <button
           type="submit"
-          className="rounded-control bg-accent px-4 py-1.5 text-meta font-medium text-white transition-opacity hover:opacity-90"
+          className="rounded-control bg-accent px-4 py-1.5 text-meta font-medium text-on-accent transition-opacity hover:opacity-90"
         >
           Post
         </button>

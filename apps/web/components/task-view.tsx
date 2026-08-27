@@ -185,7 +185,7 @@ function TaskThread({ task, project, comments }: { task: Task; project: Project;
         <button
           type="submit"
           title="Reply"
-          className="grid size-9 shrink-0 place-items-center rounded-control bg-accent text-white transition-opacity hover:opacity-90"
+          className="grid size-9 shrink-0 place-items-center rounded-control bg-accent text-on-accent transition-opacity hover:opacity-90"
         >
           <span aria-hidden>➤</span>
           <span className="sr-only">Reply</span>

@@ -114,6 +114,30 @@ sequenceDiagram
   the remembered set is known before the HTML is built, so nothing flashes
   unfiltered first. An empty query string means "restore", so clearing the last
   filter says so explicitly with `?filters=none`.
+- **Resizable chrome rides a CSS variable, not React state** — the sidebar and
+  the detail panel are sized by `--wb-sidebar-w` / `--wb-panel-w` on `<html>`,
+  which the pre-paint script stamps from `localStorage` alongside the theme. The
+  board renders on the server, so a width restored after mount would shift the
+  whole page on the first frame; stamping it before paint means the shell is
+  already the right size. Dragging writes the custom property directly, so a
+  drag repaints CSS rather than re-rendering the sidebar tree, and only the
+  handle itself carries React state (for `aria-valuenow`). Widths are re-clamped
+  against the viewport on resize, so one saved on a wide monitor cannot leave a
+  narrow window with no room for the page.
+
+- **Contrast is a policy, not a per-colour judgement call** — the neutral
+  reading ramp (`ink`, `ink-2`, `muted`) clears WCAG AAA (7:1); semantic and
+  brand colour clears AA (4.5:1) as a hard floor. Both are measured against the
+  *lightest* surface a tone actually sits on, not just the page, because the
+  same token lands on `surface` and `surface-2`. The split is deliberate: AAA on
+  prose costs nothing, while AAA on the brand hues would force the accent from
+  `#5b66ca` to a muddy `#434b95` for text that is only ever short labels. The
+  dark palette treats accent as a *light* hue, so filled accent surfaces take
+  their foreground from `--wb-on-accent` (white in light, ink in dark) — white
+  on the dark-mode accent is 2.82:1. `scripts/`-adjacent tooling is not needed
+  to check this: walk the rendered DOM and compare each text node against its
+  composited background.
+
 - **Visible sync health** — every attempt is recorded per link in `sync_state`;
   a dashboard banner surfaces failing or stale syncs, and GitHub rate limits
   trigger a cooldown rather than hammering the API.
