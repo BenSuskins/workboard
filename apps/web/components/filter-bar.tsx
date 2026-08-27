@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { boardHref, type Filters } from "@/lib/board-filters";
 import { STATUS_LABEL } from "./labels";
 
 export const SORT_OPTIONS = [
@@ -10,26 +11,6 @@ export const SORT_OPTIONS = [
 ] as const;
 
 export type SortKey = (typeof SORT_OPTIONS)[number][0];
-
-export interface Filters {
-  category?: string;
-  status?: string;
-  health?: string;
-  sort?: string;
-  view?: string;
-}
-
-/** Board URL for a filter combination; every defined key becomes a search param. */
-export function boardHref(filters: Filters): string {
-  const params = new URLSearchParams();
-  if (filters.category) params.set("category", filters.category);
-  if (filters.status) params.set("status", filters.status);
-  if (filters.health) params.set("health", filters.health);
-  if (filters.sort && filters.sort !== "activity") params.set("sort", filters.sort);
-  if (filters.view) params.set("view", filters.view);
-  const s = params.toString();
-  return s ? `/?${s}` : "/";
-}
 
 /** A segmented pill group — the same control language as the panel's rendered/raw switch. */
 function Segmented({ options }: { options: { key: string; href: string; label: string; active: boolean }[] }) {

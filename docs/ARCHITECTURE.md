@@ -101,6 +101,19 @@ sequenceDiagram
   (labels / path prefixes / branch prefix); `find_project` ranks candidates.
 - **External systems stay authoritative** — integrations are strictly read-only
   and cached in `snapshots`; the UI degrades to plain links without credentials.
+- **The PR view is read live, not synced** — "my open PRs" is a property of the
+  token, not of any project, so it has nowhere to live in a board keyed by
+  project. `/prs` asks GitHub directly (search, then each PR in full for CI and
+  reviews) behind a short in-process cache, and the sidebar badge reads the same
+  loader so the count and the page cannot disagree. Project attribution runs the
+  other way: a PR is matched back to a project through its links, and stays
+  unattributed when two projects in one monorepo both fit.
+- **Filters live in the URL, and are remembered in a cookie** — every filter
+  combination stays linkable, while the board returns to the last set you chose.
+  A cookie rather than localStorage because the board renders on the server:
+  the remembered set is known before the HTML is built, so nothing flashes
+  unfiltered first. An empty query string means "restore", so clearing the last
+  filter says so explicitly with `?filters=none`.
 - **Visible sync health** — every attempt is recorded per link in `sync_state`;
   a dashboard banner surfaces failing or stale syncs, and GitHub rate limits
   trigger a cooldown rather than hammering the API.
