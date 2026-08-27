@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getProjectDetail, integrationStatus, taskLane, taskReplyCounts } from "@workboard/core";
+import { getProjectDetail, integrationStatus, taskIdentifier, taskLane, taskReplyCounts } from "@workboard/core";
 import { Mermaid } from "@/components/mermaid";
 import { ProjectHeader } from "@/components/project-header";
 import { TaskBoard, type BoardCard } from "@/components/task-board";
@@ -23,9 +23,12 @@ export default async function ProjectTasksPage({ params }: { params: Promise<{ s
   const replies = taskReplyCounts(database, project.id);
   const cards: BoardCard[] = tasks.map((task) => ({
     id: task.id,
+    identifier: taskIdentifier(project, task),
     title: task.title,
     lane: taskLane(task),
     priority: task.priority,
+    assignee: task.assignee,
+    labels: task.labels,
     claimedBy: task.claimedBy,
     dueDate: task.dueDate,
     replies: replies.get(task.id) ?? 0,

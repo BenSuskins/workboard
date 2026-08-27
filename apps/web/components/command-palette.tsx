@@ -13,6 +13,15 @@ interface PaletteProject {
   health: string;
 }
 
+interface PaletteIssue {
+  id: number;
+  identifier: string;
+  title: string;
+  slug: string;
+  project: string;
+  lane: string;
+}
+
 interface Item {
   key: string;
   label: string;
@@ -33,6 +42,7 @@ export function CommandPalette() {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(0);
   const [projects, setProjects] = useState<PaletteProject[] | null>(null);
+  const [issues, setIssues] = useState<PaletteIssue[] | null>(null);
   const [busy, setBusy] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -67,8 +77,14 @@ export function CommandPalette() {
     inputRef.current?.focus();
     fetch("/api/palette")
       .then((r) => r.json())
-      .then((data: { projects: PaletteProject[] }) => setProjects(data.projects))
-      .catch(() => setProjects([]));
+      .then((data: { projects: PaletteProject[]; issues: PaletteIssue[] }) => {
+        setProjects(data.projects);
+        setIssues(data.issues);
+      })
+      .catch(() => {
+        setProjects([]);
+        setIssues([]);
+      });
   }, [open]);
 
   const go = useCallback(
@@ -81,6 +97,8 @@ export function CommandPalette() {
 
   const commands: Item[] = [
     { key: "cmd-board", label: "Go to Board", hint: "navigate", run: () => go("/") },
+    { key: "cmd-issues", label: "Go to Issues", hint: "navigate", run: () => go("/issues") },
+    { key: "cmd-my-issues", label: "My issues", hint: "assigned to me", run: () => go("/issues?assignee=me") },
     { key: "cmd-inbox", label: "Go to Inbox", hint: "navigate", run: () => go("/inbox") },
     { key: "cmd-prs", label: "Go to Pull requests", hint: "navigate", run: () => go("/prs") },
     { key: "cmd-digests", label: "Go to Digests", hint: "reports", run: () => go("/reports/digest") },
@@ -120,8 +138,19 @@ export function CommandPalette() {
       hint: `${p.category} · ${p.status.replace("_", " ")}`,
       run: () => go(`/projects/${p.slug}`),
     }));
+  // An identifier is the fastest thing to type, so it matches first and exactly.
+  const issueItems: Item[] = (issues ?? [])
+    .filter((issue) => q && `${issue.identifier} ${issue.title} ${issue.project}`.toLowerCase().includes(q))
+    .sort((a, b) => Number(b.identifier.toLowerCase().startsWith(q)) - Number(a.identifier.toLowerCase().startsWith(q)))
+    .slice(0, 8)
+    .map((issue) => ({
+      key: `issue-${issue.id}`,
+      label: `${issue.identifier}  ${issue.title}`,
+      hint: `${issue.project} · ${issue.lane}`,
+      run: () => go(`/projects/${issue.slug}/tasks/${issue.id}`),
+    }));
   const commandItems = commands.filter((c) => !q || c.label.toLowerCase().includes(q));
-  const items = q ? [...projectItems, ...commandItems] : [...commandItems, ...projectItems];
+  const items = q ? [...issueItems, ...projectItems, ...commandItems] : [...commandItems, ...projectItems];
   const active = Math.min(selected, Math.max(items.length - 1, 0));
 
   if (!open) return null;
@@ -151,7 +180,7 @@ export function CommandPalette() {
               void items[active].run();
             }
           }}
-          placeholder="Jump to a project or run a command…"
+          placeholder="Jump to an issue or project, or run a command…"
           className="w-full border-b border-hairline bg-transparent px-4 py-3 text-body text-ink placeholder:text-muted focus:outline-none"
         />
         <ul className="max-h-72 overflow-y-auto p-1.5">

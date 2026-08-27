@@ -37,6 +37,11 @@ export default async function RootLayout({ children, panel }: { children: React.
     questions: posts.filter((post) => post.type === "question" && !post.answeredAt).length,
   }));
 
+  // The badge counts work outstanding, so a board of finished issues reads as empty.
+  const openIssueCount = details.reduce(
+    (total, detail) => total + detail.tasks.filter((task) => task.status !== "done").length,
+    0,
+  );
   const openWarnings = details.reduce((total, detail) => total + detail.openWarnings.length, 0);
   const inboxCount = listOpenQuestions(database).length + openWarnings;
   // Same source as /prs — a badge that disagreed with the page it links to would be worse than none.
@@ -48,7 +53,12 @@ export default async function RootLayout({ children, panel }: { children: React.
         <script dangerouslySetInnerHTML={{ __html: shellInit }} />
       </head>
       <body className="min-h-screen">
-        <Sidebar projects={sidebarProjects} inboxCount={inboxCount} prCount={prCount} />
+        <Sidebar
+          projects={sidebarProjects}
+          inboxCount={inboxCount}
+          openIssueCount={openIssueCount}
+          prCount={prCount}
+        />
         <CommandPalette />
         {/* The rail is fixed, so the content pane owns the matching offset. */}
         <div className="wb-content min-h-screen">

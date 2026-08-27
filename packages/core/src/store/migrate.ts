@@ -73,6 +73,9 @@ export function convertLegacyDb(dbPath: string, root: string): Record<string, nu
       writeProject(handle, {
         id: num(row.id),
         slug: str(row.slug),
+        // The SQLite schema predates identifiers; the backfill `openStore` runs
+        // next assigns a key and numbers the tasks.
+        key: "",
         name: str(row.name),
         description: str(row.description),
         category: str(row.category),
@@ -94,10 +97,14 @@ export function convertLegacyDb(dbPath: string, root: string): Record<string, nu
       writeTask(handle, slugFor(row.project_id), {
         id: num(row.id),
         projectId: num(row.project_id),
+        number: 0,
         title: str(row.title),
         description: str(row.description),
         status: str(row.status) as never,
         priority: nullableStr(row.priority) as never,
+        // The old board had no assignee of its own; a claim is the only ownership it recorded.
+        assignee: nullableStr(row.claimed_by),
+        labels: [],
         agentReady: num(row.agent_ready),
         claimedBy: nullableStr(row.claimed_by),
         claimedAt: nullableNum(row.claimed_at),

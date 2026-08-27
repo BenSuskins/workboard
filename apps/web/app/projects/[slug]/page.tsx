@@ -1,6 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getActivityCounts, getProjectDetail, integrationStatus, listDeleted, listSummaryHistory } from "@workboard/core";
+import {
+  getActivityCounts,
+  getProjectDetail,
+  integrationStatus,
+  listDeleted,
+  listSummaryHistory,
+  taskIdentifier,
+  taskLane,
+} from "@workboard/core";
 import { ActivityFeed } from "@/components/activity-feed";
 import { LinksPanel } from "@/components/links-panel";
 import { Markdown } from "@/components/markdown";
@@ -31,6 +39,14 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
   const activity = getActivityCounts(database, project.id, 30);
 
   const upForGrabs = tasks.filter((t) => t.agentReady && t.status === "todo" && !t.claimedAt).length;
+  // The row component wants an issue, not a task: its identifier and column come
+  // from the same helpers the board and the MCP tools use.
+  const taskRows = tasks.map((task) => ({
+    task,
+    project,
+    identifier: taskIdentifier(project, task),
+    lane: taskLane(task),
+  }));
   const openQuestions = posts.filter((p) => p.type === "question" && !p.answeredAt).length;
 
   return (
@@ -129,7 +145,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
                 </Link>
               }
             />
-            <TaskList tasks={tasks.slice(0, 6)} project={project} />
+            <TaskList rows={taskRows.slice(0, 6)} />
           </section>
 
           <section className="flex flex-col gap-3">

@@ -1,12 +1,20 @@
 import type { Comment, Project, Task } from "@workboard/core";
-import { taskLane } from "@workboard/core";
+import { taskIdentifier, taskLane } from "@workboard/core";
 import { Avatar } from "./avatar";
 import { TaskPriorityBadge } from "./badges";
+import { LabelChips } from "./issue-row";
 import { Markdown } from "./markdown";
 import { TimeAgo } from "./time-ago";
 import { TASK_LANE_LABEL, TASK_LANE_ORDER, TASK_LANE_TONE } from "./labels";
 import { authorLabel, fullDate } from "@/lib/format";
-import { addTaskCommentAction, deleteTaskAction, moveTaskAction, updateTaskDetailAction } from "@/lib/actions";
+import {
+  addTaskCommentAction,
+  deleteTaskAction,
+  moveTaskAction,
+  setTaskAssigneeAction,
+  updateTaskDetailAction,
+} from "@/lib/actions";
+import { ME } from "@/lib/issue-filters";
 
 import { fieldCls as inputCls, primaryButtonCls as btnCls, selectCls } from "./form";
 
@@ -20,6 +28,10 @@ export function TaskView({ task, project, comments }: { task: Task; project: Pro
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2 pl-[1.125rem] text-meta">
+          <span className="font-mono tabular-nums text-muted">{taskIdentifier(project, task)}</span>
+          <LabelChips labels={task.labels} max={6} />
+        </div>
         <div className="flex items-start gap-2.5">
           <span className={`mt-2 size-2 shrink-0 rounded-full ${tone.dot}`} aria-hidden />
           <h1
@@ -34,6 +46,15 @@ export function TaskView({ task, project, comments }: { task: Task; project: Pro
           <span className={`font-medium ${tone.text}`}>{TASK_LANE_LABEL[lane]}</span>
           <span>·</span>
           <TaskPriorityBadge priority={task.priority} />
+          <span>·</span>
+          {task.assignee ? (
+            <span className="flex items-center gap-1.5">
+              <Avatar author={task.assignee} size="sm" />
+              {authorLabel(task.assignee)}
+            </span>
+          ) : (
+            <span>unassigned</span>
+          )}
           <span>·</span>
           <span>{authorLabel(task.author)} opened {<TimeAgo at={task.createdAt} />}</span>
           <span>·</span>
@@ -99,6 +120,24 @@ export function TaskView({ task, project, comments }: { task: Task; project: Pro
                 <input name="dueDate" type="date" defaultValue={task.dueDate ?? ""} className={inputCls} />
               </label>
             </div>
+            <label className="flex flex-col gap-1 text-meta text-muted">
+              Labels
+              <input
+                name="labels"
+                defaultValue={task.labels.join(", ")}
+                placeholder="bug, infra"
+                className={inputCls}
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-meta text-muted">
+              Assignee
+              <input
+                name="assignee"
+                defaultValue={task.assignee ?? ""}
+                placeholder="user, or an agent name — empty for nobody"
+                className={inputCls}
+              />
+            </label>
             <div>
               <button type="submit" className={btnCls}>
                 Save
@@ -128,6 +167,19 @@ export function TaskView({ task, project, comments }: { task: Task; project: Pro
           </button>
         </form>
 
+
+        {/* One person and their agents, so ownership is a button rather than a picker. */}
+        <form action={setTaskAssigneeAction}>
+          <input type="hidden" name="taskId" value={task.id} />
+          <input type="hidden" name="slug" value={project.slug} />
+          <input type="hidden" name="assignee" value={task.assignee === ME ? "" : ME} />
+          <button
+            type="submit"
+            className="rounded-control border border-hairline px-3 py-1.5 text-meta text-ink-2 transition-colors hover:border-accent/40 hover:text-accent"
+          >
+            {task.assignee === ME ? "Unassign" : "Assign to me"}
+          </button>
+        </form>
 
         <form action={deleteTaskAction}>
           <input type="hidden" name="taskId" value={task.id} />
