@@ -11,20 +11,28 @@
   --wb-surface: #ffffff;
   --wb-surface-2: #f2f3f5;
   --wb-ink: #14151a;
-  --wb-ink-2: #55575d;
-  /* muted is the 12px metadata tone, so it has to clear WCAG AA (4.5:1) against
-     the lightest surface it sits on, not merely look recessive */
-  --wb-muted: #6a6e75;
+  --wb-ink-2: #3d3e43;
+  /* Contrast policy, measured against the lightest surface each tone sits on
+     (surface-2), not just against the page: the neutral reading ramp — ink,
+     ink-2, muted — clears WCAG AAA (7:1), and semantic/brand colour clears AA
+     (4.5:1) as a hard floor. AAA on the brand hues would cost their identity
+     for text that is only ever short labels; AAA on prose costs nothing. The
+     three neutral steps stay ~1.4x apart so the hierarchy still reads. */
+  --wb-muted: #505258;
   --wb-hairline: rgba(20, 21, 26, 0.09);
   --wb-grid: rgba(20, 21, 26, 0.14);
   --wb-overlay: rgba(20, 21, 26, 0.28);
-  --wb-accent: #5e6ad2;
+  --wb-accent: #5b66ca;
   --wb-accent-deep: #4b55b8;
+  /* What goes *on* a filled accent surface. The dark palette treats accent as a
+     light hue, so white on it is 2.82:1 — a filled button has to flip to dark
+     ink there, the way it would on any other light fill. */
+  --wb-on-accent: #ffffff;
   --wb-good: #1a7f4b;
   /* warning steps darker in light mode so warning *text* stays readable;
      badges/dots keep the icon+label pairing either way */
-  --wb-warning: #96690a;
-  --wb-critical: #d03b3b;
+  --wb-warning: #93670a;
+  --wb-critical: #cb3939;
   --wb-serious: #b45309;
   /* Project identity hues. Light values step darker so a tile label holds
      contrast on white; dark values brighten to carry on black. */
@@ -45,12 +53,13 @@
   --wb-surface-2: #1a1a1d;
   --wb-ink: #f7f8f8;
   --wb-ink-2: #b4b8bf;
-  --wb-muted: #7d838b;
+  --wb-muted: #a1a5ab;
   --wb-hairline: rgba(255, 255, 255, 0.08);
   --wb-grid: rgba(255, 255, 255, 0.12);
   --wb-overlay: rgba(0, 0, 0, 0.62);
   --wb-accent: #8b90f8;
   --wb-accent-deep: #a5a9fb;
+  --wb-on-accent: #14151a;
   --wb-good: #4cc38a;
   --wb-warning: #f2c94c;
   --wb-critical: #ef6f6c;
@@ -78,6 +87,7 @@
   --color-overlay: var(--wb-overlay);
   --color-accent: var(--wb-accent);
   --color-accent-deep: var(--wb-accent-deep);
+  --color-on-accent: var(--wb-on-accent);
   --color-good: var(--wb-good);
   --color-warning: var(--wb-warning);
   --color-critical: var(--wb-critical);

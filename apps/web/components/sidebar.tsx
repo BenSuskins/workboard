@@ -123,7 +123,7 @@ export function Sidebar({
     >
       <div className={`flex h-14 shrink-0 items-center gap-1 px-3 ${collapsed ? "justify-center" : ""}`}>
         <Link href="/" className="flex min-w-0 items-center gap-2" title="Workboard">
-          <span className="grid size-[22px] shrink-0 place-items-center rounded-md bg-accent text-[11px] font-bold text-white">
+          <span className="grid size-[22px] shrink-0 place-items-center rounded-md bg-accent text-[11px] font-bold text-on-accent">
             W
           </span>
           {!collapsed && <span className="truncate text-body font-semibold tracking-tight text-ink">Workboard</span>}
