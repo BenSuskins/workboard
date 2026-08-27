@@ -10,7 +10,8 @@ export const PROJECT_PRIORITIES = ["high", "medium", "low"] as const;
 export const CATEGORY_PRESETS = ["coding", "platform", "hiring", "process", "other"] as const;
 /** Identity hues a project tile can take. A fixed set, so every tile stays legible in both themes. */
 export const PROJECT_ACCENTS = ["orange", "purple", "green", "blue", "pink", "amber", "teal", "red"] as const;
-export const TASK_STATUSES = ["todo", "in_progress", "done"] as const;
+/** `blocked` is work an agent picked up and could not finish — it stays attributed, out of the queue. */
+export const TASK_STATUSES = ["todo", "in_progress", "blocked", "done"] as const;
 /** Null priority sorts last — unprioritized work trails prioritized work in the queue. */
 export const TASK_PRIORITIES = ["high", "medium", "low"] as const;
 /** A question expects an answer from the user; everything else is a report of work. */
@@ -93,9 +94,11 @@ export interface Post {
   answeredAt: number | null;
 }
 
+/** A reply, on either a post or a task. Exactly one of `postId` / `taskId` is set. */
 export interface Comment {
   id: number;
-  postId: number;
+  postId: number | null;
+  taskId: number | null;
   projectId: number;
   body: string;
   author: string;

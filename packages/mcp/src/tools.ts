@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   addLink,
   addTask,
+  addTaskComment,
   addComment,
   addPost,
   claimTask,
@@ -19,6 +20,8 @@ import {
   listOpenQuestions,
   listQueuedTasks,
   listReports,
+  listTaskComments,
+  listTaskReplies,
   listSummaryHistory,
   PROJECT_HEALTHS,
   PROJECT_ACCENTS,
@@ -328,8 +331,8 @@ export function registerTools(server: McpServer, db: Store): void {
     {
       title: "Read replies waiting for you",
       description:
-        "Replies other people left on your posts and questions. Call this at the start of a session, before starting new work: it is how the " +
-        "user's feedback reaches you. Pass `since` with the timestamp you last checked to see only what is new.",
+        "Replies other people left on your posts and questions, plus replies on tasks you claimed. Call this at the start of a session, before " +
+        "starting new work: it is how the user's feedback reaches you. Pass `since` with the timestamp you last checked to see only what is new.",
       inputSchema: {
         agent_name: z.string().optional().describe("Your agent name. Omit to see every reply across the board."),
         since: z.string().optional().describe("ISO timestamp; only replies after it are returned"),
@@ -340,12 +343,25 @@ export function registerTools(server: McpServer, db: Store): void {
         agentName: agent_name ? `agent:${agent_name}` : undefined,
         since: since ? Date.parse(since) : undefined,
       });
+      const taskReplies = listTaskReplies(db, {
+        agentName: agent_name ? `agent:${agent_name}` : undefined,
+        since: since ? Date.parse(since) : undefined,
+      });
       return json({
         answers: answers.map(({ comment, post, projectSlug }) => ({
           project: projectSlug,
           postId: post.id,
           postTitle: post.title || post.body.slice(0, 80),
           postType: post.type,
+          from: comment.author,
+          reply: comment.body,
+          at: new Date(comment.createdAt).toISOString(),
+        })),
+        taskReplies: taskReplies.map(({ comment, task, projectSlug }) => ({
+          project: projectSlug,
+          taskId: task.id,
+          taskTitle: task.title,
+          taskStatus: task.status,
           from: comment.author,
           reply: comment.body,
           at: new Date(comment.createdAt).toISOString(),
@@ -419,7 +435,9 @@ export function registerTools(server: McpServer, db: Store): void {
     {
       title: "Update task",
       description:
-        "Change a task's status (todo | in_progress | done), title, description, priority, or due date. Agents refining a spec as they learn should update the description rather than leaving it stale.",
+        "Change a task's status (todo | in_progress | blocked | done), title, description, priority, or due date. Use blocked when you picked " +
+        "the work up and cannot finish it — the task keeps your name and leaves the queue, and it shows in the board's Blocked column. Agents " +
+        "refining a spec as they learn should update the description rather than leaving it stale.",
       inputSchema: {
         task_id: z.number(),
         status: taskStatusEnum.optional(),
@@ -485,6 +503,46 @@ export function registerTools(server: McpServer, db: Store): void {
           priority: task.priority,
           claimed_by: task.claimedBy,
         },
+      });
+    },
+  );
+
+  server.registerTool(
+    "add_task_comment",
+    {
+      title: "Reply on a task",
+      description:
+        "Post in a task's thread — report progress, ask the person who filed it something, or say why you moved it to blocked. The thread is " +
+        "what they see when they open the task on the board, and their reply comes back to you through list_answers.",
+      inputSchema: {
+        task_id: z.number().describe("The task to reply on (from claim_task or list_queued_tasks)"),
+        body: z.string().describe("Your reply, in markdown"),
+        agent_name: z.string().optional().describe("Your agent name, for attribution"),
+      },
+    },
+    async ({ task_id, body, agent_name }) => {
+      const comment = addTaskComment(db, task_id, body, agent_name ? `agent:${agent_name}` : "agent");
+      return json({ replied: { id: comment.id, taskId: task_id, at: new Date(comment.createdAt).toISOString() } });
+    },
+  );
+
+  server.registerTool(
+    "list_task_comments",
+    {
+      title: "Read a task's thread",
+      description:
+        "The full reply thread on one task, oldest first. Read this after claiming a task: the spec is the description, but the thread carries " +
+        "everything said since it was filed.",
+      inputSchema: { task_id: z.number() },
+    },
+    async ({ task_id }) => {
+      return json({
+        comments: listTaskComments(db, task_id).map((comment) => ({
+          id: comment.id,
+          from: comment.author,
+          body: comment.body,
+          at: new Date(comment.createdAt).toISOString(),
+        })),
       });
     },
   );

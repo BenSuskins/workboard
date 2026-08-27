@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { openStore, type Store } from "./store/store.js";
 import { aggregateCheckRuns } from "./integrations/github.js";
 import {
+  addTaskComment,
   claimTask,
   deleteLink,
   deleteTask,
@@ -18,6 +19,8 @@ import {
   listOpenQuestions,
   listQueuedTasks,
   listShelvedProjects,
+  listTaskComments,
+  listTaskReplies,
   listSummaryHistory,
   listWarnings,
   raiseWarning,
@@ -27,6 +30,9 @@ import {
   restoreTask,
   setProjectPinned,
   setTaskAgentReady,
+  setTaskLane,
+  taskLane,
+  taskReplyCounts,
 } from "./services.js";
 import {
   addLink,
@@ -656,5 +662,170 @@ describe("progress metrics + accomplishments", () => {
     expect(latestReport(db, "accomplishments")?.body).toBe("Shipped X, Y, Z.");
     const all = listReports(db);
     expect(all.map((r) => r.kind).sort()).toEqual(["accomplishments", "digest"]);
+  });
+});
+
+describe("board lanes", () => {
+  it("derives a lane from the fields the queue already uses", () => {
+    const p = createProject(db, { name: "Alpha" });
+    expect(taskLane(addTask(db, p.id, "filed"))).toBe("backlog");
+    const queued = addTask(db, p.id, "queued", { agentReady: true });
+    expect(taskLane(queued)).toBe("queued");
+    expect(taskLane(claimTask(db, queued.id, "agent:claude"))).toBe("moving");
+    expect(taskLane(updateTask(db, queued.id, { status: "blocked" }))).toBe("blocked");
+    expect(taskLane(updateTask(db, queued.id, { status: "done" }))).toBe("done");
+  });
+
+  it("does not call a claimed task queued, even while its flag is still set", () => {
+    const p = createProject(db, { name: "Alpha" });
+    const task = addTask(db, p.id, "work", { agentReady: true });
+    const claimed = claimTask(db, task.id, "agent:claude");
+    expect(claimed.agentReady).toBe(1);
+    expect(taskLane(claimed)).toBe("moving");
+  });
+
+  it("queues a task moved into up-for-grabs, releasing any claim first", () => {
+    const p = createProject(db, { name: "Alpha" });
+    const task = addTask(db, p.id, "work", { agentReady: true });
+    claimTask(db, task.id, "agent:claude");
+
+    const requeued = setTaskLane(db, task.id, "queued");
+    expect(taskLane(requeued)).toBe("queued");
+    expect(requeued.claimedBy).toBeNull();
+    expect(requeued.claimedAt).toBeNull();
+    expect(listQueuedTasks(db).map((t) => t.id)).toEqual([task.id]);
+    // The claim marker is gone, so a second agent can win it.
+    expect(claimTask(db, task.id, "agent:other").claimedBy).toBe("agent:other");
+  });
+
+  it("takes a task out of the queue when moved to the backlog", () => {
+    const p = createProject(db, { name: "Alpha" });
+    const task = addTask(db, p.id, "work", { agentReady: true });
+    const filed = setTaskLane(db, task.id, "backlog");
+    expect(taskLane(filed)).toBe("backlog");
+    expect(filed.agentReady).toBe(0);
+    expect(listQueuedTasks(db)).toHaveLength(0);
+  });
+
+  it("keeps the claimer on a blocked task but takes it off the queue", () => {
+    const p = createProject(db, { name: "Alpha" });
+    const task = addTask(db, p.id, "work", { agentReady: true });
+    claimTask(db, task.id, "agent:claude");
+
+    const blocked = setTaskLane(db, task.id, "blocked");
+    expect(blocked.status).toBe("blocked");
+    expect(blocked.claimedBy).toBe("agent:claude");
+    expect(listQueuedTasks(db)).toHaveLength(0);
+    expect(() => claimTask(db, task.id, "agent:other")).toThrow();
+  });
+
+  it("survives a round trip through every lane", () => {
+    const p = createProject(db, { name: "Alpha" });
+    const task = addTask(db, p.id, "work");
+    for (const lane of ["queued", "moving", "blocked", "done", "backlog"] as const) {
+      expect(taskLane(setTaskLane(db, task.id, lane))).toBe(lane);
+    }
+  });
+});
+
+describe("task replies", () => {
+  it("threads replies on a task, oldest first", () => {
+    const p = createProject(db, { name: "Alpha" });
+    const task = addTask(db, p.id, "work");
+    addTaskComment(db, task.id, "picked this up", "agent:claude");
+    addTaskComment(db, task.id, "thanks", "user");
+
+    const thread = listTaskComments(db, task.id);
+    expect(thread.map((c) => c.author)).toEqual(["agent:claude", "user"]);
+    expect(thread.every((c) => c.postId === null && c.taskId === task.id)).toBe(true);
+    expect(getTaskDetail(db, task.id)?.comments).toHaveLength(2);
+  });
+
+  it("refuses to reply on a task that does not exist", () => {
+    expect(() => addTaskComment(db, 999, "hello")).toThrow(/not found/);
+  });
+
+  it("keeps task replies out of a post's thread and out of list_answers", () => {
+    const p = createProject(db, { name: "Alpha" });
+    const post = addPost(db, p.id, "a question", { type: "question", author: "agent:claude" });
+    const task = addTask(db, p.id, "work");
+    addTaskComment(db, task.id, "on the task", "user");
+    addComment(db, post.id, "on the post", "user");
+
+    expect(listComments(db, post.id).map((c) => c.body)).toEqual(["on the post"]);
+    expect(listAnswers(db).map((a) => a.comment.body)).toEqual(["on the post"]);
+    expect(getProjectDetail(db, p.id)?.comments.map((c) => c.body)).toEqual(["on the post"]);
+  });
+
+  it("returns replies on the tasks an agent claimed, skipping its own", () => {
+    const p = createProject(db, { name: "Alpha" });
+    const mine = addTask(db, p.id, "mine", { agentReady: true });
+    const theirs = addTask(db, p.id, "theirs", { agentReady: true });
+    claimTask(db, mine.id, "agent:claude");
+    claimTask(db, theirs.id, "agent:other");
+
+    addTaskComment(db, mine.id, "blocked on staging", "agent:claude");
+    addTaskComment(db, mine.id, "seed it", "user");
+    addTaskComment(db, theirs.id, "not for claude", "user");
+
+    const replies = listTaskReplies(db, { agentName: "claude" });
+    expect(replies.map((r) => r.comment.body)).toEqual(["seed it"]);
+    expect(replies[0].task.id).toBe(mine.id);
+    expect(replies[0].projectSlug).toBe("alpha");
+    // Unfiltered, every task reply comes back.
+    expect(listTaskReplies(db)).toHaveLength(3);
+  });
+
+  it("honours since, so an agent only sees what is new", () => {
+    const p = createProject(db, { name: "Alpha" });
+    const task = addTask(db, p.id, "work", { agentReady: true });
+    claimTask(db, task.id, "agent:claude");
+    const first = addTaskComment(db, task.id, "old news", "user");
+    const second = addTaskComment(db, task.id, "new news", "user");
+
+    const fresh = listTaskReplies(db, { agentName: "claude", since: first.createdAt });
+    expect(fresh.map((r) => r.comment.id)).toEqual([second.id]);
+  });
+
+  it("counts a project's replies per task in one pass", () => {
+    const p = createProject(db, { name: "Alpha" });
+    const other = createProject(db, { name: "Beta" });
+    const task = addTask(db, p.id, "work");
+    const quiet = addTask(db, p.id, "quiet");
+    const elsewhere = addTask(db, other.id, "elsewhere");
+    addTaskComment(db, task.id, "one");
+    addTaskComment(db, task.id, "two");
+    addTaskComment(db, elsewhere.id, "other project");
+
+    const counts = taskReplyCounts(db, p.id);
+    expect(counts.get(task.id)).toBe(2);
+    expect(counts.get(quiet.id)).toBeUndefined();
+    expect(counts.get(elsewhere.id)).toBeUndefined();
+  });
+});
+
+describe("blocked tasks", () => {
+  it("never hands a blocked task to the queue", () => {
+    const p = createProject(db, { name: "Alpha" });
+    const task = addTask(db, p.id, "work", { agentReady: true });
+    updateTask(db, task.id, { status: "blocked" });
+    expect(listQueuedTasks(db)).toHaveLength(0);
+    expect(() => claimTask(db, task.id, "agent:claude")).toThrow();
+  });
+
+  it("counts as open work, not finished work", () => {
+    const p = createProject(db, { name: "Alpha" });
+    updateTask(db, addTask(db, p.id, "work").id, { status: "blocked" });
+    const metrics = getProjectMetrics(db, p.id);
+    expect(metrics?.tasksTotal).toBe(1);
+    expect(metrics?.tasksDone).toBe(0);
+  });
+
+  it("sorts blocked work above the backlog on the project page", () => {
+    const p = createProject(db, { name: "Alpha" });
+    addTask(db, p.id, "todo");
+    const stuck = addTask(db, p.id, "stuck");
+    updateTask(db, stuck.id, { status: "blocked" });
+    expect(getProjectDetail(db, p.id)?.tasks.map((t) => t.title)).toEqual(["stuck", "todo"]);
   });
 });

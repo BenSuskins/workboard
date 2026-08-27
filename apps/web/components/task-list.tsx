@@ -90,10 +90,12 @@ export function TaskList({ tasks, project }: { tasks: Task[]; project: Project }
                   ? "border-good bg-good/20 text-good"
                   : task.status === "in_progress"
                     ? "border-accent text-accent"
-                    : "border-hairline text-transparent hover:text-muted"
+                    : task.status === "blocked"
+                      ? "border-critical text-critical"
+                      : "border-hairline text-transparent hover:text-muted"
               }`}
             >
-              {task.status === "done" ? "✓" : task.status === "in_progress" ? "◐" : "✓"}
+              {task.status === "done" ? "✓" : task.status === "in_progress" ? "◐" : task.status === "blocked" ? "!" : "✓"}
             </button>
           </form>
           <div className="min-w-0 flex-1">

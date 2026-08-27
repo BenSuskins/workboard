@@ -3,6 +3,7 @@
 import {
   addLink,
   addTask,
+  addTaskComment,
   addComment,
   addPost,
   createProject,
@@ -16,8 +17,10 @@ import {
   restoreTask,
   setProjectPinned,
   setTaskAgentReady,
+  setTaskLane,
   syncAll,
   syncProject,
+  TASK_LANES,
   TASK_PRIORITIES,
   updateProject,
   updateTask,
@@ -25,6 +28,7 @@ import {
   type ProjectPriority,
   type ProjectStatus,
   type RepoScope,
+  type TaskLane,
   type TaskPriority,
   type TaskStatus,
 } from "@workboard/core";
@@ -118,18 +122,37 @@ function taskPriority(value: FormDataEntryValue | null): TaskPriority | null {
   return (TASK_PRIORITIES as readonly string[]).includes(raw) ? (raw as TaskPriority) : null;
 }
 
+/** A lane arrives from a drop target or a select, so it is never trusted without checking. */
+function taskLaneOf(value: FormDataEntryValue | null): TaskLane | null {
+  const raw = String(value ?? "").trim();
+  return (TASK_LANES as readonly string[]).includes(raw) ? (raw as TaskLane) : null;
+}
+
+/** Where a task filed straight into a column starts out. */
+const LANE_START: Record<TaskLane, { status: TaskStatus; agentReady: boolean }> = {
+  backlog: { status: "todo", agentReady: false },
+  queued: { status: "todo", agentReady: true },
+  moving: { status: "in_progress", agentReady: false },
+  blocked: { status: "blocked", agentReady: false },
+  done: { status: "done", agentReady: false },
+};
+
 export async function addTaskAction(formData: FormData) {
   const projectId = Number(formData.get("projectId"));
   const title = String(formData.get("title") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
   const dueDate = String(formData.get("dueDate") ?? "").trim();
+  // The per-column composer names its lane; the full composer uses its checkbox instead.
+  const lane = taskLaneOf(formData.get("lane"));
+  const start = lane ? LANE_START[lane] : { status: undefined, agentReady: formData.get("agentReady") === "on" };
   if (title)
     addTask(db(), projectId, title, {
       description,
       priority: taskPriority(formData.get("priority")),
       dueDate: dueDate || undefined,
       author: "user",
-      agentReady: formData.get("agentReady") === "on",
+      status: start.status,
+      agentReady: start.agentReady,
     });
   revalidateProject(String(formData.get("slug")));
   revalidatePath("/");
@@ -163,6 +186,31 @@ export async function setTaskStatusAction(formData: FormData) {
   updateTask(db(), taskId, {
     status: formData.get("status") as TaskStatus,
   });
+  const slug = String(formData.get("slug"));
+  revalidatePath(`/projects/${slug}/tasks/${taskId}`);
+  revalidateProject(slug);
+  revalidatePath("/");
+}
+
+/**
+ * The board's one write path: a drag drops here, and so does the lane select on
+ * each card and on the task page, so the mouse and the keyboard cannot diverge.
+ */
+export async function moveTaskAction(formData: FormData) {
+  const taskId = Number(formData.get("taskId"));
+  const lane = taskLaneOf(formData.get("lane"));
+  if (!lane) return;
+  setTaskLane(db(), taskId, lane);
+  const slug = String(formData.get("slug"));
+  revalidatePath(`/projects/${slug}/tasks/${taskId}`);
+  revalidateProject(slug);
+  revalidatePath("/");
+}
+
+export async function addTaskCommentAction(formData: FormData) {
+  const taskId = Number(formData.get("taskId"));
+  const body = String(formData.get("body") ?? "").trim();
+  if (body) addTaskComment(db(), taskId, body, "user");
   const slug = String(formData.get("slug"));
   revalidatePath(`/projects/${slug}/tasks/${taskId}`);
   revalidateProject(slug);
