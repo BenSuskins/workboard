@@ -12,6 +12,7 @@ export function ProjectRow({ detail }: { detail: ProjectDetail }) {
   const prCount = pipeline.draft + pipeline.inReview + pipeline.approved;
   const openTasks = tasks.filter((t) => t.status !== "done").length;
   const queuedTasks = tasks.filter((t) => t.agentReady && t.status === "todo" && !t.claimedAt).length;
+  const blockedTasks = tasks.filter((t) => t.status === "blocked").length;
   const context = toPlainText(latestSummary?.body ?? project.description);
   return (
     <div data-row className="relative flex items-center gap-3 px-3 py-[7px] text-body transition-colors">
@@ -38,6 +39,7 @@ export function ProjectRow({ detail }: { detail: ProjectDetail }) {
             {prCount} PR{prCount === 1 ? "" : "s"}
           </span>
         )}
+        {blockedTasks > 0 && <span className="font-medium text-critical">{blockedTasks} blocked</span>}
         {queuedTasks > 0 && <span className="font-medium text-accent">{queuedTasks} queued</span>}
         {openTasks > 0 && (
           <span>

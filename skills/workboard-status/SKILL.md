@@ -8,7 +8,7 @@ description: Post a status update to the user's Workboard after finishing a codi
 You are finishing a work session in a repository. Record the work on the user's
 Workboard via the `workboard` MCP server (tools: `find_project`, `get_project`,
 `add_post`, `add_link`, `upsert_summary`, `update_project`, `add_task`,
-`list_answers`, `ask_question`, `add_comment`).
+`add_task_comment`, `list_answers`, `ask_question`, `add_comment`).
 
 If no `workboard` MCP tools are available, tell the user to connect it:
 `claude mcp add --transport http workboard http://localhost:8787/mcp`
@@ -68,6 +68,11 @@ project stands against its goal, then in-flight work, then risks/blockers.
 ## Step 5 — Housekeeping (only when warranted)
 
 - Work revealed a follow-up? `add_task`.
+- Worked a task this session? `add_task_comment` on it and move it with
+  `update_task` — `done` when it shipped, `blocked` when you got stuck (that
+  keeps your name on it, takes it out of the queue, and puts it in the board's
+  **Blocked** column). Say in the comment what you need to get moving; the
+  user's reply comes back through `list_answers` under `taskReplies`.
 - Project is now genuinely blocked / unblocked / done? `update_project` with the
   new `status` (and `health` if it changed). Don't churn status speculatively.
 - Need a **decision** from the user — which approach, which name, whether to

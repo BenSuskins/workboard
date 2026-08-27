@@ -117,13 +117,23 @@ function loadBoard(root: string): Board {
       }
     }
 
+    // Replies on a task, keyed by the task id the directory is named for.
+    const taskComments = p.taskCommentsRoot(root, slug);
+    for (const dirName of readdirSyncSafe(taskComments).filter(p.isContent).sort()) {
+      const taskId = Number(dirName);
+      if (!Number.isFinite(taskId)) continue;
+      for (const { fields, body } of readAll(join(taskComments, dirName))) {
+        out.comments.push({ ...(fields as unknown as Comment), postId: null, taskId, projectId: id, body });
+      }
+    }
+
     for (const dirName of readdirSyncSafe(p.postsDir(root, slug)).filter(p.isContent).sort()) {
       const doc = readDoc(join(p.postsDir(root, slug), dirName, "post.md"));
       if (!doc) continue;
       const post = { ...(doc.fields as unknown as Post), projectId: id, body: doc.body };
       out.posts.push(post);
       for (const { fields, body } of readAll(join(p.postsDir(root, slug), dirName, "comments"))) {
-        out.comments.push({ ...(fields as unknown as Comment), postId: post.id, projectId: id, body });
+        out.comments.push({ ...(fields as unknown as Comment), postId: post.id, taskId: null, projectId: id, body });
       }
     }
 
@@ -196,11 +206,13 @@ export function writePost(store: Store, slug: string, post: Post): Post {
   return post;
 }
 
+/** A reply lands under its post or its task; the owning id comes back from the path, not the frontmatter. */
 export function writeComment(store: Store, slug: string, comment: Comment): Comment {
-  write(
-    join(p.commentsDir(store.root, slug, comment.postId), `${p.pad(comment.id)}.md`),
-    split(comment, "body", ["projectId", "postId"]),
-  );
+  const dir =
+    comment.taskId !== null
+      ? p.taskCommentsDir(store.root, slug, comment.taskId)
+      : p.commentsDir(store.root, slug, comment.postId as number);
+  write(join(dir, `${p.pad(comment.id)}.md`), split(comment, "body", ["projectId", "postId", "taskId"]));
   invalidate(store);
   return comment;
 }

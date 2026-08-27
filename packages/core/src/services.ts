@@ -188,7 +188,7 @@ export interface ProjectDetail {
   openWarnings: Warning[];
 }
 
-const TASK_STATUS_RANK = { in_progress: 0, todo: 1, done: 2 } as const;
+const TASK_STATUS_RANK = { in_progress: 0, blocked: 1, todo: 2, done: 3 } as const;
 /** Unprioritized tasks sort after prioritized ones in the queue and on the board. */
 const TASK_PRIORITY_RANK = { high: 0, medium: 1, low: 2 } as const;
 const taskPriorityRank = (priority: TaskPriority | null) => (priority ? TASK_PRIORITY_RANK[priority] : 3);
@@ -212,7 +212,9 @@ export function getProjectDetail(store: Store, ref: number | string, opts: { pos
     .sort(byNewest)
     .slice(0, opts.postsLimit ?? 50);
   const postIds = new Set(projectPosts.map((post) => post.id));
-  const projectComments = data.comments.filter((comment) => postIds.has(comment.postId)).sort((a, b) => a.createdAt - b.createdAt);
+  const projectComments = data.comments
+    .filter((comment) => comment.postId !== null && postIds.has(comment.postId))
+    .sort((a, b) => a.createdAt - b.createdAt);
 
   const projectLinks = data.links
     .filter((link) => link.projectId === project.id && !link.deletedAt)
@@ -362,12 +364,15 @@ export function listQueuedTasks(store: Store, opts: { projectId?: number } = {})
     .sort((a, b) => taskPriorityRank(a.priority) - taskPriorityRank(b.priority) || a.createdAt - b.createdAt || a.id - b.id);
 }
 
-/** One task plus its project — the task detail page's data. */
-export function getTaskDetail(store: Store, id: number): { task: Task; project: Project } | undefined {
+/** One task, its project, and its reply thread — the task detail page's data. */
+export function getTaskDetail(
+  store: Store,
+  id: number,
+): { task: Task; project: Project; comments: Comment[] } | undefined {
   const task = getTask(store, id);
   if (!task) return undefined;
   const project = getProject(store, task.projectId);
-  return project ? { task, project } : undefined;
+  return project ? { task, project, comments: listTaskComments(store, id) } : undefined;
 }
 
 /**
@@ -395,6 +400,46 @@ export function claimTask(store: Store, id: number, claimedBy: string): Task {
   const claimed = writeTask(store, slug, { ...existing, status: "in_progress", claimedBy, claimedAt: t, updatedAt: t });
   addPost(store, claimed.projectId, `Claimed task **${claimed.title}**`, { type: "agent_update", author: claimedBy });
   return claimed;
+}
+
+// ---------- board lanes ----------
+
+/**
+ * The columns the board shows. Four of them are views over fields that already
+ * exist — a lane is not stored, it is derived — so the queue an agent pulls from
+ * and the column a person drags a card into can never disagree.
+ */
+export const TASK_LANES = ["backlog", "queued", "moving", "blocked", "done"] as const;
+export type TaskLane = (typeof TASK_LANES)[number];
+
+export function taskLane(task: Task): TaskLane {
+  if (task.status === "done") return "done";
+  if (task.status === "blocked") return "blocked";
+  if (task.status === "in_progress") return "moving";
+  return task.agentReady && !task.claimedAt ? "queued" : "backlog";
+}
+
+/**
+ * Move a task into a lane. The order of the two writes is load-bearing:
+ * `updateTask({ status: "todo" })` releases a claim, and `setTaskAgentReady(false)`
+ * drags `in_progress` back to `todo`, so the status write goes last for the lanes
+ * that are a status and first for the lanes that are a queue position.
+ */
+export function setTaskLane(store: Store, id: number, lane: TaskLane): Task {
+  switch (lane) {
+    case "backlog":
+      updateTask(store, id, { status: "todo" });
+      return setTaskAgentReady(store, id, false);
+    case "queued":
+      updateTask(store, id, { status: "todo" });
+      return setTaskAgentReady(store, id, true);
+    case "moving":
+      return updateTask(store, id, { status: "in_progress" });
+    case "blocked":
+      return updateTask(store, id, { status: "blocked" });
+    case "done":
+      return updateTask(store, id, { status: "done" });
+  }
 }
 
 // ---------- posts, comments, questions ----------
@@ -442,6 +487,7 @@ export function addComment(store: Store, postId: number, body: string, author = 
   const comment: Comment = {
     id: nextId(store, "comments"),
     postId,
+    taskId: null,
     projectId: post.projectId,
     body,
     author,
@@ -493,6 +539,78 @@ export function listAnswers(store: Store, opts: { agentName?: string; since?: nu
       if (mine && mine.has(comment.author)) return [];
       const project = data.projects.find((candidate) => candidate.id === post.projectId);
       return project ? [{ comment, post, projectSlug: project.slug }] : [];
+    })
+    .sort((a, b) => a.comment.createdAt - b.comment.createdAt);
+}
+
+// ---------- task replies ----------
+
+export function listTaskComments(store: Store, taskId: number): Comment[] {
+  return board(store)
+    .comments.filter((comment) => comment.taskId === taskId)
+    .sort((a, b) => a.createdAt - b.createdAt || a.id - b.id);
+}
+
+/**
+ * Reply on a task. Unlike a question post there is no `answeredAt` to stamp —
+ * a task already says where it stands through its lane, so a reply is just the
+ * conversation between whoever filed the work and whoever picked it up.
+ */
+export function addTaskComment(store: Store, taskId: number, body: string, author = "user"): Comment {
+  const task = getTask(store, taskId);
+  if (!task) throw new Error(`Task ${taskId} not found`);
+  const comment: Comment = {
+    id: nextId(store, "comments"),
+    postId: null,
+    taskId,
+    projectId: task.projectId,
+    body,
+    author,
+    createdAt: now(),
+  };
+  writeComment(store, projectSlug(store, task.projectId), comment);
+  touchProject(store, task.projectId);
+  return comment;
+}
+
+/**
+ * Reply counts for every task in a project, in one pass. The board needs all of
+ * them at once, and calling `listTaskComments` per card would re-scan the
+ * comment list once per task.
+ */
+export function taskReplyCounts(store: Store, projectId: number): Map<number, number> {
+  const counts = new Map<number, number>();
+  for (const comment of board(store).comments) {
+    if (comment.taskId === null || comment.projectId !== projectId) continue;
+    counts.set(comment.taskId, (counts.get(comment.taskId) ?? 0) + 1);
+  }
+  return counts;
+}
+
+export interface TaskReply {
+  comment: Comment;
+  task: Task;
+  projectSlug: string;
+}
+
+/**
+ * Replies waiting for an agent on the tasks it claimed — the task-side twin of
+ * `listAnswers`. An agent that claims work, reports a blocker, and comes back
+ * next session reads what the user said here.
+ */
+export function listTaskReplies(store: Store, opts: { agentName?: string; since?: number } = {}): TaskReply[] {
+  const data = board(store);
+  const mine = opts.agentName ? new Set([opts.agentName, `agent:${opts.agentName}`]) : undefined;
+  const since = opts.since ?? 0;
+  return data.comments
+    .filter((comment) => comment.taskId !== null && comment.createdAt > since)
+    .flatMap((comment) => {
+      const task = data.tasks.find((candidate) => candidate.id === comment.taskId);
+      if (!task || task.deletedAt) return [];
+      if (mine && !(task.claimedBy !== null && mine.has(task.claimedBy))) return [];
+      if (mine && mine.has(comment.author)) return [];
+      const project = data.projects.find((candidate) => candidate.id === task.projectId);
+      return project ? [{ comment, task, projectSlug: project.slug }] : [];
     })
     .sort((a, b) => a.comment.createdAt - b.comment.createdAt);
 }

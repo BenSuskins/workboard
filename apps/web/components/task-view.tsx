@@ -1,40 +1,27 @@
-import type { Project, Task } from "@workboard/core";
+import type { Comment, Project, Task } from "@workboard/core";
+import { taskLane } from "@workboard/core";
+import { Avatar } from "./avatar";
 import { TaskPriorityBadge } from "./badges";
 import { Markdown } from "./markdown";
 import { TimeAgo } from "./time-ago";
-import { UP_FOR_GRABS } from "./labels";
-import { authorLabel } from "@/lib/format";
-import { deleteTaskAction, setTaskAgentReadyAction, setTaskStatusAction, updateTaskDetailAction } from "@/lib/actions";
+import { TASK_LANE_LABEL, TASK_LANE_ORDER, TASK_LANE_TONE } from "./labels";
+import { authorLabel, fullDate } from "@/lib/format";
+import { addTaskCommentAction, deleteTaskAction, moveTaskAction, updateTaskDetailAction } from "@/lib/actions";
 
-import { fieldCls as inputCls, primaryButtonCls as btnCls } from "./form";
+import { fieldCls as inputCls, primaryButtonCls as btnCls, selectCls } from "./form";
 
 /**
- * A task, its spec, and the controls that act on it. The full route and the
- * slide-over both render this, so the two never drift apart.
+ * A task, its spec, its thread, and the controls that act on it. The full route
+ * and the slide-over both render this, so the two never drift apart.
  */
-export function TaskView({ task, project }: { task: Task; project: Project }) {
+export function TaskView({ task, project, comments }: { task: Task; project: Project; comments: Comment[] }) {
+  const lane = taskLane(task);
+  const tone = TASK_LANE_TONE[lane];
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-2">
         <div className="flex items-start gap-2.5">
-          <form action={setTaskStatusAction}>
-            <input type="hidden" name="taskId" value={task.id} />
-            <input type="hidden" name="slug" value={project.slug} />
-            <input type="hidden" name="status" value={task.status === "done" ? "todo" : "done"} />
-            <button
-              type="submit"
-              aria-label={task.status === "done" ? "Reopen" : "Mark done"}
-              className={`mt-1.5 grid size-[18px] place-items-center rounded border text-[10px] ${
-                task.status === "done"
-                  ? "border-good bg-good/20 text-good"
-                  : task.status === "in_progress"
-                    ? "border-accent text-accent"
-                    : "border-hairline text-transparent hover:text-muted"
-              }`}
-            >
-              {task.status === "done" ? "✓" : task.status === "in_progress" ? "◐" : "✓"}
-            </button>
-          </form>
+          <span className={`mt-2 size-2 shrink-0 rounded-full ${tone.dot}`} aria-hidden />
           <h1
             className={`text-heading font-semibold leading-snug tracking-tight ${
               task.status === "done" ? "text-muted line-through" : "text-ink"
@@ -43,7 +30,9 @@ export function TaskView({ task, project }: { task: Task; project: Project }) {
             {task.title}
           </h1>
         </div>
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pl-7 text-meta text-muted">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pl-[1.125rem] text-meta text-muted">
+          <span className={`font-medium ${tone.text}`}>{TASK_LANE_LABEL[lane]}</span>
+          <span>·</span>
           <TaskPriorityBadge priority={task.priority} />
           <span>·</span>
           <span>{authorLabel(task.author)} opened {<TimeAgo at={task.createdAt} />}</span>
@@ -119,22 +108,27 @@ export function TaskView({ task, project }: { task: Task; project: Project }) {
         </details>
       </section>
 
-      <div className="flex items-center gap-3 pl-7">
-        <form action={setTaskAgentReadyAction}>
+      {/* The same move the board's drag makes, spelled out — this view has no columns to drop into. */}
+      <div className="flex flex-wrap items-center gap-3 pl-[1.125rem]">
+        <form action={moveTaskAction} className="flex items-center gap-2">
           <input type="hidden" name="taskId" value={task.id} />
           <input type="hidden" name="slug" value={project.slug} />
-          <input type="hidden" name="ready" value={task.agentReady ? "0" : "1"} />
-          <button
-            type="submit"
-            className={`rounded-control border px-3 py-1.5 text-meta transition-colors ${
-              task.agentReady
-                ? "border-accent/40 bg-accent/10 text-accent hover:bg-accent/20"
-                : "border-hairline text-ink-2 hover:border-accent/40 hover:text-accent"
-            }`}
-          >
-            {task.agentReady ? `⦿ ${UP_FOR_GRABS}` : "⦿ Put up for grabs"}
+          <label className="flex items-center gap-2 text-meta text-muted">
+            Column
+            <select name="lane" defaultValue={lane} className={`${selectCls} w-auto py-1.5 text-meta`}>
+              {TASK_LANE_ORDER.map((option) => (
+                <option key={option} value={option}>
+                  {TASK_LANE_LABEL[option]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="submit" className="rounded-control border border-hairline px-3 py-1.5 text-meta text-ink-2 transition-colors hover:border-accent/40 hover:text-accent">
+            Move
           </button>
         </form>
+
+
         <form action={deleteTaskAction}>
           <input type="hidden" name="taskId" value={task.id} />
           <input type="hidden" name="slug" value={project.slug} />
@@ -143,6 +137,61 @@ export function TaskView({ task, project }: { task: Task; project: Project }) {
           </button>
         </form>
       </div>
+
+      <TaskThread task={task} project={project} comments={comments} />
     </div>
+  );
+}
+
+/**
+ * The conversation on a task. An agent claims the work and reports here through
+ * add_task_comment; a reply left in this box reaches it back through list_answers.
+ * Same shape as a post's thread, because it is the same act.
+ */
+function TaskThread({ task, project, comments }: { task: Task; project: Project; comments: Comment[] }) {
+  return (
+    <section className="flex flex-col gap-3">
+      <h2 className="text-title font-semibold text-ink">
+        {comments.length === 0 ? "No replies yet" : `${comments.length} repl${comments.length === 1 ? "y" : "ies"}`}
+      </h2>
+
+      {comments.map((comment) => (
+        <div key={comment.id} className="rounded-card border border-hairline bg-surface p-4">
+          <div className="mb-1.5 flex items-center gap-2 text-meta text-muted">
+            <Avatar author={comment.author} size="sm" />
+            <span className="font-medium text-ink-2">{authorLabel(comment.author)}</span>
+            <span className="ml-auto" title={fullDate(comment.createdAt)}>
+              <TimeAgo at={comment.createdAt} />
+            </span>
+          </div>
+          <Markdown>{comment.body}</Markdown>
+        </div>
+      ))}
+
+      <form
+        action={addTaskCommentAction}
+        className="flex items-end gap-2 rounded-card border border-hairline bg-surface p-2 focus-within:border-accent/40"
+      >
+        <input type="hidden" name="taskId" value={task.id} />
+        <input type="hidden" name="slug" value={project.slug} />
+        <textarea
+          name="body"
+          rows={1}
+          required
+          aria-label="Reply"
+          placeholder={task.claimedBy ? `Reply to ${authorLabel(task.claimedBy)}…` : "Add a note for whoever picks this up…"}
+          className="min-h-9 flex-1 resize-none bg-transparent px-2 py-2 text-body text-ink outline-none placeholder:text-muted"
+        />
+        <button
+          type="submit"
+          title="Reply"
+          className="grid size-9 shrink-0 place-items-center rounded-control bg-accent text-white transition-opacity hover:opacity-90"
+        >
+          <span aria-hidden>➤</span>
+          <span className="sr-only">Reply</span>
+        </button>
+      </form>
+      {task.claimedBy && <p className="text-meta text-muted">Your reply reaches the agent through list_answers.</p>}
+    </section>
   );
 }

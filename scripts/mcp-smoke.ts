@@ -57,7 +57,7 @@ const expected = [
   "add_post", "add_task", "update_task", "add_link", "upsert_summary",
   "raise_warning", "resolve_warning",
   "get_activity", "save_report", "list_reports", "refresh_project",
-  "list_queued_tasks", "claim_task",
+  "list_queued_tasks", "claim_task", "add_task_comment", "list_task_comments",
   "ask_question", "add_comment", "list_answers", "list_open_questions",
 ];
 
@@ -107,6 +107,29 @@ await step("add_post + add_task + update_task", async () => {
   const task = await call("add_task", { project: "smoke-project", title: "Follow-up", agent_name: "smoke-agent" });
   const updated = await call("update_task", { task_id: task.created.id, status: "done" });
   if (updated.updated.status !== "done") throw new Error(JSON.stringify(updated));
+});
+
+await step("task threads: reply, read back, and reach the claiming agent", async () => {
+  const task = await call("add_task", { project: "smoke-project", title: "Thread me", agent_ready: true });
+  await call("claim_task", { task_id: task.created.id, agent_name: "smoke-agent" });
+
+  await call("add_task_comment", { task_id: task.created.id, body: "Blocked on staging data.", agent_name: "smoke-agent" });
+
+  const thread = await call("list_task_comments", { task_id: task.created.id });
+  if (thread.comments.length !== 1) throw new Error(JSON.stringify(thread));
+  if (thread.comments[0].from !== "agent:smoke-agent") throw new Error(JSON.stringify(thread));
+
+  // A reply from someone else comes back to the agent that claimed the task.
+  await call("add_task_comment", { task_id: task.created.id, body: "Seeded it." });
+  const replies = await call("list_answers", { agent_name: "smoke-agent" });
+  const mine = replies.taskReplies.filter((r: any) => r.taskId === task.created.id);
+  if (mine.length !== 1 || mine[0].reply !== "Seeded it.") throw new Error(JSON.stringify(replies.taskReplies));
+
+  // Blocked work keeps its claimer and leaves the queue.
+  const blocked = await call("update_task", { task_id: task.created.id, status: "blocked" });
+  if (blocked.updated.status !== "blocked") throw new Error(JSON.stringify(blocked));
+  const queue = await call("list_queued_tasks", {});
+  if (queue.queued.some((t: any) => t.id === task.created.id)) throw new Error("blocked task still queued");
 });
 
 await step("agent task queue: queue, list, claim, double-claim rejection", async () => {

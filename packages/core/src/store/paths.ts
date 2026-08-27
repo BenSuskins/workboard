@@ -17,6 +17,15 @@ export const deletedTasksDir = (root: string, slug: string): string => join(task
 export const claimsDir = (root: string, slug: string): string => join(tasksDir(root, slug), ".claims");
 export const claimFile = (root: string, slug: string, id: number): string => join(claimsDir(root, slug), pad(id));
 
+/**
+ * Task replies live beside the tasks directory rather than inside it: a task is one flat
+ * file named `<id>-<slug>.md`, and `findByIdPrefix` matches any entry starting with `<id>-`,
+ * so a directory next to the file would be picked up as the task itself.
+ */
+export const taskCommentsRoot = (root: string, slug: string): string => join(projectDir(root, slug), "task-comments");
+export const taskCommentsDir = (root: string, slug: string, taskId: number): string =>
+  join(taskCommentsRoot(root, slug), pad(taskId));
+
 export const postsDir = (root: string, slug: string): string => join(projectDir(root, slug), "posts");
 export const postDir = (root: string, slug: string, id: number): string => join(postsDir(root, slug), pad(id));
 export const postFile = (root: string, slug: string, id: number): string => join(postDir(root, slug, id), "post.md");

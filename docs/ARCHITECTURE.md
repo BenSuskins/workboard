@@ -40,6 +40,7 @@ flowchart TB
 | Component | Responsibility | Location |
 |-----------|---------------|----------|
 | Domain | Entity shapes + enums, storage-independent | `packages/core/src/domain.ts` |
+| Board lanes | Derives a task's column and moves it between them | `packages/core/src/services.ts` (`taskLane` / `setTaskLane`) |
 | Store | Tree layout, frontmatter, atomic writes, id allocation, locks | `packages/core/src/store/` |
 | Services | Domain operations (projects, tasks, posts, comments, summaries, links, warnings, reports) | `packages/core/src/services.ts` |
 | Integration clients | GitHub / Jira / Google Docs read-only fetchers | `packages/core/src/integrations/{github,jira,gdrive}.ts` |
@@ -55,7 +56,8 @@ The agent-facing API, defined in `packages/mcp/src/tools.ts`:
 
 `list_projects` · `get_project` · `find_project` · `create_project` ·
 `update_project` · `add_post` · `add_task` · `update_task` ·
-`list_queued_tasks` · `claim_task` · `add_link` ·
+`list_queued_tasks` · `claim_task` · `add_task_comment` ·
+`list_task_comments` · `add_link` ·
 `upsert_summary` · `raise_warning` · `resolve_warning` · `get_activity` ·
 `save_report` · `list_reports` · `refresh_project` ·
 `ask_question` · `add_comment` · `list_answers` · `list_open_questions`
@@ -110,6 +112,15 @@ sequenceDiagram
   `UPDATE ... WHERE` are no longer free; see Concurrency below for what replaces
   them. No native module is left anywhere: an old SQLite board is read through
   Node's built-in `node:sqlite`.
+- **A lane is derived, never stored** — the board's five columns are a view over
+  `status`, `agentReady`, and the claim marker, so the column a card sits in and
+  the queue an agent pulls from cannot disagree. `blocked` is the one lane that
+  needed a new status: work an agent picked up and could not finish keeps its
+  claimer for attribution while dropping out of the queue.
+- **Task replies live outside the tasks directory** — a task is one flat file
+  named `<id>-<slug>.md` and lookups match on that `<id>-` prefix, so a comments
+  directory beside it would be read as the task. `task-comments/<taskId>/` keeps
+  the thread hand-browsable without colliding.
 - **Questions are distinct from warnings** — a warning reports something broken;
   a question asks for a decision and blocks the asking agent until answered.
   Answers travel back through `list_answers`.
@@ -131,6 +142,7 @@ data/workboard/
     tasks/<id>-<slug>.md        # body is the spec an agent works from
     tasks/.claims/<id>          # claim marker — see Concurrency
     tasks/.deleted/…            # soft-deleted, restorable
+    task-comments/<taskId>/<id>.md  # the reply thread on a task
     summaries/<stamp>-<id>.md   # every upsert kept, newest wins
     links/<id>.md · links/.deleted/…
     warnings/<id>.md

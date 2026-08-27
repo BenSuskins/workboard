@@ -3,7 +3,7 @@ import { rmSync } from "node:fs";
 import {
   addLink,
   addTask,
-  addUpdate,
+  addPost,
   createProject,
   defaultDataDir,
   listProjects,
@@ -46,11 +46,11 @@ addTask(db, payments.id, "Cut over read path behind flag", { status: "in_progres
 addTask(db, payments.id, "Delete legacy charge pipeline", { author: "user" });
 const doneTask = addTask(db, payments.id, "Ship dual-write mode", { author: "user" });
 updateTask(db, doneTask.id, { status: "done" });
-addUpdate(db, payments.id, "Dual-write shipped to prod behind `payments_v2_dual_write`. Reconciliation job green for 48h.", {
+addPost(db, payments.id, "Dual-write shipped to prod behind `payments_v2_dual_write`. Reconciliation job green for 48h.", {
   type: "agent_update",
   author: "agent:claude-code",
 });
-addUpdate(db, payments.id, "PAY-341 flagged a rounding mismatch on refunds — fix landed in #4876.", { type: "note", author: "user" });
+addPost(db, payments.id, "PAY-341 flagged a rounding mismatch on refunds — fix landed in #4876.", { type: "note", author: "user" });
 upsertSummary(
   db,
   payments.id,
@@ -79,7 +79,7 @@ addLink(db, search.id, {
 addLink(db, search.id, { url: "https://github.com/acme/platform/pull/4903", title: "Re-ranker shadow mode" });
 addLink(db, search.id, { url: "https://acme.atlassian.net/browse/SRCH-88", title: "Epic: learned re-ranking" });
 addTask(db, search.id, "Run shadow-mode A/B for a week", { status: "in_progress", author: "agent:claude-code" });
-addUpdate(db, search.id, "Shadow mode deployed; collecting CTR deltas. Early numbers show +3.8% on head queries.", {
+addPost(db, search.id, "Shadow mode deployed; collecting CTR deltas. Early numbers show +3.8% on head queries.", {
   type: "agent_update",
   author: "agent:claude-code",
 });
@@ -104,7 +104,7 @@ addLink(db, hiring.id, {
 });
 addTask(db, hiring.id, "Debrief for candidate #2", { dueDate: "2026-07-11", status: "in_progress", author: "user" });
 addTask(db, hiring.id, "Source 10 new candidates", { author: "user" });
-addUpdate(db, hiring.id, "Candidate #1 declined — comp gap. Candidate #2 onsite completed, debrief Friday.", { author: "user" });
+addPost(db, hiring.id, "Candidate #1 declined — comp gap. Candidate #2 onsite completed, debrief Friday.", { author: "user" });
 upsertSummary(
   db,
   hiring.id,
@@ -126,7 +126,7 @@ addLink(db, oncall.id, {
   title: "On-call proposal draft",
 });
 addTask(db, oncall.id, "Get sign-off from infra leads", { author: "user" });
-addUpdate(db, oncall.id, "Blocked on infra leads sign-off — meeting pushed twice.", { type: "status_change", author: "user" });
+addPost(db, oncall.id, "Blocked on infra leads sign-off — meeting pushed twice.", { type: "status_change", author: "user" });
 upsertSummary(
   db,
   oncall.id,
@@ -166,4 +166,4 @@ saveReport(
   "agent:claude-code",
 );
 
-console.log(`Seeded ${listProjects(db, { includeArchived: true }).length} projects into ${dbPath}`);
+console.log(`Seeded ${listProjects(db, { includeArchived: true }).length} projects into ${dataDir}`);

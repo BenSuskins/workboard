@@ -1,6 +1,6 @@
 // Types only: this module is imported by client components, and pulling a
 // runtime value from @workboard/core drags the node-only store into the bundle.
-import type { Project, ProjectAccent, ProjectHealth, ProjectStatus, PostType, TaskStatus } from "@workboard/core";
+import type { Project, ProjectAccent, ProjectHealth, ProjectStatus, PostType, TaskLane } from "@workboard/core";
 
 /**
  * The words the board shows people. The domain speaks in enums — `active`,
@@ -32,12 +32,6 @@ export const HEALTH_LABEL: Record<ProjectHealth, string> = {
   red: "Off track",
 };
 
-export const TASK_STATUS_LABEL: Record<TaskStatus, string> = {
-  todo: "To do",
-  in_progress: "Moving",
-  done: "Done",
-};
-
 export const POST_TYPE_LABEL: Record<PostType, string> = {
   note: "Note",
   status_change: "Status change",
@@ -48,6 +42,40 @@ export const POST_TYPE_LABEL: Record<PostType, string> = {
 /** `agentReady` tasks are the queue agents pull from. */
 export const UP_FOR_GRABS = "Up for grabs";
 export const OPEN_QUESTIONS = "Open questions";
+
+/**
+ * The board's columns, in the order work flows through them. Written out here
+ * rather than imported from core's TASK_LANES because this module is pulled into
+ * client bundles and a runtime import from the domain drags the store in with it.
+ * The Record type still fails the build if a lane is added without a column.
+ */
+export const TASK_LANE_LABEL: Record<TaskLane, string> = {
+  backlog: "Backlog",
+  queued: UP_FOR_GRABS,
+  moving: "Moving",
+  blocked: "Blocked",
+  done: "Done",
+};
+
+/** What each column is for, shown under its heading — the same shape the PR pipeline uses. */
+export const TASK_LANE_BLURB: Record<TaskLane, string> = {
+  backlog: "filed, not queued",
+  queued: "waiting for an agent",
+  moving: "being worked on",
+  blocked: "picked up, stuck",
+  done: "finished",
+};
+
+export const TASK_LANE_TONE: Record<TaskLane, { text: string; dot: string }> = {
+  backlog: { text: "text-muted", dot: "bg-muted" },
+  queued: { text: "text-accent", dot: "bg-accent" },
+  moving: { text: "text-good", dot: "bg-good" },
+  blocked: { text: "text-critical", dot: "bg-critical" },
+  done: { text: "text-ink-2", dot: "bg-ink-2" },
+};
+
+/** Column order, taken from the map above so the two can never disagree. */
+export const TASK_LANE_ORDER = Object.keys(TASK_LANE_LABEL) as TaskLane[];
 
 /** Tailwind cannot see a class built at runtime, so the hue classes are spelled out. */
 export const ACCENT_TEXT: Record<ProjectAccent, string> = {

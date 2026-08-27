@@ -34,6 +34,7 @@ export function ProjectCard({
   const { project, latestSummary, links, tasks, openWarnings } = detail;
   const pipeline = prPipeline(links);
   const moving = tasks.filter((t) => t.status === "in_progress").length;
+  const blocked = tasks.filter((t) => t.status === "blocked").length;
   const upForGrabs = tasks.filter((t) => t.agentReady && t.status === "todo" && !t.claimedAt).length;
   const done = tasks.filter((t) => t.status === "done").length;
   const accent = tileAccent(project);
@@ -67,6 +68,7 @@ export function ProjectCard({
           <p className="mt-0.5 flex items-center gap-1.5 text-meta">
             <span className={`font-medium ${tone.text}`}>{STATUS_LABEL[project.status]}</span>
             {moving > 0 && <span className="text-muted">· {moving} in progress</span>}
+            {blocked > 0 && <span className="text-critical">· {blocked} blocked</span>}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
