@@ -128,7 +128,7 @@ export function Sidebar({
     >
       <div className={`flex h-14 shrink-0 items-center gap-1 px-3 ${collapsed ? "justify-center" : ""}`}>
         <Link href="/" className="flex min-w-0 items-center gap-2" title="Workboard">
-          <span className="grid size-[22px] shrink-0 place-items-center rounded-md bg-accent text-[11px] font-bold text-on-accent">
+          <span className="grid size-[22px] shrink-0 place-items-center rounded-md bg-accent text-micro font-bold text-on-accent">
             W
           </span>
           {!collapsed && <span className="truncate text-body font-semibold tracking-tight text-ink">Workboard</span>}
@@ -230,7 +230,7 @@ export function Sidebar({
                         </Link>
                         {project.upForGrabs > 0 && (
                           <span
-                            className="shrink-0 text-[11px] tabular-nums text-muted"
+                            className="shrink-0 text-micro tabular-nums text-muted"
                             title={`${project.upForGrabs} up for grabs`}
                           >
                             {project.upForGrabs}
@@ -360,7 +360,7 @@ function NavRow({ item, active, collapsed }: { item: NavItem; active: boolean; c
       <span className={active ? "text-ink" : "text-muted"}>{item.icon}</span>
       {!collapsed && <span className="truncate">{item.label}</span>}
       {!collapsed && item.badge !== undefined && item.badge > 0 && (
-        <span className="ml-auto shrink-0 rounded-full bg-accent/15 px-1.5 text-[11px] font-medium tabular-nums text-accent">
+        <span className="ml-auto shrink-0 rounded-full bg-accent/15 px-1.5 text-micro font-medium tabular-nums text-accent">
           {item.badge}
         </span>
       )}
@@ -391,7 +391,7 @@ function SubRow({
         }`}
       >
         <span className="truncate">{children}</span>
-        {count !== undefined && count > 0 && <span className="ml-auto text-[11px] tabular-nums text-muted">{count}</span>}
+        {count !== undefined && count > 0 && <span className="ml-auto text-micro tabular-nums text-muted">{count}</span>}
       </Link>
     </li>
   );
