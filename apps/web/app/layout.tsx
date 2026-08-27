@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Geist_Mono } from "next/font/google";
 import { listOpenQuestions, listProjects, getProjectDetail, type ProjectDetail } from "@workboard/core";
 import { CommandPalette } from "@/components/command-palette";
 import { Sidebar, type SidebarProject } from "@/components/sidebar";
@@ -7,8 +7,11 @@ import { db } from "@/lib/db";
 import { loadPullRequests } from "@/lib/prs";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-inter" });
-const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], weight: ["500"], variable: "--font-jetbrains-mono" });
+// Inter is self-hosted (see the @font-face in globals.css), not loaded through
+// next/font: Google's build strips the character variants and stylistic sets
+// the UI depends on, and ships no optical-size axis.
+// No `weight` on Geist: that selects its variable axis.
+const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono" });
 
 export const metadata: Metadata = {
   title: "Workboard",
@@ -43,8 +46,11 @@ export default async function RootLayout({ children, panel }: { children: React.
   const prCount = (await loadPullRequests(details)).rows.length;
 
   return (
-    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${jetbrainsMono.variable}`}>
+    <html lang="en" suppressHydrationWarning className={geistMono.variable}>
       <head>
+        {/* Self-hosted, so nothing else will discover it before first paint. The
+            italic face is deliberately not preloaded — only rendered markdown uses it. */}
+        <link rel="preload" href="/fonts/InterVariable.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
         <script dangerouslySetInnerHTML={{ __html: shellInit }} />
       </head>
       <body className="min-h-screen">

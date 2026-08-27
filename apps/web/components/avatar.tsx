@@ -22,7 +22,7 @@ function gradientFor(author: string): [string, string] {
   return GRADIENTS[hash % GRADIENTS.length] as [string, string];
 }
 
-const SIZES = { sm: "size-5 text-[9px]", md: "size-6 text-[10px]", lg: "size-7 text-[11px]" };
+const SIZES = { sm: "size-5 text-[9px]", md: "size-6 text-[10px]", lg: "size-7 text-micro" };
 
 /** authorLabel prefixes agents with an emoji, which is no use as an initial. */
 function initialFor(author: string): string {

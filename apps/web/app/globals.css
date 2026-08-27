@@ -1,6 +1,30 @@
 @import "tailwindcss";
 
 /*
+ * Inter is self-hosted rather than pulled from next/font/google: Google's build
+ * carries only calt/kern/tnum and friends — no character variants, no stylistic
+ * sets, no slashed zero, and no optical-size axis. The upstream release (rsms/inter
+ * v4.1) carries all of them, and body's font-feature-settings below depends on it.
+ * One variable file covers 100-900, so nothing static needs loading per weight.
+ */
+@font-face {
+  font-family: "InterVariable";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/InterVariable.woff2") format("woff2");
+}
+/* Only rendered markdown emphasises text, so this face stays unpreloaded and is
+   fetched on demand rather than being paid for on every page. */
+@font-face {
+  font-family: "InterVariable";
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/InterVariable-Italic.woff2") format("woff2");
+}
+
+/*
  * Theme tokens. Utilities (bg-surface, text-ink, …) resolve through var()
  * indirection so light/dark swap at runtime via [data-theme] on <html>.
  * Both themes ride one neutral-cool grey ramp so they read as one product;
@@ -102,8 +126,11 @@
   --color-tile-red: var(--wb-tile-red);
 
   /* Named type steps replace the scattered text-[11px] / text-[14.5px] one-offs.
-     Every step sits one size above the old scale — the reference reads roomy,
-     not dense. */
+     Every reading step sits one size above the old scale — the reference reads
+     roomy, not dense. micro sits below that scale: it names the badge and
+     avatar-initial size rather than adding a step anything is read at. */
+  --text-micro: 0.6875rem;
+  --text-micro--line-height: 0.95rem;
   --text-meta: 0.75rem;
   --text-meta--line-height: 1.1rem;
   --text-body: 0.875rem;
@@ -120,14 +147,26 @@
   --radius-card: 14px;
   --radius-pill: 999px;
 
-  --font-sans: var(--font-inter), system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+  /* Inter's variable axis reaches weights the static instances cannot. 510 and
+     590 read a shade firmer than 500/600 at UI sizes without tipping into bold;
+     overriding the tokens retunes every font-medium/font-semibold in one place. */
+  --font-weight-medium: 510;
+  --font-weight-semibold: 590;
+
+  --font-sans: "InterVariable", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
 body {
   background: var(--wb-page);
   color: var(--wb-ink);
   font-family: var(--font-sans);
+  /* Inter's alternate glyphs: straight-sided one, round quotes and commas,
+     slashed zero. Small changes that carry most of the typographic voice —
+     the slashed zero especially, next to all the tabular counts. */
+  font-feature-settings: "cv01" 1, "ss03" 1, "zero" 1;
+  /* The upstream face carries an opsz axis (14-32); Google's build does not. */
+  font-optical-sizing: auto;
   -webkit-font-smoothing: antialiased;
 }
 
