@@ -54,7 +54,7 @@ export function MicroLabel({ children, className = "" }: { children: React.React
 /** A micro-label with a hairline rule filling the rest of the row. */
 export function RuledLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-2.5 px-2 pb-2">
+    <div className="flex items-center gap-2.5 px-3 pb-2">
       <MicroLabel>{children}</MicroLabel>
       <span className="h-px flex-1 bg-hairline" aria-hidden />
     </div>

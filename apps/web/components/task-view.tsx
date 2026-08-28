@@ -41,7 +41,10 @@ export function TaskView({ task, project, comments }: { task: Task; project: Pro
           </span>
           <span className="text-meta font-medium text-ink-2">{TASK_LANE_LABEL[lane]}</span>
         </div>
-        <EditableTitle task={task} slug={project.slug} />
+        {/* Keyed on updatedAt so an edit made elsewhere — an agent writing
+            through the MCP tools — reseeds the draft instead of leaving a
+            stale one behind the next time the box is opened. */}
+        <EditableTitle key={task.updatedAt} task={task} slug={project.slug} />
         <span className="text-meta text-muted">
           {authorLabel(task.author)} opened <TimeAgo at={task.createdAt} />
           {task.updatedAt !== task.createdAt && (
@@ -54,6 +57,7 @@ export function TaskView({ task, project, comments }: { task: Task; project: Pro
       </div>
 
       <EditableDescription
+        key={task.updatedAt}
         task={task}
         slug={project.slug}
         rendered={<Markdown>{task.description}</Markdown>}

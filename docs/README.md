@@ -227,6 +227,12 @@ backup notes.
 See [ARCHITECTURE.md](ARCHITECTURE.md) for system design, the MCP tool surface,
 sync engine, and data model.
 
+## Design
+
+See [DESIGN.md](DESIGN.md) for the UI language: surfaces, the type scale, the
+status and priority glyphs, and the layout patterns every screen is built from.
+Read it before changing anything visual.
+
 ## Troubleshooting
 
 See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for common issues and fixes.
