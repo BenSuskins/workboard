@@ -156,47 +156,56 @@ function Card({
       draggable
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
-      className="flex cursor-grab flex-col gap-2.5 rounded-card border border-hairline bg-surface px-4 pb-3.5 pt-[15px] transition-colors duration-[130ms] hover:border-grid hover:bg-surface-2 active:cursor-grabbing"
+      className="cursor-grab rounded-card border border-hairline bg-surface transition-colors duration-[130ms] hover:border-grid hover:bg-surface-2 active:cursor-grabbing"
     >
-      <div className="flex items-start gap-[9px]">
-        <span className="mt-[3px]">
-          <StatusRing lane={card.lane} />
+      {/* The whole card opens the task, not just the title — a card is one
+          target, and a 4px-tall word is a poor one. The anchor is not itself
+          draggable, so the gesture falls through to the article rather than
+          becoming the browser's drag-a-link. */}
+      <Link
+        href={`/projects/${slug}/tasks/${card.id}`}
+        draggable={false}
+        title={card.identifier}
+        className="flex flex-col gap-2.5 px-4 pb-3.5 pt-[15px] [cursor:inherit]"
+      >
+        <span className="flex items-start gap-[9px]">
+          <span className="mt-[3px] flex-none">
+            <StatusRing lane={card.lane} />
+          </span>
+          <span
+            className={`min-w-0 text-pretty break-words text-title font-medium leading-[1.35] tracking-[-0.005em] ${
+              done ? "text-muted line-through" : "text-ink"
+            }`}
+          >
+            {card.title}
+          </span>
+          <span className="ml-auto mt-0.5 flex flex-none items-center gap-2">
+            {card.claimedBy && <AgentMark />}
+            <PriorityBars priority={card.priority} />
+          </span>
         </span>
-        <Link
-          href={`/projects/${slug}/tasks/${card.id}`}
-          title={card.identifier}
-          className={`min-w-0 text-pretty break-words text-title font-medium leading-[1.35] tracking-[-0.005em] ${
-            done ? "text-muted line-through" : "text-ink"
-          }`}
-        >
-          {card.title}
-        </Link>
-        <span className="ml-auto mt-0.5 flex flex-none items-center gap-2">
-          {card.claimedBy && <AgentMark />}
-          <PriorityBars priority={card.priority} />
-        </span>
-      </div>
 
-      {card.blurb && <p className="line-clamp-2 text-pretty text-detail text-muted">{card.blurb}</p>}
+        {card.blurb && <span className="line-clamp-2 text-pretty text-detail text-muted">{card.blurb}</span>}
 
-      {(card.labels.length > 0 || card.dueDate || card.assignee || card.replies > 0) && (
-        <div className="flex items-center gap-2 pt-px">
-          {card.labels.map((label) => (
-            <LabelChip key={label} label={label} />
-          ))}
-          {card.dueDate && <span className="flex-none text-caption text-warning">{card.dueDate}</span>}
-          {card.replies > 0 && (
-            <span className="flex-none text-caption text-muted">
-              {card.replies} repl{card.replies === 1 ? "y" : "ies"}
-            </span>
-          )}
-          {card.assignee && (
-            <span className="ml-auto flex-none">
-              <Avatar author={card.assignee} size="xs" />
-            </span>
-          )}
-        </div>
-      )}
+        {(card.labels.length > 0 || card.dueDate || card.assignee || card.replies > 0) && (
+          <span className="flex items-center gap-2 pt-px">
+            {card.labels.map((label) => (
+              <LabelChip key={label} label={label} />
+            ))}
+            {card.dueDate && <span className="flex-none text-caption text-warning">{card.dueDate}</span>}
+            {card.replies > 0 && (
+              <span className="flex-none text-caption text-muted">
+                {card.replies} repl{card.replies === 1 ? "y" : "ies"}
+              </span>
+            )}
+            {card.assignee && (
+              <span className="ml-auto flex-none">
+                <Avatar author={card.assignee} size="xs" />
+              </span>
+            )}
+          </span>
+        )}
+      </Link>
     </article>
   );
 }

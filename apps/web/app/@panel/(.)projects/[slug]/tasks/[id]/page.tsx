@@ -23,7 +23,7 @@ export default async function TaskPanel({ params }: { params: Promise<{ slug: st
       <Mermaid />
       {/* The same column and rail the full page draws. At the panel's default
           width the rail stacks under the column instead of squeezing it. */}
-      <DetailLayout rail={<TaskRail task={task} project={project} />}>
+      <DetailLayout rail={<TaskRail task={task} project={project} inPanel />}>
         <ReadingColumn padding="">
           <TaskView task={task} project={project} comments={comments} />
         </ReadingColumn>

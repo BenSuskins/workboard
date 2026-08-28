@@ -2,7 +2,6 @@
 
 import { useEffect, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import Link from "next/link";
 import { ResizeHandle } from "./resize-handle";
 
 /**
@@ -114,14 +113,18 @@ export function Panel({
           {breadcrumb}
           <div className="ml-auto flex items-center gap-1.5">
             {actions}
-            <Link
+            {/* A plain anchor, not <Link>: the panel already sits at `href`, so a
+                soft navigation there resolves to the same route and the
+                interceptor simply re-renders the panel. Only a document load
+                leaves the intercepting route and reaches the real page. */}
+            <a
               href={href}
               aria-label="Open full page"
               title="Open full page"
               className="grid size-8 place-items-center rounded-control text-muted transition-colors hover:bg-surface-2 hover:text-ink"
             >
               ⤢
-            </Link>
+            </a>
           </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">{children}</div>
