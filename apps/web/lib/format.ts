@@ -14,6 +14,22 @@ export function relativeTime(ms: number | string): string {
   return `${Math.floor(months / 12)}y ago`;
 }
 
+/** "3h", "6d" — the age column on a triage row, with no "ago". */
+export function compactAge(ms: number): string {
+  const diff = Date.now() - ms;
+  if (Number.isNaN(diff)) return "";
+  const minutes = Math.floor(diff / 60_000);
+  if (minutes < 1) return "now";
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}mo`;
+  return `${Math.floor(months / 12)}y`;
+}
+
 export function fullDate(ms: number): string {
   return new Date(ms).toLocaleString("en-GB", {
     day: "numeric",

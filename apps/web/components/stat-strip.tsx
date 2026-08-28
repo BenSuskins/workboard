@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { boardHref, type Filters } from "@/lib/board-filters";
 
-interface StatCell {
+export interface StatCell {
   label: string;
   value: number;
   /** The lane hue this count belongs to. Projects has none — it counts everything. */
@@ -19,24 +19,16 @@ export interface BoardStats {
 }
 
 /**
- * The board's headline numbers, bounded by two hairlines rather than boxed into
- * a bordered grid. Every count but the first counts *tasks*: one unit across the
- * strip, and the digest sentence above names it, so no cell can be misread.
+ * A row of headline numbers, bounded by two hairlines rather than boxed into a
+ * bordered grid. The board and Triage both draw their own cells and share this
+ * one rendering: two hairlines, a reserved two-line label so every value sits
+ * on one baseline, and flush outer edges so the strip lines up with whatever
+ * sits above it.
  *
  * A zero is drawn in `muted` so an empty count recedes instead of competing with
  * the numbers that mean something.
  */
-export function StatStrip({ filters, stats }: { filters: Filters; stats: BoardStats }) {
-  const cells: StatCell[] = [
-    { label: "Projects", value: stats.projects, href: boardHref({ ...filters, status: undefined }) },
-    { label: "Moving", value: stats.moving, dot: "bg-good", href: boardHref({ ...filters, status: "active" }) },
-    { label: "Up for grabs", value: stats.upForGrabs, dot: "bg-accent" },
-    { label: "Blocked", value: stats.blocked, dot: "bg-critical", href: boardHref({ ...filters, status: "blocked" }) },
-    // A question blocks an agent until you reply, so it reads as work, not noise.
-    { label: "Open questions", value: stats.questions, dot: "bg-serious" },
-    { label: "Done", value: stats.done, dot: "bg-ink-2" },
-  ];
-
+export function StatStrip({ cells }: { cells: StatCell[] }) {
   return (
     <div className="flex items-stretch border-y border-hairline py-3.5">
       {cells.map((cell, index) => {
@@ -76,4 +68,22 @@ export function StatStrip({ filters, stats }: { filters: Filters; stats: BoardSt
       })}
     </div>
   );
+}
+
+/**
+ * The board's six cells. Every count but the first counts *tasks*: one unit
+ * across the strip, and the digest sentence above names it, so no cell can be
+ * misread.
+ */
+export function BoardStatStrip({ filters, stats }: { filters: Filters; stats: BoardStats }) {
+  const cells: StatCell[] = [
+    { label: "Projects", value: stats.projects, href: boardHref({ ...filters, status: undefined }) },
+    { label: "Moving", value: stats.moving, dot: "bg-good", href: boardHref({ ...filters, status: "active" }) },
+    { label: "Up for grabs", value: stats.upForGrabs, dot: "bg-accent" },
+    { label: "Blocked", value: stats.blocked, dot: "bg-critical", href: boardHref({ ...filters, status: "blocked" }) },
+    // A question blocks an agent until you reply, so it reads as work, not noise.
+    { label: "Open questions", value: stats.questions, dot: "bg-serious" },
+    { label: "Done", value: stats.done, dot: "bg-ink-2" },
+  ];
+  return <StatStrip cells={cells} />;
 }

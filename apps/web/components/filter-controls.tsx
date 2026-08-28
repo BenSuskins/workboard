@@ -123,16 +123,19 @@ export function OptionsDropdown({
   anyLabel,
   clearHref,
   options,
+  ghost = false,
 }: {
   label: string;
   /** The value shown, and the entry offered, when nothing is chosen. */
   anyLabel: string;
   clearHref: string;
   options: FilterOption[];
+  /** Borderless, value only — for a filter row that carries no chrome of its own. */
+  ghost?: boolean;
 }) {
   const chosen = options.find((option) => option.active);
   return (
-    <Dropdown label={label} value={chosen?.label ?? anyLabel} active={Boolean(chosen)}>
+    <Dropdown label={label} value={chosen?.label ?? anyLabel} active={Boolean(chosen)} ghost={ghost}>
       <MenuLink href={clearHref} active={!chosen}>
         {anyLabel}
       </MenuLink>
