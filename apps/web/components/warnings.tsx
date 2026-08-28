@@ -8,7 +8,7 @@ import { authorLabel } from "@/lib/format";
  * decoration at a glance and as "grimacing face" to a screen reader, and it
  * said nothing the word beside it did not.
  */
-const SEVERITY: Record<WarningSeverity, { label: string; dot: string; text: string; box: string }> = {
+export const SEVERITY: Record<WarningSeverity, { label: string; dot: string; text: string; box: string }> = {
   critical: {
     label: "Critical",
     dot: "bg-critical",

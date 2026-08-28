@@ -18,7 +18,7 @@ import { refreshAllAction } from "@/lib/actions";
 import { FilterBar } from "@/components/filter-bar";
 import { FilterMemory } from "@/components/filter-memory";
 import { ProjectCard } from "@/components/project-card";
-import { StatStrip } from "@/components/stat-strip";
+import { BoardStatStrip } from "@/components/stat-strip";
 import { SyncBanner } from "@/components/sync-banner";
 import { projectWantingAttention } from "@/lib/digest";
 import {
@@ -117,7 +117,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         <div className="flex flex-col gap-[26px]">
           <Digest counts={{ ...stats, movingProjects, attention }} week={week} />
 
-          <StatStrip filters={filters} stats={stats} />
+          <BoardStatStrip filters={filters} stats={stats} />
 
           <div className="flex flex-col gap-3">
             <FilterBar filters={filters} categories={categories} />

@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { Geist_Mono } from "next/font/google";
-import { listOpenQuestions, listProjects, getProjectDetail, type ProjectDetail } from "@workboard/core";
+import { listProjects, getProjectDetail, type ProjectDetail } from "@workboard/core";
 import { CommandPalette } from "@/components/command-palette";
 import { Sidebar, type SidebarProject } from "@/components/sidebar";
+import { collectInbox } from "@/lib/inbox";
 import { db } from "@/lib/db";
 import { loadPullRequests } from "@/lib/prs";
 import "./globals.css";
@@ -45,8 +46,8 @@ export default async function RootLayout({ children, panel }: { children: React.
     (total, detail) => total + detail.tasks.filter((task) => task.status !== "done").length,
     0,
   );
-  const openWarnings = details.reduce((total, detail) => total + detail.openWarnings.length, 0);
-  const inboxCount = listOpenQuestions(database).length + openWarnings;
+  // The badge and the Inbox page's own count both come from here, so they can never disagree.
+  const inboxCount = collectInbox(database, Date.now()).length;
   // Same source as /prs — a badge that disagreed with the page it links to would be worse than none.
   const prCount = (await loadPullRequests(details)).rows.length;
 

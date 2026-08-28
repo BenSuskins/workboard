@@ -13,6 +13,7 @@ import {
   deleteLink,
   deleteTask,
   getProject,
+  listWarnings,
   resolveWarning,
   restoreLink,
   restoreTask,
@@ -294,6 +295,16 @@ export async function resolveWarningAction(formData: FormData) {
   revalidatePath("/");
   // Resolving here empties a row of the inbox and decrements the sidebar badge.
   revalidatePath("/inbox");
+}
+
+/** Every open warning, resolved at once — the Inbox's "Resolve all warnings" action. */
+export async function resolveAllWarningsAction() {
+  for (const warning of listWarnings(db(), {})) {
+    resolveWarning(db(), warning.id, { resolvedBy: "user" });
+  }
+  revalidatePath("/inbox");
+  revalidatePath("/reports/triage");
+  revalidatePath("/", "layout");
 }
 
 export async function setProjectPinnedAction(formData: FormData) {

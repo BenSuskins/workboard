@@ -1,124 +1,79 @@
-import Link from "next/link";
-import { getProject, getProjectDetail, listOpenQuestions, listProjects, type ProjectDetail, type Warning } from "@workboard/core";
-import { Avatar } from "@/components/avatar";
-import { pageContainerCls } from "@/components/form";
-import { SectionHeading } from "@/components/section";
-import { TimeAgo } from "@/components/time-ago";
-import { resolveWarningAction } from "@/lib/actions";
+import { listWarnings } from "@workboard/core";
+import { ConfirmSubmit } from "@/components/confirm-submit";
+import { InboxRow } from "@/components/inbox-row";
+import { listCls } from "@/components/list";
+import { PageTopBar, topBarGhostCls } from "@/components/page-top-bar";
+import { PillGroup, type FilterOption } from "@/components/filter-controls";
+import { resolveAllWarningsAction } from "@/lib/actions";
 import { db } from "@/lib/db";
-import { authorLabel, toPlainText } from "@/lib/format";
+import { collectInbox, type InboxKind } from "@/lib/inbox";
 
 export const dynamic = "force-dynamic";
 
-const SEVERITY_TONE: Record<Warning["severity"], string> = {
-  critical: "text-critical",
-  warning: "text-warning",
-  info: "text-ink-2",
-};
+/** The four ways to narrow the inbox — a tab covers one or more item kinds. */
+const TABS: { key: string; label: string; kinds?: InboxKind[] }[] = [
+  { key: "", label: "Everything" },
+  { key: "question", label: "Questions", kinds: ["question"] },
+  { key: "warning", label: "Warnings", kinds: ["critical", "warning", "info"] },
+  { key: "update", label: "Updates", kinds: ["update"] },
+];
 
 /**
- * What is waiting on a person. Workboard has no read state, so this is not a
- * feed of everything — it lists the two things that actually block an agent: a
- * question nobody has answered, and a warning nobody has resolved.
+ * What is waiting on you. Workboard has no read state, so this is not a feed
+ * of everything — it lists the three things that actually block an agent or
+ * need a decision: an open question, an open warning, and a recent update.
  */
-export default async function InboxPage() {
+export default async function InboxPage({ searchParams }: { searchParams: Promise<{ kind?: string }> }) {
+  const { kind = "" } = await searchParams;
   const database = db();
-  const questions = listOpenQuestions(database);
-  const details = listProjects(database, {})
-    .map((project) => getProjectDetail(database, project.id, { postsLimit: 0 }))
-    .filter((detail): detail is ProjectDetail => detail !== undefined);
+  const items = collectInbox(database, Date.now());
+  const openWarnings = listWarnings(database, {}).length;
 
-  const warnings = details.flatMap((detail) =>
-    detail.openWarnings.map((warning) => ({ warning, project: detail.project })),
-  );
-  const total = questions.length + warnings.length;
+  const tab = TABS.find((candidate) => candidate.key === kind) ?? TABS[0];
+  const kinds = tab.kinds;
+  const shown = kinds ? items.filter((item) => kinds.includes(item.kind)) : items;
+
+  const count = items.length === 0 ? "Nothing needs you" : `${items.length} thing${items.length === 1 ? "" : "s"} need you`;
+
+  const tabOptions: FilterOption[] = TABS.map((candidate) => ({
+    key: candidate.key,
+    href: `/inbox${candidate.key ? `?kind=${candidate.key}` : ""}`,
+    label: candidate.label,
+    active: candidate.key === tab.key,
+  }));
 
   return (
-    <div className={`${pageContainerCls} flex flex-col gap-6`}>
-      <div className="flex flex-col gap-1">
-        <h1 className="text-heading font-semibold tracking-tight text-ink">Inbox</h1>
-        <p className="text-meta text-muted">
-          {total === 0 ? "Nothing is waiting on you." : `${total} thing${total === 1 ? "" : "s"} need you.`}
-        </p>
-      </div>
+    <div className="flex min-h-screen flex-col">
+      <PageTopBar name="Inbox" count={count} action={<ResolveAllWarnings count={openWarnings} />} />
 
-      {total === 0 && (
-        <div className="rounded-card border border-dashed border-grid px-6 py-16 text-center text-body text-muted">
-          No open questions and no open warnings. Agents are unblocked.
+      <div className="flex flex-1 flex-col gap-3.5 px-5 pb-9 pt-[22px]">
+        <div className="flex items-center gap-3.5">
+          <PillGroup options={tabOptions} />
+          <span className="ml-auto text-meta text-muted">Agent updates cover the last 24 hours</span>
         </div>
-      )}
 
-      {questions.length > 0 && (
-        <section className="flex flex-col gap-3">
-          <SectionHeading title="Open questions" count={questions.length} />
-          <ul className="flex flex-col gap-2">
-            {questions.map((post) => {
-              const project = getProject(database, post.projectId);
-              if (!project) return null;
-              return (
-                <li key={post.id}>
-                  <Link
-                    href={`/projects/${project.slug}/posts/${post.id}`}
-                    className="flex flex-col gap-1.5 rounded-card border border-hairline bg-surface p-4 transition-colors hover:border-accent/40"
-                  >
-                    <div className="flex flex-wrap items-center gap-2 text-meta font-medium text-muted">
-                      <Avatar author={post.author} size="sm" />
-                      <span className="font-medium text-ink-2">{authorLabel(post.author)}</span>
-                      <span className="rounded-chip bg-serious/15 px-1.5 py-0.5 font-medium text-serious">asked</span>
-                      <span>in {project.name}</span>
-                      <span className="ml-auto">
-                        <TimeAgo at={post.createdAt} />
-                      </span>
-                    </div>
-                    {post.title && <span className="text-title font-medium text-ink">{post.title}</span>}
-                    <p className="line-clamp-2 text-body text-ink-2">{toPlainText(post.body)}</p>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
-
-      {warnings.length > 0 && (
-        <section className="flex flex-col gap-3">
-          <SectionHeading title="Open warnings" count={warnings.length} />
-          <ul className="flex flex-col gap-2">
-            {warnings.map(({ warning, project }) => (
-              <li
-                key={warning.id}
-                className="flex items-start gap-3 rounded-card border border-hairline bg-surface p-4"
-              >
-                <span className={`mt-0.5 shrink-0 ${SEVERITY_TONE[warning.severity]}`} aria-hidden>
-                  ⚠
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2 text-meta font-medium text-muted">
-                    <span className={`font-medium capitalize ${SEVERITY_TONE[warning.severity]}`}>{warning.severity}</span>
-                    <Link href={`/projects/${project.slug}`} className="hover:text-ink">
-                      {project.name}
-                    </Link>
-                    <span className="ml-auto">
-                      <TimeAgo at={warning.createdAt} />
-                    </span>
-                  </div>
-                  <p className="mt-1 text-body text-ink-2">{warning.message}</p>
-                </div>
-                <form action={resolveWarningAction} className="shrink-0">
-                  <input type="hidden" name="warningId" value={warning.id} />
-                  <input type="hidden" name="slug" value={project.slug} />
-                  <button
-                    type="submit"
-                    className="rounded-control border border-hairline px-2.5 py-1 text-meta text-ink-2 transition-colors hover:border-muted hover:text-ink"
-                  >
-                    Resolve
-                  </button>
-                </form>
-              </li>
+        {shown.length === 0 ? (
+          <p className="text-body text-muted">Nothing is waiting on you. Agents are unblocked.</p>
+        ) : (
+          <ul className={listCls}>
+            {shown.map((item) => (
+              <InboxRow key={item.key} item={item} />
             ))}
           </ul>
-        </section>
-      )}
+        )}
+      </div>
     </div>
+  );
+}
+
+/** Destructive and irreversible, so it confirms before it clears every open warning at once. */
+function ResolveAllWarnings({ count }: { count: number }) {
+  if (count === 0) return null;
+  return (
+    <form action={resolveAllWarningsAction}>
+      <ConfirmSubmit message={`Resolve all ${count} open warning${count === 1 ? "" : "s"}?`} className={topBarGhostCls}>
+        Resolve all warnings
+      </ConfirmSubmit>
+    </form>
   );
 }
