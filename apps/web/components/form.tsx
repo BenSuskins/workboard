@@ -33,3 +33,13 @@ export function Field({
     </label>
   );
 }
+
+/**
+ * The page container every route outside a project draws itself in. It used to
+ * live on the root layout's <main>, but the project screens are a reading
+ * column beside a full-height rail and cannot sit inside a centred max-width
+ * box — so the container moved down one level to the pages that still want it.
+ * A page that reads narrower (a form, a report) sets its own max-width and
+ * carries `px-6 py-7` itself; the padding is the part that must not drift.
+ */
+export const pageContainerCls = "mx-auto w-full max-w-6xl px-6 py-7";

@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { listLabels, listProjects, listTasks, TASK_LANES, type TaskLane, type TaskPriority, type TaskRow } from "@workboard/core";
 import { FilterMemory } from "@/components/filter-memory";
+import { pageContainerCls } from "@/components/form";
 import { IssueFilterBar } from "@/components/issue-filter-bar";
 import { IssueRow } from "@/components/issue-row";
 import { TASK_LANE_LABEL, TASK_LANE_ORDER, TASK_LANE_TONE } from "@/components/labels";
@@ -59,7 +60,7 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
   );
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className={`${pageContainerCls} flex flex-col gap-5`}>
       <FilterMemory serialized={serializeIssueFilters(filters)} cookie={ISSUE_FILTERS_COOKIE} />
 
       <div className="flex flex-wrap items-center justify-between gap-3">

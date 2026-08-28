@@ -13,7 +13,6 @@ import { ActivityFeed } from "@/components/activity-feed";
 import { LinksPanel } from "@/components/links-panel";
 import { Markdown } from "@/components/markdown";
 import { Mermaid } from "@/components/mermaid";
-import { ProjectHeader } from "@/components/project-header";
 import { ProjectSettings, RecentlyDeleted } from "@/components/project-settings";
 import { SectionHeading } from "@/components/section";
 import { Sparkline } from "@/components/sparkline";
@@ -52,7 +51,6 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
   return (
     <div className="flex flex-col gap-6">
       <Mermaid />
-      <ProjectHeader project={project} active="" configured={anyConfigured} />
 
       <StatCells
         items={[

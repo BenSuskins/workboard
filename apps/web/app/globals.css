@@ -128,23 +128,36 @@
   /* Named type steps replace the scattered text-[11px] / text-[14.5px] one-offs.
      Every reading step sits one size above the old scale — the reference reads
      roomy, not dense. micro sits below that scale: it names the badge and
-     avatar-initial size rather than adding a step anything is read at. */
+     avatar-initial size rather than adding a step anything is read at.
+     The half-step gradation (caption 12.5, label 13, detail 13.5, prose 14.5)
+     is fine on purpose: it is what separates a card blurb from a list row from
+     a description without reaching for a second weight or colour. */
   --text-micro: 0.6875rem;
   --text-micro--line-height: 0.95rem;
   --text-meta: 0.75rem;
   --text-meta--line-height: 1.1rem;
+  --text-caption: 0.78125rem;
+  --text-caption--line-height: 1.175rem;
+  --text-label: 0.8125rem;
+  --text-label--line-height: 1.22rem;
+  --text-detail: 0.84375rem;
+  --text-detail--line-height: 1.31rem;
   --text-body: 0.875rem;
   --text-body--line-height: 1.4rem;
+  --text-prose: 0.90625rem;
+  --text-prose--line-height: 1.54rem;
   --text-title: 0.9375rem;
   --text-title--line-height: 1.4rem;
   --text-heading: 1.125rem;
   --text-heading--line-height: 1.6rem;
+  --text-page: 1.5rem;
+  --text-page--line-height: 1.95rem;
   --text-display: 1.75rem;
   --text-display--line-height: 2.15rem;
 
   --radius-chip: 6px;
-  --radius-control: 8px;
-  --radius-card: 14px;
+  --radius-control: 7px;
+  --radius-card: 11px;
   --radius-pill: 999px;
 
   /* Inter's variable axis reaches weights the static instances cannot. 510 and

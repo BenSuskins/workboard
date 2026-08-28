@@ -2,7 +2,6 @@ import { notFound } from "next/navigation";
 import { getActivityCounts, getProjectDetail, integrationStatus } from "@workboard/core";
 import { ActivityFeed, PostComposer } from "@/components/activity-feed";
 import { Mermaid } from "@/components/mermaid";
-import { ProjectHeader } from "@/components/project-header";
 import { SectionHeading } from "@/components/section";
 import { Sparkline } from "@/components/sparkline";
 import { db } from "@/lib/db";
@@ -23,7 +22,6 @@ export default async function ProjectActivityPage({ params }: { params: Promise<
   return (
     <div className="flex flex-col gap-6">
       <Mermaid />
-      <ProjectHeader project={project} active="/activity" configured={anyConfigured} />
 
       <section className="flex flex-col gap-2 rounded-card border border-hairline bg-surface p-5">
         <div className="flex items-baseline justify-between gap-3">

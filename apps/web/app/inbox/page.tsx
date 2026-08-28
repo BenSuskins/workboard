@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getProject, getProjectDetail, listOpenQuestions, listProjects, type ProjectDetail, type Warning } from "@workboard/core";
 import { Avatar } from "@/components/avatar";
+import { pageContainerCls } from "@/components/form";
 import { SectionHeading } from "@/components/section";
 import { TimeAgo } from "@/components/time-ago";
 import { resolveWarningAction } from "@/lib/actions";
@@ -33,7 +34,7 @@ export default async function InboxPage() {
   const total = questions.length + warnings.length;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className={`${pageContainerCls} flex flex-col gap-6`}>
       <div className="flex flex-col gap-1">
         <h1 className="text-heading font-semibold tracking-tight text-ink">Inbox</h1>
         <p className="text-meta text-muted">

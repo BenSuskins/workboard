@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPost, getProject, listComments } from "@workboard/core";
 import { ContextCard } from "@/components/context-card";
@@ -18,20 +17,8 @@ export default async function PostPage({ params }: { params: Promise<{ slug: str
   const comments = listComments(store, post.id);
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-5 px-10 py-7">
       <Mermaid />
-
-      <div className="flex items-center gap-2 text-meta text-muted">
-        <Link href="/" className="hover:text-ink">
-          Board
-        </Link>
-        <span>/</span>
-        <Link href={`/projects/${project.slug}`} className="hover:text-ink">
-          {project.name}
-        </Link>
-        <span>/</span>
-        <span className="text-ink-2">post #{post.id}</span>
-      </div>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
         <PostView post={post} project={project} comments={comments} />

@@ -1,8 +1,6 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getProject } from "@workboard/core";
 import { TaskComposer } from "@/components/task-list";
-import { TASK_LANE_LABEL } from "@/components/labels";
 import { db } from "@/lib/db";
 import { laneParam } from "@/lib/lanes";
 
@@ -21,19 +19,9 @@ export default async function NewTaskPage({
   const lane = laneParam((await searchParams).lane) ?? "backlog";
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-6">
-      <div className="flex items-center gap-2 text-meta text-muted">
-        <Link href={`/projects/${project.slug}`} className="hover:text-ink">
-          {project.name}
-        </Link>
-        <span>/</span>
-        <Link href={`/projects/${project.slug}/tasks`} className="hover:text-ink">
-          Tasks
-        </Link>
-        <span>/</span>
-        <span className="text-ink-2">New task in {TASK_LANE_LABEL[lane]}</span>
-      </div>
-
+    <div className="mx-auto flex w-full max-w-[680px] flex-col gap-6 px-10 py-7">
+      {/* The top bar already says which project and which view; the composer's
+          own Column select says which lane. */}
       <TaskComposer project={project} lane={lane} />
     </div>
   );

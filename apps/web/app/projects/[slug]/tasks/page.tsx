@@ -2,7 +2,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getProjectDetail, integrationStatus, taskIdentifier, taskLane, taskReplyCounts } from "@workboard/core";
 import { Mermaid } from "@/components/mermaid";
-import { ProjectHeader } from "@/components/project-header";
 import { TaskBoard, type BoardCard } from "@/components/task-board";
 import { primaryButtonCls } from "@/components/form";
 import { db } from "@/lib/db";
@@ -37,7 +36,6 @@ export default async function ProjectTasksPage({ params }: { params: Promise<{ s
   return (
     <div className="flex flex-col gap-6">
       <Mermaid />
-      <ProjectHeader project={project} active="/tasks" configured={anyConfigured} />
 
       <div className="flex justify-end">
         <Link href={`/projects/${project.slug}/tasks/new`} className={primaryButtonCls}>
