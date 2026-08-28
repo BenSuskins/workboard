@@ -69,10 +69,19 @@ export function TaskView({ task, project, comments }: { task: Task; project: Pro
 
 /**
  * The task's properties, each row a control rather than a readout. Setting one
- * is a single gesture: the select posts the moment it changes, through the same
+ * is a single gesture: choosing in the picker commits it, through the same
  * server actions the rest of the app writes with.
  */
-export function TaskRail({ task, project }: { task: Task; project: Project }) {
+export function TaskRail({
+  task,
+  project,
+  inPanel = false,
+}: {
+  task: Task;
+  project: Project;
+  /** The full page already is the full page; only the slide-over offers the way out. */
+  inPanel?: boolean;
+}) {
   const lane = taskLane(task);
   const hidden = (
     <>
@@ -154,12 +163,17 @@ export function TaskRail({ task, project }: { task: Task; project: Project }) {
       </div>
 
       <div className="mt-auto flex flex-col gap-1 border-t border-hairline pt-3">
-        <Link
-          href={`/projects/${project.slug}/tasks/${task.id}`}
-          className="rounded-control px-2 py-1.5 text-label text-muted transition-colors hover:bg-surface-2 hover:text-ink"
-        >
-          Open full page
-        </Link>
+        {/* A plain anchor, not <Link>: the panel is already mounted at this URL,
+            so a soft navigation re-enters the intercepting route and nothing
+            appears to happen. A document load is what leaves the panel. */}
+        {inPanel && (
+          <a
+            href={`/projects/${project.slug}/tasks/${task.id}`}
+            className="rounded-control px-2 py-1.5 text-label text-muted transition-colors hover:bg-surface-2 hover:text-ink"
+          >
+            Open full page
+          </a>
+        )}
         <form action={deleteTaskAction}>
           <input type="hidden" name="taskId" value={task.id} />
           <input type="hidden" name="slug" value={project.slug} />

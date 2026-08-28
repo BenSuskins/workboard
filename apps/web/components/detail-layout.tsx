@@ -5,6 +5,11 @@
  * The split is a container query, not a viewport one, because the same view
  * renders full-page and inside the 672px slide-over panel. At panel width the
  * rail stacks under the column instead of squeezing it to nothing.
+ *
+ * The container and the row are two elements on purpose. An element cannot
+ * query its own container — `@[948px]:` on the element carrying `@container`
+ * asks about the *enclosing* container and so never matches, which is what
+ * left the rail stacked under a full-width page and 288px wide.
  */
 export function DetailLayout({
   children,
@@ -18,15 +23,19 @@ export function DetailLayout({
 }) {
   if (!rail) return <div className="@container flex-1">{children}</div>;
   return (
-    <div className="@container flex flex-1 flex-col items-stretch @[948px]:flex-row">
-      <div className="min-w-0 flex-1">{children}</div>
-      <aside
-        className={`flex flex-none flex-col gap-[22px] border-t border-hairline bg-surface px-4 py-5 @[948px]:sticky @[948px]:top-12 @[948px]:h-[calc(100vh-3rem)] @[948px]:overflow-y-auto @[948px]:border-l @[948px]:border-t-0 ${
-          wide ? "@[948px]:w-72" : "@[948px]:w-[268px]"
-        }`}
-      >
-        {rail}
-      </aside>
+    <div className="@container flex flex-1 flex-col">
+      <div className="flex flex-1 flex-col items-stretch @[948px]:flex-row">
+        <div className="min-w-0 flex-1">{children}</div>
+        {/* Stacked, the rail is a footer to the column and takes the column's
+            measure. Beside it, it becomes the surface-backed sidebar. */}
+        <aside
+          className={`mx-auto flex w-full max-w-[680px] flex-none flex-col gap-[22px] border-t border-hairline px-4 pb-8 pt-5 @[948px]:sticky @[948px]:top-12 @[948px]:mx-0 @[948px]:h-[calc(100vh-3rem)] @[948px]:max-w-none @[948px]:overflow-y-auto @[948px]:border-l @[948px]:border-t-0 @[948px]:bg-surface @[948px]:py-5 ${
+            wide ? "@[948px]:w-72" : "@[948px]:w-[268px]"
+          }`}
+        >
+          {rail}
+        </aside>
+      </div>
     </div>
   );
 }
