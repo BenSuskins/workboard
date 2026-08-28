@@ -39,9 +39,12 @@ export interface BoardCard {
  *
  * Dragging is native HTML5 DnD rather than a library: the interaction is one
  * card into one of five drop zones with no reordering inside a column, which is
- * the case the browser already handles. Every drop goes through the same
- * `moveTaskAction` as the per-card lane select, so the pointer path and the
- * keyboard path cannot drift.
+ * the case the browser already handles.
+ *
+ * Moving a task here is drag-only, by design: the card carries no lane control.
+ * The keyboard route to the same `moveTaskAction` is the Status row in the task
+ * detail rail — open a card and set it there. Anything added to this card later
+ * must go through `move()` so the pointer and the keyboard cannot diverge.
  */
 export function TaskBoard({ cards, slug }: { cards: BoardCard[]; slug: string }) {
   const [, startTransition] = useTransition();
@@ -116,7 +119,6 @@ export function TaskBoard({ cards, slug }: { cards: BoardCard[]; slug: string })
                     dragging.current = null;
                     setOver(null);
                   }}
-                  onPick={(next) => move(card.id, next)}
                 />
               ))}
 
@@ -142,13 +144,11 @@ function Card({
   slug,
   onDragStart,
   onDragEnd,
-  onPick,
 }: {
   card: BoardCard;
   slug: string;
   onDragStart: (event: React.DragEvent) => void;
   onDragEnd: () => void;
-  onPick: (lane: TaskLane) => void;
 }) {
   const done = card.lane === "done";
   return (
@@ -156,7 +156,7 @@ function Card({
       draggable
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
-      className="group flex cursor-grab flex-col gap-2.5 rounded-card border border-hairline bg-surface px-4 pb-3.5 pt-[15px] transition-colors duration-[130ms] hover:border-grid hover:bg-surface-2 active:cursor-grabbing"
+      className="flex cursor-grab flex-col gap-2.5 rounded-card border border-hairline bg-surface px-4 pb-3.5 pt-[15px] transition-colors duration-[130ms] hover:border-grid hover:bg-surface-2 active:cursor-grabbing"
     >
       <div className="flex items-start gap-[9px]">
         <span className="mt-[3px]">
@@ -174,31 +174,6 @@ function Card({
         <span className="ml-auto mt-0.5 flex flex-none items-center gap-2">
           {card.claimedBy && <AgentMark />}
           <PriorityBars priority={card.priority} />
-          {/* The keyboard's way to do what the drag does — same action, same
-              rules. Out of sight until it is hovered or focused, so the card
-              stays a card, but never out of reach. */}
-          <label className="relative grid size-[18px] place-items-center rounded-chip text-muted opacity-0 transition-opacity duration-[120ms] hover:text-ink group-hover:opacity-100 focus-within:text-ink focus-within:opacity-100 focus-within:ring-2 focus-within:ring-accent/40">
-            <span className="sr-only">Move “{card.title}” to another column</span>
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
-              <circle cx="3.5" cy="8" r="1.1" />
-              <circle cx="8" cy="8" r="1.1" />
-              <circle cx="12.5" cy="8" r="1.1" />
-            </svg>
-            {/* The menu itself is invisible and covers the glyph, so the row
-                reads as one quiet control and still opens the native picker. */}
-            <select
-              value={card.lane}
-              onChange={(event) => onPick(event.target.value as TaskLane)}
-              title="Move to another column"
-              className="absolute inset-0 cursor-pointer opacity-0 outline-none"
-            >
-              {TASK_LANE_ORDER.map((lane) => (
-                <option key={lane} value={lane}>
-                  {TASK_LANE_LABEL[lane]}
-                </option>
-              ))}
-            </select>
-          </label>
         </span>
       </div>
 
