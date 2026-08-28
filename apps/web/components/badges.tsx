@@ -1,5 +1,5 @@
-import type { ProjectHealth, ProjectPriority, ProjectStatus, TaskPriority } from "@workboard/core";
-import { HEALTH_LABEL, STATUS_LABEL, STATUS_TONE } from "./labels";
+import type { ProjectStatus, TaskPriority } from "@workboard/core";
+import { STATUS_LABEL, STATUS_TONE } from "./labels";
 
 /** Dot-only status marker for dense contexts; label surfaces via tooltip. */
 export function StatusDot({ status }: { status: ProjectStatus }) {
@@ -35,34 +35,5 @@ export function TaskPriorityBadge({ priority }: { priority: TaskPriority | null 
       <span className={`size-1.5 rounded-full ${dot}`} aria-hidden />
       {priority} priority
     </span>
-  );
-}
-
-/** Plain-text "category · health · priority" meta line shared by the board card and project page. */
-export function ProjectMeta({
-  category,
-  health,
-  priority,
-  className = "",
-}: {
-  category: string;
-  health: ProjectHealth;
-  priority: ProjectPriority;
-  className?: string;
-}) {
-  return (
-    <div className={`flex flex-wrap items-center gap-x-1.5 text-meta text-muted ${className}`}>
-      <span className="capitalize">{category}</span>
-      <span>·</span>
-      <span>{HEALTH_LABEL[health]}</span>
-      {priority !== "medium" && (
-        <>
-          <span>·</span>
-          <span className={priority === "high" ? "font-semibold text-serious" : "text-muted"}>
-            {priority === "high" ? "High priority" : "Low priority"}
-          </span>
-        </>
-      )}
-    </div>
   );
 }

@@ -10,7 +10,6 @@ import {
   type TaskLane,
 } from "@workboard/core";
 import { ActivityFeed } from "@/components/activity-feed";
-import { ProjectMeta } from "@/components/badges";
 import { DetailLayout, MicroLabel, ReadingColumn } from "@/components/detail-layout";
 import { ACCENT_BG, ACCENT_TEXT, HEALTH_LABEL, STATUS_LABEL, STATUS_TONE, tileAccent, tileGlyph } from "@/components/labels";
 import { LinksPanel } from "@/components/links-panel";
@@ -154,19 +153,13 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
               >
                 {tileGlyph(project)}
               </span>
-              <h1 className="min-w-0 truncate text-page font-semibold tracking-[-0.02em] text-ink">{project.name}</h1>
+              <h1 className="min-w-0 truncate text-page-title font-semibold tracking-[-0.02em] text-ink">{project.name}</h1>
             </div>
             {project.description && (
               <div className="text-prose text-ink-2">
                 <Markdown>{project.description}</Markdown>
               </div>
             )}
-            <ProjectMeta
-              category={project.category}
-              health={project.health}
-              priority={project.priority}
-              className="text-meta text-muted"
-            />
           </div>
 
           <WarningsPanel warnings={openWarnings} slug={project.slug} />

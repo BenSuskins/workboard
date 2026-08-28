@@ -60,8 +60,13 @@ variable axis: `font-medium` is 510 and `font-semibold` is 590, retuned in
 | `text-prose` | 14.5px | Descriptions, summaries, activity titles |
 | `text-title` | 15px | Card titles |
 | `text-heading` | 18px | Reserved for the few places 15px is not enough |
-| `text-page` | 24px | Page and task titles |
+| `text-page-title` | 24px | Page and task titles |
 | `text-display` | 28px | The home board's one hero line |
+
+A size token must never share its name with a colour token. Tailwind resolves
+`text-*` against both `--color-*` and `--text-*`, and the colour wins: while the
+size step was called `page`, `text-page` painted every page title in the page
+background colour. This is why the 24px step is `text-page-title`, not `text-page`.
 
 The half-step gradation between 12.5 and 14.5 is deliberate. It is what
 separates a card blurb from a list row from a description without reaching for

@@ -44,7 +44,7 @@ export function EditableTitle({ task, slug }: { task: Task; slug: string }) {
           }
         }}
         aria-label="Task title"
-        className={`${BOX} w-full border-accent bg-surface text-page font-semibold tracking-[-0.018em] text-ink shadow-[0_0_0_3px_color-mix(in_srgb,var(--wb-accent)_18%,transparent)] outline-none`}
+        className={`${BOX} w-full border-accent bg-surface text-page-title font-semibold tracking-[-0.018em] text-ink shadow-[0_0_0_3px_color-mix(in_srgb,var(--wb-accent)_18%,transparent)] outline-none`}
       />
     );
   }
@@ -61,7 +61,7 @@ export function EditableTitle({ task, slug }: { task: Task; slug: string }) {
           setEditing(true);
         }
       }}
-      className={`${BOX} cursor-text text-pretty border-transparent text-page font-semibold tracking-[-0.018em] text-ink transition-colors duration-[130ms] hover:border-hairline hover:bg-surface-2`}
+      className={`${BOX} cursor-text text-pretty border-transparent text-page-title font-semibold tracking-[-0.018em] text-ink transition-colors duration-[130ms] hover:border-hairline hover:bg-surface-2`}
     >
       {draft}
     </h1>
