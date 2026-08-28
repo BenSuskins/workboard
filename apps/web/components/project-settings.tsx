@@ -1,9 +1,15 @@
-import { CATEGORY_PRESETS, PROJECT_ACCENTS, type Link as ProjectLink, type Project, type Task } from "@workboard/core";
-import { STATUS_LABEL } from "./labels";
+import { CATEGORY_PRESETS, type Link as ProjectLink, type Project, type Task } from "@workboard/core";
+import {
+  ACCENT_OPTIONS,
+  PROJECT_HEALTH_OPTIONS,
+  PROJECT_PRIORITY_OPTIONS,
+  PROJECT_STATUS_OPTIONS,
+} from "./labels";
+import { PickerField } from "./picker-field";
 import { TimeAgo } from "./time-ago";
 import { restoreLinkAction, restoreTaskAction, updateProjectAction } from "@/lib/actions";
 
-import { Field, fieldCls as inputCls, primaryButtonCls as btnCls, selectCls } from "./form";
+import { Field, fieldCls as inputCls, primaryButtonCls as btnCls } from "./form";
 
 export function ProjectSettings({ project }: { project: Project }) {
   return (
@@ -47,27 +53,18 @@ export function ProjectSettings({ project }: { project: Project }) {
 
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Status">
-            <select name="status" defaultValue={project.status} className={selectCls}>
-              {(["active", "blocked", "on_hold", "done", "archived"] as const).map((s) => (
-                <option key={s} value={s}>
-                  {STATUS_LABEL[s]}
-                </option>
-              ))}
-            </select>
+            <PickerField name="status" defaultValue={project.status} options={PROJECT_STATUS_OPTIONS} label="Status" />
           </Field>
           <Field label="Priority">
-            <select name="priority" defaultValue={project.priority} className={selectCls}>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
-            </select>
+            <PickerField
+              name="priority"
+              defaultValue={project.priority}
+              options={PROJECT_PRIORITY_OPTIONS}
+              label="Priority"
+            />
           </Field>
           <Field label="Health">
-            <select name="health" defaultValue={project.health} className={selectCls}>
-              <option value="green">On track</option>
-              <option value="amber">At risk</option>
-              <option value="red">Off track</option>
-            </select>
+            <PickerField name="health" defaultValue={project.health} options={PROJECT_HEALTH_OPTIONS} label="Health" />
           </Field>
         </div>
 
@@ -76,14 +73,12 @@ export function ProjectSettings({ project }: { project: Project }) {
             <input name="icon" defaultValue={project.icon ?? ""} maxLength={4} placeholder="🚀" className={`${inputCls} text-center`} />
           </Field>
           <Field label="Tile colour" hint="Leave it derived and the colour follows the name.">
-            <select name="accent" defaultValue={project.accent ?? ""} className={selectCls}>
-              <option value="">Derived from the name</option>
-              {PROJECT_ACCENTS.map((a) => (
-                <option key={a} value={a} className="capitalize">
-                  {a}
-                </option>
-              ))}
-            </select>
+            <PickerField
+              name="accent"
+              defaultValue={project.accent ?? ""}
+              options={ACCENT_OPTIONS}
+              label="Tile colour"
+            />
           </Field>
         </div>
 

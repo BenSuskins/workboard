@@ -1,26 +1,23 @@
 import Link from "next/link";
-import type { Comment, Project, Task, TaskPriority } from "@workboard/core";
+import type { Comment, Project, Task } from "@workboard/core";
 import { taskIdentifier, taskLane } from "@workboard/core";
-import { AutoSubmit } from "./auto-submit";
 import { Avatar } from "./avatar";
 import { MicroLabel } from "./detail-layout";
 import { Markdown } from "./markdown";
 import { railControlCls, RailRow, RailValue } from "./property-rail";
+import { DueDatePicker, LanePicker, PriorityPicker } from "./task-pickers";
 import { StatusRing } from "./state-glyphs";
 import { EditableDescription, EditableTitle } from "./task-editable";
 import { TimeAgo } from "./time-ago";
-import { TASK_LANE_LABEL, TASK_LANE_ORDER, TASK_LANE_TONE } from "./labels";
+import { TASK_LANE_LABEL } from "./labels";
 import { authorLabel, fullDate } from "@/lib/format";
 import {
   addTaskCommentAction,
   deleteTaskAction,
-  moveTaskAction,
   setTaskAssigneeAction,
   updateTaskDetailAction,
 } from "@/lib/actions";
 import { ME } from "@/lib/issue-filters";
-
-const PRIORITIES: TaskPriority[] = ["high", "medium", "low"];
 
 /**
  * A task's reading column: what it is, what it says, and the conversation about
@@ -102,36 +99,11 @@ export function TaskRail({ task, project }: { task: Task; project: Project }) {
         <MicroLabel className="px-2 pb-1.5">Properties</MicroLabel>
 
         <RailRow label="Status">
-          <span className={`size-[7px] flex-none rounded-pill ${TASK_LANE_TONE[lane].dot}`} aria-hidden />
-          <form action={moveTaskAction} className="min-w-0 flex-1">
-            {hidden}
-            <AutoSubmit>
-              <select name="lane" defaultValue={lane} aria-label="Status" className={railControlCls}>
-                {TASK_LANE_ORDER.map((option) => (
-                  <option key={option} value={option}>
-                    {TASK_LANE_LABEL[option]}
-                  </option>
-                ))}
-              </select>
-            </AutoSubmit>
-          </form>
+          <LanePicker taskId={task.id} slug={project.slug} lane={lane} />
         </RailRow>
 
         <RailRow label="Priority">
-          <form action={updateTaskDetailAction} className="min-w-0 flex-1">
-            {hidden}
-            {carry("priority")}
-            <AutoSubmit>
-              <select name="priority" defaultValue={task.priority ?? ""} aria-label="Priority" className={railControlCls}>
-                <option value="">No priority</option>
-                {PRIORITIES.map((option) => (
-                  <option key={option} value={option}>
-                    {option[0].toUpperCase() + option.slice(1)}
-                  </option>
-                ))}
-              </select>
-            </AutoSubmit>
-          </form>
+          <PriorityPicker task={task} slug={project.slug} />
         </RailRow>
 
         <RailRow label="Assignee">
@@ -171,19 +143,7 @@ export function TaskRail({ task, project }: { task: Task; project: Project }) {
         </RailRow>
 
         <RailRow label="Due date">
-          <form action={updateTaskDetailAction} className="min-w-0 flex-1">
-            {hidden}
-            {carry("dueDate")}
-            <AutoSubmit>
-              <input
-                type="date"
-                name="dueDate"
-                defaultValue={task.dueDate ?? ""}
-                aria-label="Due date"
-                className={`${railControlCls} ${task.dueDate ? "text-warning" : ""}`}
-              />
-            </AutoSubmit>
-          </form>
+          <DueDatePicker task={task} slug={project.slug} />
         </RailRow>
 
         <RailRow label="Project">

@@ -43,11 +43,10 @@ export function RailSection({ label, children }: { label: string; children: Reac
 }
 
 /**
- * Controls in the rail are native form controls with their chrome stripped, not
- * a custom popover. A `<select>` gets keyboard support, screen-reader support
- * and touch behaviour from the platform, and it posts from a server form with
- * no client component at all — see AutoSubmitSelect for the one line of JS
- * that makes choosing an option submit it.
+ * The one control style left that is a plain input: the labels field, which is
+ * free text and has nothing to pick from. Everything else in the rail opens a
+ * Picker — see `components/picker.tsx` for why the panel is drawn rather than
+ * delegated to the platform.
  */
 export const railControlCls =
   "w-full min-w-0 cursor-pointer appearance-none truncate rounded-chip border border-transparent bg-transparent px-1 py-0.5 text-label font-medium text-ink-2 outline-none transition-colors hover:border-hairline hover:bg-surface focus:border-accent focus:bg-surface";

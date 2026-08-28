@@ -3,29 +3,13 @@
 import { useState, useTransition } from "react";
 import type { Task } from "@workboard/core";
 import { updateTaskDetailAction } from "@/lib/actions";
+import { detailForm } from "@/lib/task-form";
 
 /**
  * Click-to-edit for a task's title and description. This is the only new client
  * state in the redesign: everything else on this page is still a server
  * component posting a form.
- *
- * `updateTaskDetailAction` reads every field at once and treats an absent one
- * as empty — an update carrying only a title would clear the labels and the due
- * date. So both editors send the whole task back, changing one field of it.
  */
-function detailForm(task: Task, changes: { title?: string; description?: string }, slug: string): FormData {
-  const form = new FormData();
-  form.set("taskId", String(task.id));
-  form.set("slug", slug);
-  form.set("title", changes.title ?? task.title);
-  form.set("description", changes.description ?? task.description);
-  form.set("priority", task.priority ?? "");
-  form.set("dueDate", task.dueDate ?? "");
-  form.set("labels", task.labels.join(","));
-  if (task.assignee) form.set("assignee", task.assignee);
-  return form;
-}
-
 /** Read mode and edit mode occupy the same box, so committing does not reflow. */
 const BOX = "rounded-control border px-2 py-1.5 -mx-[9px] -my-[7px]";
 

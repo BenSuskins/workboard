@@ -1,11 +1,12 @@
 import Link from "next/link";
 import type { Project, TaskLane, TaskRow } from "@workboard/core";
 import { IssueRow } from "./issue-row";
-import { TASK_LANE_LABEL, TASK_LANE_ORDER, TASK_LANE_TONE } from "./labels";
+import { LANE_OPTIONS, TASK_LANE_LABEL, TASK_LANE_ORDER, TASK_LANE_TONE, TASK_PRIORITY_OPTIONS } from "./labels";
+import { DateField, PickerField } from "./picker-field";
 import { addTaskAction } from "@/lib/actions";
 import { ME } from "@/lib/issue-filters";
 
-import { Field, fieldCls as inputCls, primaryButtonCls as btnCls, selectCls } from "./form";
+import { Field, fieldCls as inputCls, primaryButtonCls as btnCls } from "./form";
 
 /**
  * Writing a task is the main thing this form is for, so it keeps the shape of a
@@ -46,26 +47,21 @@ export function TaskComposer({ project, lane = "backlog" }: { project: Project; 
 
       <div className="grid gap-3 border-t border-hairline px-4 py-3 sm:grid-cols-3">
         <Field label="Column">
-          <select name="lane" defaultValue={lane} className={selectCls}>
-            {TASK_LANE_ORDER.map((option) => (
-              <option key={option} value={option}>
-                {TASK_LANE_LABEL[option]}
-              </option>
-            ))}
-          </select>
+          <PickerField name="lane" defaultValue={lane} options={LANE_OPTIONS} label="Column" />
         </Field>
 
         <Field label="Priority">
-          <select name="priority" defaultValue="" className={selectCls}>
-            <option value="">No priority</option>
-            <option value="high">High</option>
-            <option value="medium">Medium</option>
-            <option value="low">Low</option>
-          </select>
+          <PickerField
+            name="priority"
+            defaultValue=""
+            options={TASK_PRIORITY_OPTIONS}
+            label="Priority"
+            placeholder="No priority"
+          />
         </Field>
 
         <Field label="Due date">
-          <input type="date" name="dueDate" className={inputCls} />
+          <DateField name="dueDate" defaultValue="" label="Due date" placeholder="No due date" />
         </Field>
       </div>
 

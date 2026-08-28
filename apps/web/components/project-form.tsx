@@ -3,8 +3,9 @@
 import { useState } from "react";
 import type { ProjectAccent } from "@workboard/core";
 import { createProjectAction } from "@/lib/actions";
-import { Field, fieldCls, primaryButtonCls, selectCls } from "./form";
-import { ACCENT_BG, ACCENT_TEXT, ACCENTS, tileAccent, tileGlyph } from "./labels";
+import { Field, fieldCls, primaryButtonCls } from "./form";
+import { ACCENT_BG, ACCENT_TEXT, ACCENTS, PROJECT_PRIORITY_OPTIONS, tileAccent, tileGlyph } from "./labels";
+import { PickerField } from "./picker-field";
 
 /**
  * Creating a project. The title leads at full size with no box around it, the
@@ -59,11 +60,12 @@ export function ProjectForm({ categories }: { categories: string[] }) {
             </datalist>
           </Field>
           <Field label="Priority">
-            <select name="priority" defaultValue="medium" className={selectCls}>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
-            </select>
+            <PickerField
+              name="priority"
+              defaultValue="medium"
+              options={PROJECT_PRIORITY_OPTIONS}
+              label="Priority"
+            />
           </Field>
         </div>
 
