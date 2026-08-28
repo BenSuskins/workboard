@@ -1,11 +1,9 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getProjectDetail, integrationStatus, taskIdentifier, taskLane, taskReplyCounts } from "@workboard/core";
+import { getProjectDetail, taskIdentifier, taskLane, taskReplyCounts } from "@workboard/core";
 import { Mermaid } from "@/components/mermaid";
-import { ProjectHeader } from "@/components/project-header";
 import { TaskBoard, type BoardCard } from "@/components/task-board";
-import { primaryButtonCls } from "@/components/form";
 import { db } from "@/lib/db";
+import { toPlainText } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -15,8 +13,6 @@ export default async function ProjectTasksPage({ params }: { params: Promise<{ s
   const detail = getProjectDetail(database, slug, { postsLimit: 0 });
   if (!detail) notFound();
   const { project, tasks } = detail;
-  const integrations = integrationStatus();
-  const anyConfigured = integrations.github || integrations.jira || integrations.google;
 
   // The lane is decided here, by the same function the queue and the MCP tools
   // use, so the board's columns are a view of the domain rather than a guess.
@@ -25,6 +21,9 @@ export default async function ProjectTasksPage({ params }: { params: Promise<{ s
     id: task.id,
     identifier: taskIdentifier(project, task),
     title: task.title,
+    // Two lines of blurb is all the card shows, so the markdown is flattened
+    // here rather than shipped whole to a client that would only clamp it.
+    blurb: toPlainText(task.description).slice(0, 220),
     lane: taskLane(task),
     priority: task.priority,
     assignee: task.assignee,
@@ -35,17 +34,9 @@ export default async function ProjectTasksPage({ params }: { params: Promise<{ s
   }));
 
   return (
-    <div className="flex flex-col gap-6">
+    <>
       <Mermaid />
-      <ProjectHeader project={project} active="/tasks" configured={anyConfigured} />
-
-      <div className="flex justify-end">
-        <Link href={`/projects/${project.slug}/tasks/new`} className={primaryButtonCls}>
-          New task
-        </Link>
-      </div>
-
       <TaskBoard cards={cards} slug={project.slug} />
-    </div>
+    </>
   );
 }

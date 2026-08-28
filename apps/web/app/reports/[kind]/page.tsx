@@ -46,7 +46,7 @@ export default async function ReportsPage({ params }: { params: Promise<{ kind: 
   const reports = listReports(db(), kind);
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-6 py-7">
       <Mermaid />
 
       <div className="flex flex-col gap-1">

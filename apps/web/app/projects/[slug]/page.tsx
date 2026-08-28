@@ -3,22 +3,23 @@ import { notFound } from "next/navigation";
 import {
   getActivityCounts,
   getProjectDetail,
-  integrationStatus,
   listDeleted,
   listSummaryHistory,
   taskIdentifier,
   taskLane,
+  type TaskLane,
 } from "@workboard/core";
 import { ActivityFeed } from "@/components/activity-feed";
+import { ProjectMeta } from "@/components/badges";
+import { DetailLayout, MicroLabel, ReadingColumn } from "@/components/detail-layout";
+import { ACCENT_BG, ACCENT_TEXT, HEALTH_LABEL, STATUS_LABEL, STATUS_TONE, tileAccent, tileGlyph } from "@/components/labels";
 import { LinksPanel } from "@/components/links-panel";
 import { Markdown } from "@/components/markdown";
 import { Mermaid } from "@/components/mermaid";
-import { ProjectHeader } from "@/components/project-header";
-import { ProjectSettings, RecentlyDeleted } from "@/components/project-settings";
-import { SectionHeading } from "@/components/section";
+import { ProgressBlock } from "@/components/progress-block";
+import { RailRow, RailValue } from "@/components/property-rail";
 import { Sparkline } from "@/components/sparkline";
-import { StatCells } from "@/components/stat-strip";
-import { TaskList } from "@/components/task-list";
+import { OverviewTaskRows } from "@/components/task-list";
 import { TimeAgo } from "@/components/time-ago";
 import { WarningsPanel } from "@/components/warnings";
 import { db } from "@/lib/db";
@@ -26,19 +27,47 @@ import { authorLabel, fullDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
+/** A section in the reading column: a micro-label, optional meta, and a link out. */
+function Section({
+  label,
+  meta,
+  action,
+  children,
+}: {
+  label: string;
+  meta?: React.ReactNode;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="flex flex-col gap-2.5">
+      <div className="flex items-baseline gap-2">
+        <MicroLabel>{label}</MicroLabel>
+        {meta && <span className="text-meta text-muted">{meta}</span>}
+        {action && <span className="ml-auto text-meta">{action}</span>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/**
+ * Everything about a project, reorganised rather than trimmed. The reading
+ * column answers "what is this and how is it going"; the rail answers "what is
+ * it made of". Nothing was cut in the move — the five-cell stat strip became
+ * the rail's progress bar, which says the same thing in less furniture.
+ */
 export default async function ProjectPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const database = db();
   const detail = getProjectDetail(database, slug, { postsLimit: 6 });
   if (!detail) notFound();
   const { project, tasks, posts, comments, links, latestSummary, openWarnings } = detail;
-  const integrations = integrationStatus();
-  const anyConfigured = integrations.github || integrations.jira || integrations.google;
   const summaryHistory = listSummaryHistory(database, project.id, 11).slice(1);
   const deleted = listDeleted(database, project.id);
   const activity = getActivityCounts(database, project.id, 30);
+  const accent = tileAccent(project);
 
-  const upForGrabs = tasks.filter((t) => t.agentReady && t.status === "todo" && !t.claimedAt).length;
   // The row component wants an issue, not a task: its identifier and column come
   // from the same helpers the board and the MCP tools use.
   const taskRows = tasks.map((task) => ({
@@ -47,121 +76,171 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
     identifier: taskIdentifier(project, task),
     lane: taskLane(task),
   }));
-  const openQuestions = posts.filter((p) => p.type === "question" && !p.answeredAt).length;
+  const laneCounts = taskRows.reduce(
+    (counts, row) => ({ ...counts, [row.lane]: counts[row.lane] + 1 }),
+    { backlog: 0, queued: 0, moving: 0, blocked: 0, done: 0 } as Record<TaskLane, number>,
+  );
+  const open = tasks.filter((task) => task.status !== "done").length;
+  const deletedCount = deleted.tasks.length + deleted.links.length;
+
+  const rail = (
+    <>
+      <div className="flex flex-col gap-0.5">
+        <RailRow label="Status" wide>
+          <RailValue dot={STATUS_TONE[project.status].dot}>{STATUS_LABEL[project.status]}</RailValue>
+        </RailRow>
+        <RailRow label="Health" wide>
+          <RailValue>{HEALTH_LABEL[project.health]}</RailValue>
+        </RailRow>
+        <RailRow label="Priority" wide>
+          <RailValue>{project.priority}</RailValue>
+        </RailRow>
+        <RailRow label="Category" wide>
+          <RailValue>{project.category}</RailValue>
+        </RailRow>
+        <RailRow label="Issue key" wide>
+          <span className="truncate font-mono text-meta tabular-nums text-muted">{project.key}</span>
+        </RailRow>
+        <RailRow label="Last active" wide>
+          <span className="truncate" title={fullDate(project.lastActivityAt)}>
+            <TimeAgo at={project.lastActivityAt} />
+          </span>
+        </RailRow>
+      </div>
+
+      <ProgressBlock counts={laneCounts} />
+
+      <div className="flex flex-col gap-2">
+        <MicroLabel>Pulse · 30 days</MicroLabel>
+        <Sparkline counts={activity} width={256} height={40} fill className="w-full" />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <MicroLabel className="px-2">Linked · {links.length}</MicroLabel>
+        <LinksPanel links={links} project={project} />
+      </div>
+
+      <div className="mt-auto flex flex-col gap-0.5 border-t border-hairline pt-3">
+        <Link
+          href={`/projects/${project.slug}/settings`}
+          className="rounded-control px-2 py-1.5 text-label text-muted transition-colors hover:bg-surface-2 hover:text-ink"
+        >
+          Project settings
+        </Link>
+        {deletedCount > 0 && (
+          <Link
+            href={`/projects/${project.slug}/settings`}
+            className="rounded-control px-2 py-1.5 text-label text-muted transition-colors hover:bg-surface-2 hover:text-ink"
+          >
+            Recently deleted ({deletedCount})
+          </Link>
+        )}
+      </div>
+    </>
+  );
 
   return (
-    <div className="flex flex-col gap-6">
+    <DetailLayout rail={rail} wide>
       <Mermaid />
-      <ProjectHeader project={project} active="" configured={anyConfigured} />
-
-      <StatCells
-        items={[
-          { label: "Moving", value: tasks.filter((t) => t.status === "in_progress").length },
-          { label: "Up for grabs", value: upForGrabs },
-          { label: "Done", value: tasks.filter((t) => t.status === "done").length },
-          { label: "Questions", value: openQuestions, tone: openQuestions > 0 ? "text-serious" : undefined },
-          { label: "Links", value: links.length },
-        ]}
-      />
-
-      <WarningsPanel warnings={openWarnings} slug={project.slug} />
-
-      {project.description && (
-        <section className="rounded-card border border-hairline bg-surface p-5">
-          <Markdown>{project.description}</Markdown>
-        </section>
-      )}
-
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
-        <div className="flex flex-col gap-6">
-          <section className="flex flex-col gap-3">
-            <SectionHeading
-              title="AI summary"
-              action={
-                latestSummary && (
-                  <span className="text-meta text-muted">
-                    {authorLabel(latestSummary.generatedBy)} · <TimeAgo at={latestSummary.createdAt} />
-                  </span>
-                )
-              }
+      <ReadingColumn>
+        <div className="flex flex-col gap-7">
+          {/* The identity block the top bar no longer carries — read once, here,
+              rather than repeated above every view of this project. */}
+          <div className="flex flex-col gap-2.5">
+            <div className="flex items-center gap-3">
+              <span
+                className={`grid size-9 flex-none place-items-center rounded-[9px] text-heading font-semibold ${ACCENT_BG[accent]} ${ACCENT_TEXT[accent]}`}
+                aria-hidden
+              >
+                {tileGlyph(project)}
+              </span>
+              <h1 className="min-w-0 truncate text-page font-semibold tracking-[-0.02em] text-ink">{project.name}</h1>
+            </div>
+            {project.description && (
+              <div className="text-prose text-ink-2">
+                <Markdown>{project.description}</Markdown>
+              </div>
+            )}
+            <ProjectMeta
+              category={project.category}
+              health={project.health}
+              priority={project.priority}
+              className="text-meta text-muted"
             />
-            <div className="rounded-card border border-hairline bg-surface p-5">
+          </div>
+
+          <WarningsPanel warnings={openWarnings} slug={project.slug} />
+
+          <Section
+            label="Summary"
+            meta={
+              latestSummary && (
+                <>
+                  {authorLabel(latestSummary.generatedBy)} · <TimeAgo at={latestSummary.createdAt} />
+                </>
+              )
+            }
+            action={
+              summaryHistory.length > 0 && (
+                <details className="inline">
+                  <summary className="cursor-pointer select-none list-none text-accent hover:underline">history</summary>
+                </details>
+              )
+            }
+          >
+            <div className="rounded-card border border-hairline bg-surface p-[18px] shadow-[0_1px_2px_rgba(0,0,0,0.12)]">
               {latestSummary ? (
                 <Markdown>{latestSummary.body}</Markdown>
               ) : (
-                <p className="text-body text-muted">
-                  No summary yet. A coding agent connected to the Workboard MCP can write one with <code>upsert_summary</code>.
+                <p className="text-prose text-muted">
+                  No summary yet. A coding agent connected to the Workboard MCP can write one with{" "}
+                  <code>upsert_summary</code>.
                 </p>
               )}
-              {summaryHistory.length > 0 && (
-                <details className="mt-4 border-t border-hairline pt-3">
-                  <summary className="cursor-pointer select-none text-meta text-muted hover:text-ink">
-                    History ({summaryHistory.length} previous)
-                  </summary>
-                  <ol className="mt-2 flex flex-col gap-3">
-                    {summaryHistory.map((summary) => (
-                      <li key={summary.id} className="border-l border-grid pl-3">
-                        <div className="mb-1 text-meta text-muted">
-                          {authorLabel(summary.generatedBy)} · {fullDate(summary.createdAt)}
-                        </div>
-                        <Markdown>{summary.body}</Markdown>
-                      </li>
-                    ))}
-                  </ol>
-                </details>
-              )}
             </div>
-          </section>
+            {summaryHistory.length > 0 && (
+              <details>
+                <summary className="cursor-pointer select-none text-meta text-muted hover:text-ink">
+                  {summaryHistory.length} earlier summar{summaryHistory.length === 1 ? "y" : "ies"}
+                </summary>
+                <ol className="mt-2.5 flex flex-col gap-3">
+                  {summaryHistory.map((summary) => (
+                    <li key={summary.id} className="border-l border-grid pl-3">
+                      <div className="mb-1 text-meta text-muted">
+                        {authorLabel(summary.generatedBy)} · {fullDate(summary.createdAt)}
+                      </div>
+                      <Markdown>{summary.body}</Markdown>
+                    </li>
+                  ))}
+                </ol>
+              </details>
+            )}
+          </Section>
 
-          <section className="flex flex-col gap-3">
-            <SectionHeading
-              title="Recent activity"
-              action={
-                <Link href={`/projects/${project.slug}/activity`} className="text-meta text-accent hover:underline">
-                  all activity
-                </Link>
-              }
-            />
+          <Section
+            label="Tasks"
+            meta={`${open} open`}
+            action={
+              <Link href={`/projects/${project.slug}/tasks`} className="text-accent hover:underline">
+                board
+              </Link>
+            }
+          >
+            <OverviewTaskRows rows={taskRows.slice(0, 6)} />
+          </Section>
+
+          <Section
+            label="Activity"
+            action={
+              <Link href={`/projects/${project.slug}/activity`} className="text-accent hover:underline">
+                all activity
+              </Link>
+            }
+          >
             <ActivityFeed posts={posts} comments={comments} project={project} />
-          </section>
+          </Section>
         </div>
-
-        <div className="flex flex-col gap-6">
-          <section className="flex flex-col gap-3">
-            <SectionHeading title="Pulse" />
-            <div className="rounded-card border border-hairline bg-surface p-4">
-              <Sparkline counts={activity} width={280} height={44} fill />
-              <p className="mt-2 text-meta text-muted">posts · 30 days</p>
-            </div>
-          </section>
-
-          <section className="flex flex-col gap-3">
-            <SectionHeading
-              title="Tasks"
-              count={tasks.filter((t) => t.status !== "done").length}
-              action={
-                <Link href={`/projects/${project.slug}/tasks`} className="text-meta text-accent hover:underline">
-                  manage
-                </Link>
-              }
-            />
-            <TaskList rows={taskRows.slice(0, 6)} />
-          </section>
-
-          <section className="flex flex-col gap-3">
-            <SectionHeading title="Linked resources" count={links.length} />
-            <div className="rounded-card border border-hairline bg-surface p-4">
-              <LinksPanel links={links} project={project} />
-            </div>
-          </section>
-        </div>
-      </div>
-
-      {/* Full width: these forms need room, and a 300px rail clips every select. */}
-      <div className="flex flex-col gap-3">
-        <ProjectSettings project={project} />
-        <RecentlyDeleted project={project} tasks={deleted.tasks} links={deleted.links} />
-      </div>
-    </div>
+      </ReadingColumn>
+    </DetailLayout>
   );
 }

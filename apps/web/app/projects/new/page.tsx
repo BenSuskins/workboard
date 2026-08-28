@@ -11,7 +11,7 @@ export default function NewProjectPage() {
   const categories = [...new Set([...existing, ...CATEGORY_PRESETS])].sort();
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-6 py-7">
       <div className="flex items-center gap-2 text-meta text-muted">
         <Link href="/" className="hover:text-ink">
           Board

@@ -3,6 +3,7 @@ import { listShelvedProjects } from "@workboard/core";
 import { restoreProjectAction } from "@/lib/actions";
 import { db } from "@/lib/db";
 import { StatusBadge } from "@/components/badges";
+import { pageContainerCls } from "@/components/form";
 import { TimeAgo } from "@/components/time-ago";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +11,7 @@ export const dynamic = "force-dynamic";
 export default function Archive() {
   const shelved = listShelvedProjects(db());
   return (
-    <div className="flex flex-col gap-6">
+    <div className={`${pageContainerCls} flex flex-col gap-6`}>
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-heading font-semibold tracking-tight text-ink">Archive</h1>
         <Link href="/" className="text-meta text-muted transition-colors hover:text-accent">

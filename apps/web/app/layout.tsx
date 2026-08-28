@@ -68,7 +68,9 @@ export default async function RootLayout({ children, panel }: { children: React.
         <CommandPalette />
         {/* The rail is fixed, so the content pane owns the matching offset. */}
         <div className="wb-content min-h-screen">
-          <main className="mx-auto max-w-6xl px-6 py-7">{children}</main>
+          {/* Width is the page's call: project screens run full-bleed, the
+              rest draw themselves in pageContainerCls. */}
+          <main className="min-h-screen">{children}</main>
         </div>
         {panel}
       </body>

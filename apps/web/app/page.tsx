@@ -1,3 +1,4 @@
+import { pageContainerCls } from "@/components/form";
 import { TimeAgo } from "@/components/time-ago";
 import { cookies } from "next/headers";
 import Link from "next/link";
@@ -108,7 +109,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const lastSyncAt = getSyncHealth(database).lastSuccessAt;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className={`${pageContainerCls} flex flex-col gap-6`}>
       <FilterMemory serialized={serializeFilters(filters)} />
       <SyncBanner />
       <div className="flex items-center justify-between gap-3">

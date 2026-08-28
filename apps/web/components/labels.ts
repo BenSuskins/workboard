@@ -57,21 +57,17 @@ export const TASK_LANE_LABEL: Record<TaskLane, string> = {
   done: "Done",
 };
 
-/** What each column is for, shown under its heading — the same shape the PR pipeline uses. */
-export const TASK_LANE_BLURB: Record<TaskLane, string> = {
-  backlog: "filed, not queued",
-  queued: "waiting for an agent",
-  moving: "being worked on",
-  blocked: "picked up, stuck",
-  done: "finished",
-};
-
-export const TASK_LANE_TONE: Record<TaskLane, { text: string; dot: string }> = {
-  backlog: { text: "text-muted", dot: "bg-muted" },
-  queued: { text: "text-accent", dot: "bg-accent" },
-  moving: { text: "text-good", dot: "bg-good" },
-  blocked: { text: "text-critical", dot: "bg-critical" },
-  done: { text: "text-ink-2", dot: "bg-ink-2" },
+/**
+ * Tone classes travel with the lane so a column reads the same on the board, in
+ * the task rail, and in the overview list. `border` draws the status ring, whose
+ * hue must be the same one the dot uses — hence one record, not three.
+ */
+export const TASK_LANE_TONE: Record<TaskLane, { text: string; dot: string; border: string }> = {
+  backlog: { text: "text-muted", dot: "bg-muted", border: "border-muted" },
+  queued: { text: "text-accent", dot: "bg-accent", border: "border-accent" },
+  moving: { text: "text-good", dot: "bg-good", border: "border-good" },
+  blocked: { text: "text-critical", dot: "bg-critical", border: "border-critical" },
+  done: { text: "text-ink-2", dot: "bg-ink-2", border: "border-ink-2" },
 };
 
 /** Column order, taken from the map above so the two can never disagree. */
@@ -145,3 +141,41 @@ export function labelAccent(label: string): ProjectAccent {
 export function tileGlyph(project: Pick<Project, "name" | "icon">): string {
   return project.icon?.trim() || project.name.trim().charAt(0).toUpperCase() || "?";
 }
+
+/** Option lists for the pickers, built from the label maps so they cannot disagree. */
+export const LANE_OPTIONS = TASK_LANE_ORDER.map((lane) => ({
+  value: lane as string,
+  label: TASK_LANE_LABEL[lane],
+  dot: TASK_LANE_TONE[lane].dot,
+}));
+
+export const TASK_PRIORITY_OPTIONS = [
+  { value: "", label: "No priority" },
+  { value: "high", label: "High", dot: "bg-critical" },
+  { value: "medium", label: "Medium", dot: "bg-serious" },
+  { value: "low", label: "Low", dot: "bg-muted" },
+];
+
+/** The project form's priority is required, so it offers no empty entry. */
+export const PROJECT_PRIORITY_OPTIONS = TASK_PRIORITY_OPTIONS.slice(1);
+
+export const PROJECT_STATUS_OPTIONS = (Object.keys(STATUS_LABEL) as ProjectStatus[]).map((status) => ({
+  value: status as string,
+  label: STATUS_LABEL[status],
+  dot: STATUS_TONE[status].dot,
+}));
+
+export const PROJECT_HEALTH_OPTIONS = (Object.keys(HEALTH_LABEL) as ProjectHealth[]).map((health) => ({
+  value: health as string,
+  label: HEALTH_LABEL[health],
+  dot: health === "green" ? "bg-good" : health === "amber" ? "bg-warning" : "bg-critical",
+}));
+
+export const ACCENT_OPTIONS = [
+  { value: "", label: "Derived from the name" },
+  ...ACCENTS.map((accent) => ({
+    value: accent as string,
+    label: accent[0].toUpperCase() + accent.slice(1),
+    dot: ACCENT_DOT[accent],
+  })),
+];

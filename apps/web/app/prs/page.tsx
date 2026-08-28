@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getProjectDetail, listProjects, type ProjectDetail } from "@workboard/core";
 import { ciLabel, GitHubMark } from "@/components/chips";
+import { pageContainerCls } from "@/components/form";
 import { RefreshButton } from "@/components/refresh-button";
 import { SectionHeading } from "@/components/section";
 import { refreshMyPrsAction } from "@/lib/actions";
@@ -78,7 +79,7 @@ export default async function PullRequestsPage() {
         : `${rows.length} open across your projects`;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className={`${pageContainerCls} flex flex-col gap-6`}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex flex-col gap-1">
           <h1 className="text-heading font-semibold tracking-tight text-ink">Pull requests</h1>

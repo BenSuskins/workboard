@@ -22,7 +22,12 @@ function gradientFor(author: string): [string, string] {
   return GRADIENTS[hash % GRADIENTS.length] as [string, string];
 }
 
-const SIZES = { sm: "size-5 text-[9px]", md: "size-6 text-[10px]", lg: "size-7 text-micro" };
+const SIZES = {
+  xs: "size-[18px] text-[9px]",
+  sm: "size-5 text-[9px]",
+  md: "size-6 text-[10px]",
+  lg: "size-7 text-micro",
+};
 
 /** authorLabel prefixes agents with an emoji, which is no use as an initial. */
 function initialFor(author: string): string {
@@ -35,7 +40,7 @@ export function Avatar({ author, size = "md" }: { author: string; size?: keyof t
   const label = authorLabel(author);
   return (
     <span
-      className={`inline-flex shrink-0 items-center justify-center rounded-full font-semibold text-white/95 ring-2 ring-surface ${SIZES[size]}`}
+      className={`inline-flex shrink-0 items-center justify-center rounded-full font-semibold text-white/95 ${SIZES[size]}`}
       style={{ background: `linear-gradient(135deg, ${from}, ${to})` }}
       title={label}
       aria-label={label}
@@ -45,7 +50,11 @@ export function Avatar({ author, size = "md" }: { author: string; size?: keyof t
   );
 }
 
-/** Overlapping stack of everyone who has touched a project, most recent first. */
+/**
+ * Overlapping stack of everyone who has touched a project, most recent first.
+ * The ring lives here rather than on Avatar: it is what separates two avatars
+ * that overlap, and a single avatar on a card has nothing to be separated from.
+ */
 export function AvatarStack({ authors, max = 3 }: { authors: string[]; max?: number }) {
   const shown = authors.slice(0, max);
   const extra = authors.length - shown.length;
@@ -53,7 +62,7 @@ export function AvatarStack({ authors, max = 3 }: { authors: string[]; max?: num
   return (
     <div className="flex items-center">
       {shown.map((author, index) => (
-        <span key={author} className={index === 0 ? "" : "-ml-2"}>
+        <span key={author} className={`rounded-full ring-2 ring-surface ${index === 0 ? "" : "-ml-2"}`}>
           <Avatar author={author} />
         </span>
       ))}

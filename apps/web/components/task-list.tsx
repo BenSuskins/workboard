@@ -1,10 +1,12 @@
+import Link from "next/link";
 import type { Project, TaskLane, TaskRow } from "@workboard/core";
 import { IssueRow } from "./issue-row";
-import { TASK_LANE_LABEL, TASK_LANE_ORDER } from "./labels";
+import { LANE_OPTIONS, TASK_LANE_LABEL, TASK_LANE_ORDER, TASK_LANE_TONE, TASK_PRIORITY_OPTIONS } from "./labels";
+import { DateField, PickerField } from "./picker-field";
 import { addTaskAction } from "@/lib/actions";
 import { ME } from "@/lib/issue-filters";
 
-import { Field, fieldCls as inputCls, primaryButtonCls as btnCls, selectCls } from "./form";
+import { Field, fieldCls as inputCls, primaryButtonCls as btnCls } from "./form";
 
 /**
  * Writing a task is the main thing this form is for, so it keeps the shape of a
@@ -45,26 +47,21 @@ export function TaskComposer({ project, lane = "backlog" }: { project: Project; 
 
       <div className="grid gap-3 border-t border-hairline px-4 py-3 sm:grid-cols-3">
         <Field label="Column">
-          <select name="lane" defaultValue={lane} className={selectCls}>
-            {TASK_LANE_ORDER.map((option) => (
-              <option key={option} value={option}>
-                {TASK_LANE_LABEL[option]}
-              </option>
-            ))}
-          </select>
+          <PickerField name="lane" defaultValue={lane} options={LANE_OPTIONS} label="Column" />
         </Field>
 
         <Field label="Priority">
-          <select name="priority" defaultValue="" className={selectCls}>
-            <option value="">No priority</option>
-            <option value="high">High</option>
-            <option value="medium">Medium</option>
-            <option value="low">Low</option>
-          </select>
+          <PickerField
+            name="priority"
+            defaultValue=""
+            options={TASK_PRIORITY_OPTIONS}
+            label="Priority"
+            placeholder="No priority"
+          />
         </Field>
 
         <Field label="Due date">
-          <input type="date" name="dueDate" className={inputCls} />
+          <DateField name="dueDate" defaultValue="" label="Due date" placeholder="No due date" />
         </Field>
       </div>
 
@@ -109,6 +106,42 @@ export function TaskList({ rows }: { rows: TaskRow[] }) {
     <ul className="overflow-hidden rounded-card border border-hairline bg-surface">
       {rows.map((row) => (
         <IssueRow key={row.task.id} row={row} />
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * The project overview's task list. Deliberately smaller than IssueRow: this is
+ * a glance at what is open, and the board a click away is where you act on it.
+ */
+export function OverviewTaskRows({ rows }: { rows: TaskRow[] }) {
+  if (rows.length === 0) {
+    return (
+      <div className="rounded-card border border-dashed border-grid px-6 py-8 text-center text-caption text-muted">
+        No tasks yet.
+      </div>
+    );
+  }
+  return (
+    <ul className="overflow-hidden rounded-card border border-hairline bg-surface">
+      {rows.map(({ task, project, identifier, lane }) => (
+        <li
+          key={task.id}
+          className="flex items-center gap-2.5 border-b border-hairline px-3.5 py-2.5 transition-colors last:border-b-0 hover:bg-surface-2"
+        >
+          <span className={`size-[7px] flex-none rounded-pill ${TASK_LANE_TONE[lane].dot}`} aria-hidden />
+          <span className="flex-none font-mono text-[11.5px] tabular-nums text-muted">{identifier}</span>
+          <Link
+            href={`/projects/${project.slug}/tasks/${task.id}`}
+            className={`min-w-0 truncate text-detail transition-colors hover:text-ink ${
+              lane === "done" ? "text-muted line-through" : "text-ink-2"
+            }`}
+          >
+            {task.title}
+          </Link>
+          <span className="ml-auto flex-none text-micro text-muted">{TASK_LANE_LABEL[lane]}</span>
+        </li>
       ))}
     </ul>
   );

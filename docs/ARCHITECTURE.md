@@ -138,7 +138,8 @@ sequenceDiagram
   their foreground from `--wb-on-accent` (white in light, ink in dark) — white
   on the dark-mode accent is 2.82:1. `scripts/`-adjacent tooling is not needed
   to check this: walk the rendered DOM and compare each text node against its
-  composited background.
+  composited background. The tokens this policy governs, and the
+  patterns built on them, are catalogued in [DESIGN.md](DESIGN.md).
 
 - **Visible sync health** — every attempt is recorded per link in `sync_state`;
   a dashboard banner surfaces failing or stale syncs, and GitHub rate limits

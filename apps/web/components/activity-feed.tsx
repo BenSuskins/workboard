@@ -1,43 +1,46 @@
 import Link from "next/link";
 import type { Comment, Post, Project } from "@workboard/core";
 import { Avatar } from "./avatar";
+import { RuledLabel } from "./detail-layout";
 import { POST_TYPE_LABEL } from "./labels";
+import { TypeMark } from "./state-glyphs";
 import { TimeAgo } from "./time-ago";
 import { addPostAction } from "@/lib/actions";
+import { groupPostsByDay } from "@/lib/activity-groups";
 import { authorLabel, toPlainText } from "@/lib/format";
 
-const TYPE_TONE: Record<Post["type"], string> = {
-  question: "bg-serious/15 text-serious",
-  agent_update: "bg-accent/15 text-accent",
-  status_change: "bg-warning/15 text-warning",
-  note: "bg-surface-2 text-ink-2",
-};
-
+/**
+ * One line to start with, because most posts are one line. The body opens as
+ * soon as there is a title to hang it under, and the hint says what the box
+ * accepts without a toolbar of buttons that do it for you.
+ */
 export function PostComposer({ project }: { project: Project }) {
   return (
     <form
+      id="compose"
       action={addPostAction}
-      className="flex flex-col gap-2 rounded-card border border-hairline bg-surface p-3 focus-within:border-accent/40"
+      className="flex flex-col gap-2 rounded-card border border-hairline bg-surface px-3.5 py-3 transition-colors focus-within:border-accent"
     >
       <input type="hidden" name="projectId" value={project.id} />
       <input type="hidden" name="slug" value={project.slug} />
       <input
         name="title"
-        placeholder="Title (optional)"
+        placeholder="Write a post…"
         aria-label="Post title"
-        className="w-full bg-transparent px-1 text-title font-medium text-ink outline-none placeholder:font-normal placeholder:text-muted"
+        className="w-full bg-transparent text-title font-medium text-ink outline-none placeholder:font-normal placeholder:text-muted"
       />
       <textarea
         name="body"
         rows={2}
-        placeholder="Write a post — markdown and mermaid both render…"
+        placeholder="Detail, if it needs any."
         aria-label="Post body"
-        className="w-full resize-none bg-transparent px-1 text-body text-ink outline-none placeholder:text-muted"
+        className="w-full resize-none bg-transparent text-body text-ink outline-none placeholder:text-muted"
       />
-      <div className="flex justify-end">
+      <div className="flex items-center gap-2">
+        <span className="text-meta text-muted">Markdown and mermaid both render</span>
         <button
           type="submit"
-          className="rounded-control bg-accent px-4 py-1.5 text-meta font-medium text-on-accent transition-opacity hover:opacity-90"
+          className="ml-auto rounded-control bg-accent px-3 py-1.5 text-label font-medium text-on-accent transition-opacity hover:opacity-90"
         >
           Post
         </button>
@@ -47,49 +50,93 @@ export function PostComposer({ project }: { project: Project }) {
 }
 
 /**
- * The project timeline as cards rather than a bulleted list, so a post here
- * reads the same as it does in the slide-over that opens from it.
+ * The project timeline. Rows are borderless until you point at one — a feed of
+ * forty bordered cards is forty boxes competing with each other, and the thing
+ * being read is the text. Days are the only headings, because a timeline you
+ * scan is answering "when", and the row's own timestamp answers the rest.
+ *
+ * `grouped` is off on the overview, where the feed is a six-post excerpt and
+ * day headings would outnumber the posts under them.
  */
-export function ActivityFeed({ posts, comments, project }: { posts: Post[]; comments: Comment[]; project: Project }) {
+export function ActivityFeed({
+  posts,
+  comments,
+  project,
+  grouped = false,
+}: {
+  posts: Post[];
+  comments: Comment[];
+  project: Project;
+  grouped?: boolean;
+}) {
   if (posts.length === 0) {
     return (
-      <div className="rounded-card border border-dashed border-grid px-6 py-10 text-center text-body text-muted">
+      <div className="rounded-card border border-dashed border-grid px-6 py-10 text-center text-detail text-muted">
         No activity yet.
       </div>
     );
   }
-  return (
-    <ol className="flex flex-col gap-2">
-      {posts.map((post) => {
-        const replies = comments.filter((comment) => comment.postId === post.id).length;
-        const openQuestion = post.type === "question" && !post.answeredAt;
-        return (
+
+  if (!grouped) {
+    return (
+      <ol className="-mx-3 flex flex-col">
+        {posts.map((post) => (
           <li key={post.id}>
-            <Link
-              href={`/projects/${project.slug}/posts/${post.id}`}
-              className="flex flex-col gap-1.5 rounded-card border border-hairline bg-surface p-4 transition-colors hover:border-accent/40"
-            >
-              <div className="flex flex-wrap items-center gap-2 text-meta text-muted">
-                <Avatar author={post.author} size="sm" />
-                <span className="font-medium text-ink-2">{authorLabel(post.author)}</span>
-                <span className={`rounded-chip px-1.5 py-0.5 font-medium ${TYPE_TONE[post.type]}`}>
-                  {openQuestion ? "open question" : post.answeredAt ? "answered" : POST_TYPE_LABEL[post.type]}
-                </span>
-                {replies > 0 && (
-                  <span>
-                    {replies} repl{replies === 1 ? "y" : "ies"}
-                  </span>
-                )}
-                <span className="ml-auto">
-                  <TimeAgo at={post.createdAt} />
-                </span>
-              </div>
-              {post.title && <span className="text-title font-medium text-ink">{post.title}</span>}
-              {post.body && <p className="line-clamp-2 text-body text-ink-2">{toPlainText(post.body)}</p>}
-            </Link>
+            <PostRow post={post} comments={comments} project={project} />
           </li>
-        );
-      })}
-    </ol>
+        ))}
+      </ol>
+    );
+  }
+
+  return (
+    <div className="-mx-3 flex flex-col gap-4">
+      {groupPostsByDay(posts, Date.now()).map((group) => (
+        <section key={group.label} className="flex flex-col">
+          <RuledLabel>{group.label}</RuledLabel>
+          <ol className="flex flex-col">
+            {group.items.map((post) => (
+              <li key={post.id}>
+                <PostRow post={post} comments={comments} project={project} />
+              </li>
+            ))}
+          </ol>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function PostRow({ post, comments, project }: { post: Post; comments: Comment[]; project: Project }) {
+  const replies = comments.filter((comment) => comment.postId === post.id).length;
+  const openQuestion = post.type === "question" && !post.answeredAt;
+  return (
+    <Link
+      href={`/projects/${project.slug}/posts/${post.id}`}
+      className="flex gap-2.5 rounded-card border border-transparent px-3 py-2.5 transition-colors duration-[130ms] hover:border-hairline hover:bg-surface"
+    >
+      <Avatar author={post.author} size="md" />
+      <span className="flex min-w-0 flex-1 flex-col gap-[3px]">
+        <span className="flex flex-wrap items-center gap-2 text-meta">
+          <span className="font-medium text-ink">{authorLabel(post.author)}</span>
+          <span className="inline-flex items-center gap-1.5 text-muted">
+            <TypeMark type={post.type} />
+            {openQuestion ? "open question" : post.answeredAt ? "answered" : POST_TYPE_LABEL[post.type].toLowerCase()}
+          </span>
+          <span className="ml-auto text-muted">
+            <TimeAgo at={post.createdAt} />
+          </span>
+        </span>
+        {post.title && (
+          <span className="text-pretty text-prose font-medium tracking-[-0.005em] text-ink">{post.title}</span>
+        )}
+        {post.body && <span className="line-clamp-2 text-pretty text-detail text-muted">{toPlainText(post.body)}</span>}
+        {replies > 0 && (
+          <span className="pt-0.5 text-meta text-muted">
+            {replies} repl{replies === 1 ? "y" : "ies"}
+          </span>
+        )}
+      </span>
+    </Link>
   );
 }

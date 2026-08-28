@@ -1,197 +1,177 @@
+import Link from "next/link";
 import type { Comment, Project, Task } from "@workboard/core";
 import { taskIdentifier, taskLane } from "@workboard/core";
 import { Avatar } from "./avatar";
-import { TaskPriorityBadge } from "./badges";
-import { LabelChips } from "./issue-row";
+import { MicroLabel } from "./detail-layout";
 import { Markdown } from "./markdown";
+import { railControlCls, RailRow, RailValue } from "./property-rail";
+import { DueDatePicker, LanePicker, PriorityPicker } from "./task-pickers";
+import { StatusRing } from "./state-glyphs";
+import { EditableDescription, EditableTitle } from "./task-editable";
 import { TimeAgo } from "./time-ago";
-import { TASK_LANE_LABEL, TASK_LANE_ORDER, TASK_LANE_TONE } from "./labels";
+import { TASK_LANE_LABEL } from "./labels";
 import { authorLabel, fullDate } from "@/lib/format";
 import {
   addTaskCommentAction,
   deleteTaskAction,
-  moveTaskAction,
   setTaskAssigneeAction,
   updateTaskDetailAction,
 } from "@/lib/actions";
 import { ME } from "@/lib/issue-filters";
 
-import { fieldCls as inputCls, primaryButtonCls as btnCls, selectCls } from "./form";
-
 /**
- * A task, its spec, its thread, and the controls that act on it. The full route
- * and the slide-over both render this, so the two never drift apart.
+ * A task's reading column: what it is, what it says, and the conversation about
+ * it. What it *is* — status, priority, owner, dates — lives in the rail beside
+ * this, so the column stays prose. Both the full route and the slide-over
+ * render this pair, so the two never drift apart.
  */
 export function TaskView({ task, project, comments }: { task: Task; project: Project; comments: Comment[] }) {
   const lane = taskLane(task);
-  const tone = TASK_LANE_TONE[lane];
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-2 pl-[1.125rem] text-meta">
-          <span className="font-mono tabular-nums text-muted">{taskIdentifier(project, task)}</span>
-          <LabelChips labels={task.labels} max={6} />
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center gap-2.5">
+          <StatusRing lane={lane} />
+          <span className="font-mono text-meta tabular-nums text-muted">{taskIdentifier(project, task)}</span>
+          <span className="text-meta text-muted" aria-hidden>
+            ·
+          </span>
+          <span className="text-meta font-medium text-ink-2">{TASK_LANE_LABEL[lane]}</span>
         </div>
-        <div className="flex items-start gap-2.5">
-          <span className={`mt-2 size-2 shrink-0 rounded-full ${tone.dot}`} aria-hidden />
-          <h1
-            className={`text-heading font-semibold leading-snug tracking-tight ${
-              task.status === "done" ? "text-muted line-through" : "text-ink"
-            }`}
-          >
-            {task.title}
-          </h1>
-        </div>
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pl-[1.125rem] text-meta text-muted">
-          <span className={`font-medium ${tone.text}`}>{TASK_LANE_LABEL[lane]}</span>
-          <span>·</span>
-          <TaskPriorityBadge priority={task.priority} />
-          <span>·</span>
-          {task.assignee ? (
-            <span className="flex items-center gap-1.5">
-              <Avatar author={task.assignee} size="sm" />
-              {authorLabel(task.assignee)}
-            </span>
-          ) : (
-            <span>unassigned</span>
-          )}
-          <span>·</span>
-          <span>{authorLabel(task.author)} opened {<TimeAgo at={task.createdAt} />}</span>
-          <span>·</span>
-          <span>updated {<TimeAgo at={task.updatedAt} />}</span>
-          {task.dueDate && (
+        {/* Keyed on updatedAt so an edit made elsewhere — an agent writing
+            through the MCP tools — reseeds the draft instead of leaving a
+            stale one behind the next time the box is opened. */}
+        <EditableTitle key={task.updatedAt} task={task} slug={project.slug} />
+        <span className="text-meta text-muted">
+          {authorLabel(task.author)} opened <TimeAgo at={task.createdAt} />
+          {task.updatedAt !== task.createdAt && (
             <>
-              <span>·</span>
-              <span className="text-warning">due {task.dueDate}</span>
+              {" · updated "}
+              <TimeAgo at={task.updatedAt} />
             </>
           )}
-          {task.claimedBy && (
-            <>
-              <span>·</span>
-              <span className="rounded-chip bg-accent/15 px-1.5 py-0.5 text-accent" title="Claimed via the agent queue">
-                {task.claimedBy}
-              </span>
-            </>
-          )}
-        </div>
+        </span>
       </div>
 
-      <section className="rounded-card border border-hairline bg-surface p-5">
-        {task.description ? (
-          <Markdown>{task.description}</Markdown>
-        ) : (
-          <p className="text-body text-muted">
-            No description yet — the spec lives in the title alone. Add the problem, constraints, and acceptance criteria below.
-          </p>
-        )}
-        <details className="mt-4 border-t border-hairline pt-3">
-          <summary className="cursor-pointer select-none text-meta text-muted hover:text-ink">Edit task</summary>
-          <form action={updateTaskDetailAction} className="mt-3 flex flex-col gap-3">
-            <input type="hidden" name="taskId" value={task.id} />
-            <input type="hidden" name="slug" value={project.slug} />
-            <label className="flex flex-col gap-1 text-meta text-muted">
-              Title
-              <input name="title" defaultValue={task.title} className={inputCls} />
-            </label>
-            <label className="flex flex-col gap-1 text-meta text-muted">
-              Description (markdown)
-              <textarea
-                name="description"
-                defaultValue={task.description}
-                rows={8}
-                placeholder="Problem, constraints, acceptance criteria…"
-                className={`${inputCls} font-mono text-[0.8125rem]`}
-              />
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <label className="flex flex-col gap-1 text-meta text-muted">
-                Priority
-                <select name="priority" defaultValue={task.priority ?? ""} className={inputCls}>
-                  <option value="">no priority</option>
-                  {["high", "medium", "low"].map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex flex-col gap-1 text-meta text-muted">
-                Due date
-                <input name="dueDate" type="date" defaultValue={task.dueDate ?? ""} className={inputCls} />
-              </label>
-            </div>
-            <label className="flex flex-col gap-1 text-meta text-muted">
-              Labels
-              <input
-                name="labels"
-                defaultValue={task.labels.join(", ")}
-                placeholder="bug, infra"
-                className={inputCls}
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-meta text-muted">
-              Assignee
-              <input
-                name="assignee"
-                defaultValue={task.assignee ?? ""}
-                placeholder="user, or an agent name — empty for nobody"
-                className={inputCls}
-              />
-            </label>
-            <div>
-              <button type="submit" className={btnCls}>
-                Save
-              </button>
-            </div>
+      <EditableDescription
+        key={task.updatedAt}
+        task={task}
+        slug={project.slug}
+        rendered={<Markdown>{task.description}</Markdown>}
+      />
+
+      <div className="h-px bg-hairline" aria-hidden />
+
+      <TaskThread task={task} project={project} comments={comments} />
+    </div>
+  );
+}
+
+/**
+ * The task's properties, each row a control rather than a readout. Setting one
+ * is a single gesture: the select posts the moment it changes, through the same
+ * server actions the rest of the app writes with.
+ */
+export function TaskRail({ task, project }: { task: Task; project: Project }) {
+  const lane = taskLane(task);
+  const hidden = (
+    <>
+      <input type="hidden" name="taskId" value={task.id} />
+      <input type="hidden" name="slug" value={project.slug} />
+    </>
+  );
+  // updateTaskDetailAction reads the whole task at once, so a form that sets
+  // one field has to carry the others or it clears them.
+  const carry = (except: string) => (
+    <>
+      {except !== "title" && <input type="hidden" name="title" value={task.title} />}
+      {except !== "description" && <input type="hidden" name="description" value={task.description} />}
+      {except !== "priority" && <input type="hidden" name="priority" value={task.priority ?? ""} />}
+      {except !== "dueDate" && <input type="hidden" name="dueDate" value={task.dueDate ?? ""} />}
+      {except !== "labels" && <input type="hidden" name="labels" value={task.labels.join(",")} />}
+      {task.assignee && <input type="hidden" name="assignee" value={task.assignee} />}
+    </>
+  );
+
+  return (
+    <>
+      <div className="flex flex-col gap-0.5">
+        <MicroLabel className="px-2 pb-1.5">Properties</MicroLabel>
+
+        <RailRow label="Status">
+          <LanePicker taskId={task.id} slug={project.slug} lane={lane} />
+        </RailRow>
+
+        <RailRow label="Priority">
+          <PriorityPicker task={task} slug={project.slug} />
+        </RailRow>
+
+        <RailRow label="Assignee">
+          {task.assignee ? <Avatar author={task.assignee} size="xs" /> : null}
+          {/* One person and their agents, so ownership is a button, not a picker. */}
+          <form action={setTaskAssigneeAction} className="min-w-0 flex-1">
+            {hidden}
+            <input type="hidden" name="assignee" value={task.assignee === ME ? "" : ME} />
+            <button
+              type="submit"
+              className="w-full truncate rounded-chip border border-transparent px-1 py-0.5 text-left text-label font-medium text-ink-2 transition-colors hover:border-hairline hover:bg-surface hover:text-ink"
+            >
+              {task.assignee ? authorLabel(task.assignee) : "Unassigned"}
+            </button>
           </form>
-        </details>
-      </section>
+        </RailRow>
 
-      {/* The same move the board's drag makes, spelled out — this view has no columns to drop into. */}
-      <div className="flex flex-wrap items-center gap-3 pl-[1.125rem]">
-        <form action={moveTaskAction} className="flex items-center gap-2">
-          <input type="hidden" name="taskId" value={task.id} />
-          <input type="hidden" name="slug" value={project.slug} />
-          <label className="flex items-center gap-2 text-meta text-muted">
-            Column
-            <select name="lane" defaultValue={lane} className={`${selectCls} w-auto py-1.5 text-meta`}>
-              {TASK_LANE_ORDER.map((option) => (
-                <option key={option} value={option}>
-                  {TASK_LANE_LABEL[option]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button type="submit" className="rounded-control border border-hairline px-3 py-1.5 text-meta text-ink-2 transition-colors hover:border-accent/40 hover:text-accent">
-            Move
-          </button>
-        </form>
+        {task.claimedBy && (
+          <RailRow label="Claimed by">
+            <RailValue dot="bg-accent">{authorLabel(task.claimedBy)}</RailValue>
+          </RailRow>
+        )}
 
+        <RailRow label="Labels">
+          <form action={updateTaskDetailAction} className="min-w-0 flex-1">
+            {hidden}
+            {carry("labels")}
+            <input
+              name="labels"
+              defaultValue={task.labels.join(", ")}
+              placeholder="None"
+              title="Comma separated · Enter to save"
+              aria-label="Labels, comma separated"
+              className={`${railControlCls} cursor-text`}
+            />
+          </form>
+        </RailRow>
 
-        {/* One person and their agents, so ownership is a button rather than a picker. */}
-        <form action={setTaskAssigneeAction}>
-          <input type="hidden" name="taskId" value={task.id} />
-          <input type="hidden" name="slug" value={project.slug} />
-          <input type="hidden" name="assignee" value={task.assignee === ME ? "" : ME} />
-          <button
-            type="submit"
-            className="rounded-control border border-hairline px-3 py-1.5 text-meta text-ink-2 transition-colors hover:border-accent/40 hover:text-accent"
-          >
-            {task.assignee === ME ? "Unassign" : "Assign to me"}
-          </button>
-        </form>
+        <RailRow label="Due date">
+          <DueDatePicker task={task} slug={project.slug} />
+        </RailRow>
 
+        <RailRow label="Project">
+          <Link href={`/projects/${project.slug}`} className="truncate hover:text-ink">
+            {project.name}
+          </Link>
+        </RailRow>
+      </div>
+
+      <div className="mt-auto flex flex-col gap-1 border-t border-hairline pt-3">
+        <Link
+          href={`/projects/${project.slug}/tasks/${task.id}`}
+          className="rounded-control px-2 py-1.5 text-label text-muted transition-colors hover:bg-surface-2 hover:text-ink"
+        >
+          Open full page
+        </Link>
         <form action={deleteTaskAction}>
           <input type="hidden" name="taskId" value={task.id} />
           <input type="hidden" name="slug" value={project.slug} />
-          <button type="submit" className="text-meta text-muted hover:text-critical">
+          <button
+            type="submit"
+            className="w-full rounded-control px-2 py-1.5 text-left text-label text-muted transition-colors hover:text-critical"
+          >
             Delete task
           </button>
         </form>
       </div>
-
-      <TaskThread task={task} project={project} comments={comments} />
-    </div>
+    </>
   );
 }
 
@@ -202,27 +182,29 @@ export function TaskView({ task, project, comments }: { task: Task; project: Pro
  */
 function TaskThread({ task, project, comments }: { task: Task; project: Project; comments: Comment[] }) {
   return (
-    <section className="flex flex-col gap-3">
-      <h2 className="text-title font-semibold text-ink">
-        {comments.length === 0 ? "No replies yet" : `${comments.length} repl${comments.length === 1 ? "y" : "ies"}`}
-      </h2>
+    <section className="flex flex-col gap-4">
+      <MicroLabel>Activity</MicroLabel>
 
       {comments.map((comment) => (
-        <div key={comment.id} className="rounded-card border border-hairline bg-surface p-4">
-          <div className="mb-1.5 flex items-center gap-2 text-meta text-muted">
-            <Avatar author={comment.author} size="sm" />
-            <span className="font-medium text-ink-2">{authorLabel(comment.author)}</span>
-            <span className="ml-auto" title={fullDate(comment.createdAt)}>
-              <TimeAgo at={comment.createdAt} />
-            </span>
+        <div key={comment.id} className="flex gap-2.5">
+          <Avatar author={comment.author} size="md" />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline gap-2 text-meta">
+              <span className="font-medium text-ink">{authorLabel(comment.author)}</span>
+              <span className="text-muted" title={fullDate(comment.createdAt)}>
+                <TimeAgo at={comment.createdAt} />
+              </span>
+            </div>
+            <div className="mt-0.5">
+              <Markdown>{comment.body}</Markdown>
+            </div>
           </div>
-          <Markdown>{comment.body}</Markdown>
         </div>
       ))}
 
       <form
         action={addTaskCommentAction}
-        className="flex items-end gap-2 rounded-card border border-hairline bg-surface p-2 focus-within:border-accent/40"
+        className="flex items-end gap-2 rounded-card border border-hairline bg-surface p-2 transition-colors focus-within:border-accent"
       >
         <input type="hidden" name="taskId" value={task.id} />
         <input type="hidden" name="slug" value={project.slug} />
@@ -232,15 +214,13 @@ function TaskThread({ task, project, comments }: { task: Task; project: Project;
           required
           aria-label="Reply"
           placeholder={task.claimedBy ? `Reply to ${authorLabel(task.claimedBy)}…` : "Add a note for whoever picks this up…"}
-          className="min-h-9 flex-1 resize-none bg-transparent px-2 py-2 text-body text-ink outline-none placeholder:text-muted"
+          className="min-h-8 flex-1 resize-none bg-transparent px-2 py-1.5 text-body text-ink outline-none placeholder:text-muted"
         />
         <button
           type="submit"
-          title="Reply"
-          className="grid size-9 shrink-0 place-items-center rounded-control bg-accent text-on-accent transition-opacity hover:opacity-90"
+          className="rounded-control bg-accent px-3 py-1.5 text-label font-medium text-on-accent transition-opacity hover:opacity-90"
         >
-          <span aria-hidden>➤</span>
-          <span className="sr-only">Reply</span>
+          Reply
         </button>
       </form>
       {task.claimedBy && <p className="text-meta text-muted">Your reply reaches the agent through list_answers.</p>}
