@@ -31,9 +31,14 @@ export function DetailLayout({
   );
 }
 
-/** The reading measure. 680px is where a 14.5px line lands near 75 characters. */
-export function ReadingColumn({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <div className={`mx-auto flex w-full max-w-[680px] flex-col px-10 py-7 ${className}`}>{children}</div>;
+/**
+ * The reading measure. 680px is where a 14.5px line lands near 75 characters.
+ * The padding is a prop rather than a class to override, because two padding
+ * utilities on one element resolve by stylesheet order, not by which was
+ * written last — the panel supplies its own and would otherwise lose the race.
+ */
+export function ReadingColumn({ children, padding = "px-10 py-7" }: { children: React.ReactNode; padding?: string }) {
+  return <div className={`mx-auto flex w-full max-w-[680px] flex-col ${padding}`}>{children}</div>;
 }
 
 /**
