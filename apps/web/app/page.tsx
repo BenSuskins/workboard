@@ -1,11 +1,8 @@
-import { pageContainerCls } from "@/components/form";
-import { TimeAgo } from "@/components/time-ago";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import {
   getActivityCounts,
   getProjectDetail,
-  getSyncHealth,
   getWorkspaceActivityCounts,
   integrationStatus,
   listOpenQuestions,
@@ -14,33 +11,25 @@ import {
   type ProjectHealth,
   type ProjectStatus,
 } from "@workboard/core";
-import { AlertRow } from "@/components/alert-row";
+import { BoardTopBar } from "@/components/board-top-bar";
+import { Digest } from "@/components/digest";
 import { RefreshButton } from "@/components/refresh-button";
 import { refreshAllAction } from "@/lib/actions";
 import { FilterBar } from "@/components/filter-bar";
 import { FilterMemory } from "@/components/filter-memory";
-import { Mermaid } from "@/components/mermaid";
 import { ProjectCard } from "@/components/project-card";
-import { ProjectRow } from "@/components/project-row";
-import { PulseCard } from "@/components/pulse-card";
 import { StatStrip } from "@/components/stat-strip";
 import { SyncBanner } from "@/components/sync-banner";
-import { ViewToggle } from "@/components/view-toggle";
+import { projectWantingAttention } from "@/lib/digest";
 import {
   FILTERS_COOKIE,
   resolveFilters,
   serializeFilters,
   type BoardParams,
-  type Filters,
 } from "@/lib/board-filters";
 import { db } from "@/lib/db";
-import { prPipeline } from "@/lib/pipeline";
 
 export const dynamic = "force-dynamic";
-
-type BoardCookies = Awaited<ReturnType<typeof cookies>>;
-
-const STALE_MS = 7 * 24 * 60 * 60 * 1000;
 
 const PRIORITY_RANK = { high: 0, medium: 1, low: 2 } as const;
 const HEALTH_RANK = { red: 0, amber: 1, green: 2 } as const;
@@ -61,17 +50,10 @@ const SORTERS: Record<string, (a: ProjectDetail, b: ProjectDetail) => number> = 
   name: (a, b) => a.project.name.localeCompare(b.project.name),
 };
 
-/** Explicit ?view= wins; otherwise the wb-board-view cookie; otherwise cards. */
-function resolveView(filters: Filters, cookieStore: BoardCookies): "cards" | "list" {
-  if (filters.view === "list" || filters.view === "cards") return filters.view;
-  return cookieStore.get("wb-board-view")?.value === "list" ? "list" : "cards";
-}
-
 export default async function Dashboard({ searchParams }: { searchParams: Promise<BoardParams> }) {
   const cookieStore = await cookies();
   // The URL describes the filters whenever it mentions any; otherwise the last set is restored.
   const filters = resolveFilters(await searchParams, cookieStore.get(FILTERS_COOKIE)?.value);
-  const view = resolveView(filters, cookieStore);
   const database = db();
 
   const all = listProjects(database, {});
@@ -85,89 +67,83 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     .filter(({ project }) => {
       if (filters.category && project.category !== filters.category) return false;
       if (filters.status && project.status !== (filters.status as ProjectStatus)) return false;
-      if (filters.health && project.health !== (filters.health as ProjectHealth)) return false;
       return true;
     })
     .sort(pinnedFirst(sorter));
 
   const categories = [...new Set(all.map((p) => p.category))].sort();
-  const active = all.filter((p) => p.status === "active").length;
-  const blocked = all.filter((p) => p.status === "blocked").length;
-  const stale = all.filter((p) => p.status === "active" && Date.now() - p.lastActivityAt > STALE_MS).length;
-  let ciFailing = 0;
-  for (const d of details) ciFailing += prPipeline(d.links).ciFailing;
-  const openWarnings = details.reduce((n, d) => n + d.openWarnings.length, 0);
-  const openQuestions = listOpenQuestions(database).length;
   const allTasks = details.flatMap((d) => d.tasks);
   const movingTasks = allTasks.filter((t) => t.status === "in_progress").length;
+  const blockedTasks = allTasks.filter((t) => t.status === "blocked").length;
   const upForGrabs = allTasks.filter((t) => t.agentReady && t.status === "todo" && !t.claimedAt).length;
   const doneTasks = allTasks.filter((t) => t.status === "done").length;
-  const pulseCounts = getWorkspaceActivityCounts(database, 30);
+  const questions = listOpenQuestions(database).length;
+  const stats = {
+    projects: all.length,
+    moving: movingTasks,
+    upForGrabs,
+    blocked: blockedTasks,
+    questions,
+    done: doneTasks,
+  };
+
+  // The digest names its own unit, so it needs one number the strip does not:
+  // how many projects those moving tasks are spread across.
+  const movingProjects = details.filter((d) => d.tasks.some((t) => t.status === "in_progress")).length;
+  const attention = projectWantingAttention(
+    details.map(({ project, openWarnings }) => ({
+      name: project.name,
+      status: project.status,
+      warnings: openWarnings.length,
+      lastActivityAt: project.lastActivityAt,
+    })),
+  );
+  // The chart is gone, but the state word still has to know whether the week was quiet.
+  const week = getWorkspaceActivityCounts(database, 7).reduce((total, day) => total + day, 0);
 
   const integrations = integrationStatus();
   const anyConfigured = integrations.github || integrations.jira || integrations.google;
-  const lastSyncAt = getSyncHealth(database).lastSuccessAt;
 
   return (
-    <div className={`${pageContainerCls} flex flex-col gap-6`}>
+    <div className="flex min-h-screen flex-col">
       <FilterMemory serialized={serializeFilters(filters)} />
-      <SyncBanner />
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-heading font-semibold tracking-tight text-ink">Board</h1>
-        <div className="flex items-center gap-2.5">
-          {lastSyncAt && <span className="text-meta text-muted">data synced {<TimeAgo at={lastSyncAt} />}</span>}
-          {anyConfigured ? (
-            <RefreshButton action={refreshAllAction} label="Refresh data" />
-          ) : (
-            <span className="text-meta text-muted" title="Set GITHUB_TOKEN / JIRA_* / GOOGLE_* in .env to enable live data">
-              no integrations configured
-            </span>
-          )}
-          <ViewToggle filters={filters} view={view} />
-        </div>
-      </div>
-
-      <StatStrip
-        filters={filters}
-        stats={{ projects: all.length, moving: movingTasks, upForGrabs, questions: openQuestions, done: doneTasks }}
+      <BoardTopBar
+        shown={filtered.length}
+        total={all.length}
+        refresh={anyConfigured ? <RefreshButton action={refreshAllAction} label="Refresh" /> : null}
       />
+      <div className="px-8 pb-10 pt-7">
+        <SyncBanner />
+        <div className="flex flex-col gap-[26px]">
+          <Digest counts={{ ...stats, movingProjects, attention }} week={week} />
 
-      <AlertRow filters={filters} alerts={{ blocked, warnings: openWarnings, stale, ciFailing }} />
+          <StatStrip filters={filters} stats={stats} />
 
-      <PulseCard pulse={{ counts: pulseCounts, blocked, moving: active }} />
+          <div className="flex flex-col gap-3">
+            <FilterBar filters={filters} categories={categories} />
 
-      <FilterBar filters={filters} categories={categories} />
-
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-title font-semibold text-ink">Projects</h2>
-        <span className="text-meta tabular-nums text-muted">{filtered.length}</span>
+            {filtered.length === 0 ? (
+              <div className="rounded-card border border-dashed border-grid px-6 py-16 text-center text-body text-muted">
+                No projects match.{" "}
+                <Link href="/projects/new" className="text-accent hover:underline">
+                  Create one
+                </Link>{" "}
+                or connect a coding agent to the MCP server.
+              </div>
+            ) : (
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(296px,1fr))] items-start gap-4">
+                {filtered.map((d) => (
+                  <ProjectCard
+                    key={d.project.id}
+                    detail={d}
+                    activityCounts={getActivityCounts(database, d.project.id, 30)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
-
-      {filtered.length === 0 ? (
-        <div className="rounded-card border border-dashed border-grid px-6 py-16 text-center text-body text-muted">
-          No projects match.{" "}
-          <Link href="/projects/new" className="text-accent hover:underline">
-            Create one
-          </Link>{" "}
-          or connect a coding agent to the MCP server.
-        </div>
-      ) : view === "list" ? (
-        <div className="divide-y divide-hairline overflow-hidden rounded-card border border-hairline bg-surface">
-          {filtered.map((d) => (
-            <ProjectRow key={d.project.id} detail={d} />
-          ))}
-        </div>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((d) => (
-            <ProjectCard
-              key={d.project.id}
-              detail={d}
-              activityCounts={getActivityCounts(database, d.project.id)}
-            />
-          ))}
-        </div>
-      )}
     </div>
   );
 }

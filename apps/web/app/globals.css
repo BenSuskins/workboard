@@ -150,6 +150,10 @@
   --text-title--line-height: 1.4rem;
   --text-heading: 1.125rem;
   --text-heading--line-height: 1.6rem;
+  /* The stat strip's values. It sits under the 24px digest headline and has to
+     read as the smaller of the two, so it cannot borrow text-page-title. */
+  --text-stat: 1.375rem;
+  --text-stat--line-height: 1.5125rem;
   --text-page-title: 1.5rem;
   --text-page-title--line-height: 1.95rem;
   --text-display: 1.75rem;

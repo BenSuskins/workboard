@@ -8,16 +8,20 @@ export function Sparkline({
   width = 96,
   height = 22,
   fill = false,
+  hideWhenFlat = false,
   className = "",
 }: {
   counts: number[];
   width?: number;
   height?: number;
   fill?: boolean;
+  /** Draw nothing at all for a dormant project: a flat line reads as data when it is really absence. */
+  hideWhenFlat?: boolean;
   className?: string;
 }) {
   if (counts.length < 2) return null;
   const total = counts.reduce((a, b) => a + b, 0);
+  if (hideWhenFlat && total === 0) return null;
   const max = Math.max(...counts, 1);
   const pad = 2;
   const innerW = width - pad * 2;

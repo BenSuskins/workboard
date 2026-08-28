@@ -11,13 +11,11 @@
 export interface Filters {
   category?: string;
   status?: string;
-  health?: string;
   sort?: string;
-  view?: string;
 }
 
-/** What the board filters by. `view` is layout, not a filter, and persists on its own cookie. */
-export const FILTER_KEYS = ["category", "status", "health", "sort"] as const;
+/** What the board filters by — the whole set, since the grid is the board's only view. */
+export const FILTER_KEYS = ["category", "status", "sort"] as const;
 
 export const FILTERS_COOKIE = "wb-board-filters";
 
@@ -42,7 +40,6 @@ function params(filters: Filters): URLSearchParams {
 export function boardHref(filters: Filters): string {
   const search = params(filters);
   if ([...search.keys()].length === 0) search.set("filters", NO_FILTERS);
-  if (filters.view) search.set("view", filters.view);
   return `/?${search}`;
 }
 
@@ -76,5 +73,5 @@ export function resolveFilters(search: BoardParams, remembered: string | undefin
     if (value) fromUrl[key] = value;
   }
   const explicit = search.filters === NO_FILTERS || Object.keys(fromUrl).length > 0;
-  return { ...(explicit ? fromUrl : parseFilters(remembered)), view: search.view };
+  return explicit ? fromUrl : parseFilters(remembered);
 }

@@ -55,19 +55,31 @@ export function Avatar({ author, size = "md" }: { author: string; size?: keyof t
  * The ring lives here rather than on Avatar: it is what separates two avatars
  * that overlap, and a single avatar on a card has nothing to be separated from.
  */
-export function AvatarStack({ authors, max = 3 }: { authors: string[]; max?: number }) {
+export function AvatarStack({
+  authors,
+  max = 3,
+  size = "md",
+}: {
+  authors: string[];
+  max?: number;
+  size?: keyof typeof SIZES;
+}) {
   const shown = authors.slice(0, max);
   const extra = authors.length - shown.length;
   if (shown.length === 0) return null;
+  // A smaller avatar needs a smaller bite taken out of it, or the stack closes up.
+  const overlap = size === "xs" || size === "sm" ? "-ml-1" : "-ml-2";
   return (
     <div className="flex items-center">
       {shown.map((author, index) => (
-        <span key={author} className={`rounded-full ring-2 ring-surface ${index === 0 ? "" : "-ml-2"}`}>
-          <Avatar author={author} />
+        <span key={author} className={`rounded-full ring-2 ring-surface ${index === 0 ? "" : overlap}`}>
+          <Avatar author={author} size={size} />
         </span>
       ))}
       {extra > 0 && (
-        <span className="-ml-2 inline-flex size-6 items-center justify-center rounded-full bg-surface-2 text-[10px] font-medium text-ink-2 ring-2 ring-surface">
+        <span
+          className={`inline-flex items-center justify-center rounded-full bg-surface-2 font-medium text-ink-2 ring-2 ring-surface ${overlap} ${SIZES[size]}`}
+        >
           +{extra}
         </span>
       )}

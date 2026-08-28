@@ -25,21 +25,22 @@ const SEVERITY: Record<WarningSeverity, { label: string; dot: string; text: stri
 };
 
 /**
- * One line for a board card: a coloured dot, the severity, and the message
- * truncated. A boxed panel here competed with the card's own border and made
- * every warned project shout; the dot carries the same signal in a third of
- * the height.
+ * One warning on a board card, as a callout at card scale: the same 8% tint and
+ * 35% border every semantic callout in the app wears, holding a dot, the
+ * severity word, and the message. The card is the only place a workspace
+ * warning surfaces now — the board's red strip above the grid made every warned
+ * project shout at the whole page rather than at its own card.
  */
-export function WarningStrip({ warnings }: { warnings: Warning[] }) {
+export function WarningNote({ warnings }: { warnings: Warning[] }) {
   if (warnings.length === 0) return null;
   const top = warnings[0];
   const tone = SEVERITY[top.severity];
   return (
-    <div className="flex min-w-0 items-center gap-2 text-meta" title={top.message}>
-      <span className={`size-1.5 shrink-0 rounded-full ${tone.dot}`} aria-hidden />
-      <span className={`shrink-0 font-medium ${tone.text}`}>{tone.label}</span>
-      <span className="truncate text-ink-2">{top.message}</span>
-      {warnings.length > 1 && <span className="shrink-0 text-muted">+{warnings.length - 1}</span>}
+    <div className={`flex min-w-0 items-center gap-2 rounded-control border px-2.5 py-1.5 ${tone.box}`} title={top.message}>
+      <span className={`size-1.5 flex-none rounded-pill ${tone.dot}`} aria-hidden />
+      <span className={`flex-none text-micro font-semibold ${tone.text}`}>{tone.label}</span>
+      <span className="min-w-0 truncate text-caption text-ink-2">{top.message}</span>
+      {warnings.length > 1 && <span className="flex-none text-caption text-muted">+{warnings.length - 1}</span>}
     </div>
   );
 }

@@ -1,5 +1,5 @@
-import type { PostType, TaskLane, TaskPriority } from "@workboard/core";
-import { ACCENT_TEXT, labelAccent, TASK_LANE_LABEL, TASK_LANE_TONE } from "./labels";
+import type { PostType, ProjectStatus, TaskLane, TaskPriority } from "@workboard/core";
+import { ACCENT_TEXT, labelAccent, STATUS_LABEL, STATUS_TONE, TASK_LANE_LABEL, TASK_LANE_TONE } from "./labels";
 
 /**
  * One icon language for state, shared by the board, the task rail, and the
@@ -30,6 +30,26 @@ export function StatusRing({ lane }: { lane: TaskLane }) {
     >
       {inner && <span className={`rounded-pill ${inner}`} aria-hidden />}
       <span className="sr-only">{TASK_LANE_LABEL[lane]}</span>
+    </span>
+  );
+}
+
+/**
+ * The same ring at project scale, on the board card. A project is filled once it
+ * is actually going somewhere — moving or stuck — and hollow while it is parked
+ * or shelved, so a quiet project reads as quiet without a second colour.
+ */
+export function ProjectStatusRing({ status }: { status: ProjectStatus }) {
+  const tone = STATUS_TONE[status];
+  const inner =
+    status === "active" || status === "blocked" ? `size-[5px] ${tone.dot}` : status === "done" ? "size-[6px] bg-accent" : "";
+  return (
+    <span
+      title={STATUS_LABEL[status]}
+      className={`grid size-[11px] flex-none place-items-center rounded-pill border-[1.5px] ${tone.border}`}
+    >
+      {inner && <span className={`rounded-pill ${inner}`} aria-hidden />}
+      <span className="sr-only">{STATUS_LABEL[status]}</span>
     </span>
   );
 }

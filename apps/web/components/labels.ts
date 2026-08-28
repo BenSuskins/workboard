@@ -17,13 +17,17 @@ export const STATUS_LABEL: Record<ProjectStatus, string> = {
   archived: "Shelved",
 };
 
-/** Tone classes travel with the label so a status looks the same everywhere. */
-export const STATUS_TONE: Record<ProjectStatus, { text: string; dot: string }> = {
-  active: { text: "text-good", dot: "bg-good" },
-  blocked: { text: "text-critical", dot: "bg-critical" },
-  on_hold: { text: "text-warning", dot: "bg-warning" },
-  done: { text: "text-accent", dot: "bg-accent" },
-  archived: { text: "text-muted", dot: "bg-muted" },
+/**
+ * Tone classes travel with the label so a status looks the same everywhere.
+ * `border` draws the board card's status ring, whose hue must be the one the dot
+ * uses — hence one record, as with TASK_LANE_TONE below.
+ */
+export const STATUS_TONE: Record<ProjectStatus, { text: string; dot: string; border: string }> = {
+  active: { text: "text-good", dot: "bg-good", border: "border-good" },
+  blocked: { text: "text-critical", dot: "bg-critical", border: "border-critical" },
+  on_hold: { text: "text-warning", dot: "bg-warning", border: "border-warning" },
+  done: { text: "text-accent", dot: "bg-accent", border: "border-accent" },
+  archived: { text: "text-muted", dot: "bg-muted", border: "border-muted" },
 };
 
 export const HEALTH_LABEL: Record<ProjectHealth, string> = {
