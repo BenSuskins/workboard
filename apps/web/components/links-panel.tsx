@@ -35,7 +35,7 @@ export function LinkSnapshot({ link }: { link: LinkWithStatus }) {
           : (pr.reviewDecision ?? "open").replace("_", " ");
     // CI is only shown for in-flight PRs — closed/merged never carry it
     return (
-      <span className="text-meta text-muted">
+      <span className="text-muted">
         #{pr.number} · {state}
         {pr.state === "open" && ciLabel(pr.ciStatus) && (
           <span className={pr.ciStatus === "failing" ? "font-semibold text-critical" : pr.ciStatus === "passing" ? "text-good" : ""}>
@@ -52,7 +52,7 @@ export function LinkSnapshot({ link }: { link: LinkWithStatus }) {
     const open = repo.prs.filter((p) => p.state === "open");
     const failing = open.filter((p) => p.ciStatus === "failing").length;
     return (
-      <span className="text-meta text-muted">
+      <span className="text-muted">
         {open.length} open PR{open.length === 1 ? "" : "s"} in scope · {repo.prs.length} tracked
         {failing > 0 && <span className="font-semibold text-critical"> · {failing} CI failing</span>}
       </span>
@@ -61,7 +61,7 @@ export function LinkSnapshot({ link }: { link: LinkWithStatus }) {
   if (data.type === "jira_project") {
     const jp = data as JiraProjectSnapshot;
     return (
-      <span className="text-meta text-muted">
+      <span className="text-muted">
         {Object.entries(jp.byStatusCategory)
           .map(([k, v]) => `${v} ${k.toLowerCase()}`)
           .join(" · ")}
@@ -71,7 +71,7 @@ export function LinkSnapshot({ link }: { link: LinkWithStatus }) {
   if (data.type === "jira_issue") {
     const ji = data as JiraIssueSnapshot;
     return (
-      <span className="text-meta text-muted">
+      <span className="text-muted">
         {ji.status}
         {ji.assignee ? ` · ${ji.assignee}` : ""} · updated <TimeAgo at={ji.updatedAt} />
       </span>
@@ -80,7 +80,7 @@ export function LinkSnapshot({ link }: { link: LinkWithStatus }) {
   if (data.type === "gdoc") {
     const doc = data as GdocSnapshot;
     return (
-      <span className="text-meta text-muted">
+      <span className="text-muted">
         edited <TimeAgo at={doc.modifiedAt} />
       </span>
     );
@@ -97,69 +97,51 @@ export function ProviderMark({ provider }: { provider: string }) {
 
 export function LinksPanel({ links, project }: { links: LinkWithStatus[]; project: Project }) {
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-1">
       {links.length === 0 ? (
-        <p className="text-body text-muted">Nothing linked yet.</p>
+        <p className="px-2 text-caption text-muted">Nothing linked yet.</p>
       ) : (
-        <ul className="flex flex-col gap-2.5">
+        <ul className="flex flex-col gap-0.5">
           {links.map((link) => (
-            <li key={link.id} className="group flex flex-col gap-0.5">
-              <div className="flex items-center gap-2">
-                <ProviderMark provider={link.provider} />
-                <a
-                  href={link.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="truncate text-body text-ink-2 hover:text-accent hover:underline"
-                >
-                  {link.title || link.externalId || link.url}
-                </a>
-                <form action={deleteLinkAction} className="ml-auto opacity-0 transition-opacity group-hover:opacity-100">
-                  <input type="hidden" name="linkId" value={link.id} />
-                  <input type="hidden" name="slug" value={project.slug} />
-                  <button type="submit" aria-label="Remove link" className="text-muted hover:text-critical">
-                    ×
-                  </button>
-                </form>
-              </div>
-              <div className="pl-5">
-                <LinkSnapshot link={link} />
-                {link.syncState?.lastError && (
-                  <div className="text-meta font-medium text-critical">
-                    ⚠ sync failing (<TimeAgo at={link.syncState.lastAttemptAt} />): {link.syncState.lastError.slice(0, 140)}
-                    {link.syncState.lastSuccessAt && (
-                      <span className="font-normal text-muted">
-                        {" "}
-                        — showing data from <TimeAgo at={link.syncState.lastSuccessAt} />
-                      </span>
-                    )}
-                  </div>
-                )}
-                {!link.syncState?.lastError && link.snapshot && (
-                  <div className="text-meta text-muted">
-                    synced <TimeAgo at={link.snapshot.fetchedAt} />
-                  </div>
-                )}
-                {link.kind === "repo" && link.scope && (
-                  <div className="text-meta text-muted">
-                    scope:{" "}
-                    {[
-                      link.scope.branchPrefix && `branch ${link.scope.branchPrefix}*`,
-                      link.scope.pathPrefixes?.length && `paths ${link.scope.pathPrefixes.join(", ")}`,
-                      link.scope.labels?.length && `labels ${link.scope.labels.join(", ")}`,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </div>
-                )}
-              </div>
+            <li key={link.id} className="group relative">
+              <a
+                href={link.url}
+                target="_blank"
+                rel="noreferrer"
+                className="flex flex-col gap-px rounded-control px-2 py-1.5 transition-colors hover:bg-surface-2"
+              >
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <ProviderMark provider={link.provider} />
+                  <span className="truncate text-label text-ink-2">{link.title || link.externalId || link.url}</span>
+                </span>
+                <span className="min-w-0 truncate pl-[18px] text-[11.5px]">
+                  <LinkSnapshot link={link} />
+                  {link.syncState?.lastError && (
+                    <span className="font-medium text-critical" title={link.syncState.lastError}>
+                      sync failing
+                    </span>
+                  )}
+                </span>
+              </a>
+              <form
+                action={deleteLinkAction}
+                className="absolute right-1.5 top-1.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
+              >
+                <input type="hidden" name="linkId" value={link.id} />
+                <input type="hidden" name="slug" value={project.slug} />
+                <button type="submit" aria-label={`Remove link ${link.title || link.url}`} className="px-1 text-muted hover:text-critical">
+                  ×
+                </button>
+              </form>
             </li>
           ))}
         </ul>
       )}
       <details>
-        <summary className="cursor-pointer select-none text-meta text-accent hover:underline">+ Add link</summary>
-        <form action={addLinkAction} className="mt-3 flex flex-col gap-2">
+        <summary className="cursor-pointer select-none px-2 py-0.5 text-meta text-accent hover:underline">
+          + Add link
+        </summary>
+        <form action={addLinkAction} className="mt-2 flex flex-col gap-2">
           <input type="hidden" name="projectId" value={project.id} />
           <input type="hidden" name="slug" value={project.slug} />
           <input name="url" placeholder="URL (GitHub PR/repo, Jira, Google Doc…)" className={inputCls} required />
