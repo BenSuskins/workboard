@@ -57,21 +57,17 @@ export const TASK_LANE_LABEL: Record<TaskLane, string> = {
   done: "Done",
 };
 
-/** What each column is for, shown under its heading — the same shape the PR pipeline uses. */
-export const TASK_LANE_BLURB: Record<TaskLane, string> = {
-  backlog: "filed, not queued",
-  queued: "waiting for an agent",
-  moving: "being worked on",
-  blocked: "picked up, stuck",
-  done: "finished",
-};
-
-export const TASK_LANE_TONE: Record<TaskLane, { text: string; dot: string }> = {
-  backlog: { text: "text-muted", dot: "bg-muted" },
-  queued: { text: "text-accent", dot: "bg-accent" },
-  moving: { text: "text-good", dot: "bg-good" },
-  blocked: { text: "text-critical", dot: "bg-critical" },
-  done: { text: "text-ink-2", dot: "bg-ink-2" },
+/**
+ * Tone classes travel with the lane so a column reads the same on the board, in
+ * the task rail, and in the overview list. `border` draws the status ring, whose
+ * hue must be the same one the dot uses — hence one record, not three.
+ */
+export const TASK_LANE_TONE: Record<TaskLane, { text: string; dot: string; border: string }> = {
+  backlog: { text: "text-muted", dot: "bg-muted", border: "border-muted" },
+  queued: { text: "text-accent", dot: "bg-accent", border: "border-accent" },
+  moving: { text: "text-good", dot: "bg-good", border: "border-good" },
+  blocked: { text: "text-critical", dot: "bg-critical", border: "border-critical" },
+  done: { text: "text-ink-2", dot: "bg-ink-2", border: "border-ink-2" },
 };
 
 /** Column order, taken from the map above so the two can never disagree. */
