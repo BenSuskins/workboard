@@ -182,9 +182,7 @@ export function Sidebar({
           </ul>
         )}
 
-        {/* The board *is* the project list, so listing it again beside it is
-            duplication. Every other route keeps the tree. */}
-        {!collapsed && pathname !== "/" && (
+        {!collapsed && (
           <>
             <SectionLabel
               name="projects"
