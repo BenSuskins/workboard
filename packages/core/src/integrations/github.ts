@@ -18,6 +18,16 @@ export interface PrSnapshot {
   headRef: string;
   author: string | null;
   updatedAt: string;
+  /* Everything below is optional: snapshots written before these were kept lack
+     the keys, and the repo-scope path never fills them in at all. */
+  additions?: number;
+  deletions?: number;
+  /** Logins that reviewed, then logins still being waited on. */
+  reviewers?: string[];
+  /** Who asked for changes, so the row can name them rather than say "changes". */
+  changesRequestedBy?: string | null;
+  /** The head commit's checks, so a red PR can say which one broke. */
+  checks?: CheckRun[];
 }
 
 export interface RepoScopeSnapshot {
@@ -79,11 +89,17 @@ interface RawPr {
   head: { ref: string; sha: string };
   user: { login: string } | null;
   updated_at: string;
+  additions?: number;
+  deletions?: number;
+  requested_reviewers?: { login: string }[];
 }
 
 export interface CheckRun {
+  name?: string;
   status: "queued" | "in_progress" | "completed" | string;
   conclusion: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
 }
 
 /** failure-ish conclusion anywhere → failing; anything still running → pending; else passing (or null if no checks). */
@@ -98,9 +114,22 @@ export function aggregateCheckRuns(runs: CheckRun[]): CiStatus {
   return pending ? "pending" : "passing";
 }
 
-async function fetchCiStatus(repo: string, sha: string): Promise<CiStatus> {
+/**
+ * The aggregate word *and* the runs behind it. A red PR has to be able to name
+ * the check that broke, and this is the only call that knows — keeping the list
+ * costs nothing, where fetching it again would cost a request per PR.
+ */
+async function fetchChecks(repo: string, sha: string): Promise<{ status: CiStatus; runs: CheckRun[] }> {
   const result = await gh<{ check_runs: CheckRun[] }>(`/repos/${repo}/commits/${sha}/check-runs?per_page=100`);
-  return aggregateCheckRuns(result.check_runs);
+  // Four fields per run, not the whole payload — 25 PRs of these sit in the cache.
+  const runs = result.check_runs.map((run) => ({
+    name: run.name,
+    status: run.status,
+    conclusion: run.conclusion,
+    started_at: run.started_at,
+    completed_at: run.completed_at,
+  }));
+  return { status: aggregateCheckRuns(runs), runs };
 }
 
 function toPr(repo: string, pr: RawPr): Omit<PrSnapshot, "type" | "reviewDecision" | "ciStatus"> {
@@ -116,6 +145,8 @@ function toPr(repo: string, pr: RawPr): Omit<PrSnapshot, "type" | "reviewDecisio
     headRef: pr.head.ref,
     author: pr.user?.login ?? null,
     updatedAt: pr.updated_at,
+    additions: pr.additions,
+    deletions: pr.deletions,
   };
 }
 
@@ -129,8 +160,11 @@ export async function fetchPr(externalId: string): Promise<PrSnapshot> {
   const pr = await gh<RawPr>(`/repos/${repo}/pulls/${num}`);
   let reviewDecision: PrSnapshot["reviewDecision"] = null;
   let ciStatus: CiStatus = null;
+  let checks: CheckRun[] | undefined;
+  let reviewers: string[] = [];
+  let changesRequestedBy: string | null = null;
   if (pr.state === "open") {
-    ciStatus = await fetchCiStatus(repo, pr.head.sha);
+    ({ status: ciStatus, runs: checks } = await fetchChecks(repo, pr.head.sha));
     if (!pr.draft) {
       const reviews = await gh<{ user: { login: string } | null; state: string }[]>(
         `/repos/${repo}/pulls/${num}/reviews?per_page=100`,
@@ -147,9 +181,15 @@ export async function fetchPr(externalId: string): Promise<PrSnapshot> {
         : states.includes("APPROVED")
           ? "approved"
           : "review_pending";
+      for (const [login, state] of latest) {
+        if (state === "CHANGES_REQUESTED") changesRequestedBy = login;
+      }
+      // Who has spoken, then who is still being waited on.
+      const pending = (pr.requested_reviewers ?? []).map((r) => r.login).filter((login) => !latest.has(login));
+      reviewers = [...latest.keys(), ...pending];
     }
   }
-  return { type: "pr", reviewDecision, ciStatus, ...toPr(repo, pr) };
+  return { type: "pr", reviewDecision, ciStatus, checks, reviewers, changesRequestedBy, ...toPr(repo, pr) };
 }
 
 /** The token's own open pull requests, and who the token belongs to. */
@@ -256,7 +296,7 @@ export async function fetchScopedRepo(repo: string, scope: RepoScope | null): Pr
     const sha = shaByNumber.get(pr.number);
     if (!sha) continue;
     ciCalls++;
-    pr.ciStatus = await fetchCiStatus(repo, sha);
+    pr.ciStatus = (await fetchChecks(repo, sha)).status;
   }
   return { type: "repo", repo, prs, scope };
 }
