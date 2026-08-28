@@ -37,3 +37,17 @@ export function toPlainText(markdown: string): string {
     .replace(/\s+/g, " ")
     .trim();
 }
+
+/** A project nobody has touched for a week is stale; the board says so on its card. */
+export const STALE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * "stale 12d", or nothing. Only active work can go stale — a parked or finished
+ * project is quiet because it is meant to be, and badging it would cry wolf.
+ */
+export function staleLabel(lastActivityAt: number, status: string): string | null {
+  if (status !== "active") return null;
+  const idle = Date.now() - lastActivityAt;
+  if (idle <= STALE_MS) return null;
+  return `stale ${Math.floor(idle / 86_400_000)}d`;
+}

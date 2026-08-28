@@ -1,13 +1,12 @@
 import Link from "next/link";
 import type { ProjectDetail } from "@workboard/core";
 import { setProjectPinnedAction } from "@/lib/actions";
-import { hasPipeline, prPipeline } from "@/lib/pipeline";
-import { toPlainText } from "@/lib/format";
+import { staleLabel, toPlainText } from "@/lib/format";
 import { AvatarStack } from "./avatar";
-import { DocChips, JiraChips, PipelineChip } from "./chips";
-import { ACCENT_BG, ACCENT_TEXT, STATUS_LABEL, STATUS_TONE, tileAccent, tileGlyph } from "./labels";
+import { ACCENT_BG, ACCENT_TEXT, STATUS_LABEL, tileAccent, tileGlyph } from "./labels";
 import { Sparkline } from "./sparkline";
-import { WarningStrip } from "./warnings";
+import { ProjectStatusRing } from "./state-glyphs";
+import { WarningNote } from "./warnings";
 
 /** Everyone who has touched the project lately, most recent first, no repeats. */
 function recentAuthors(detail: ProjectDetail): string[] {
@@ -19,9 +18,9 @@ function recentAuthors(detail: ProjectDetail): string[] {
 }
 
 // The whole card is clickable via the title link's stretched ::after (fills the
-// nearest positioned ancestor, i.e. this card). The pipeline chip's popover PR
-// links sit later in the DOM at the same stacking level, so they paint above the
-// stretched area and stay independently clickable — no nested <a> involved.
+// nearest positioned ancestor, i.e. this card). The card is deliberately not an
+// <a> itself: the pin control is a form button and cannot nest inside one, so it
+// sits later in the DOM at z-10 and stays independently clickable.
 export function ProjectCard({
   detail,
   activityCounts,
@@ -29,89 +28,74 @@ export function ProjectCard({
   detail: ProjectDetail;
   activityCounts?: number[];
 }) {
-  const { project, latestSummary, links, tasks, openWarnings } = detail;
-  const pipeline = prPipeline(links);
-  const moving = tasks.filter((t) => t.status === "in_progress").length;
-  const blocked = tasks.filter((t) => t.status === "blocked").length;
+  const { project, latestSummary, tasks, openWarnings } = detail;
   const upForGrabs = tasks.filter((t) => t.agentReady && t.status === "todo" && !t.claimedAt).length;
   const done = tasks.filter((t) => t.status === "done").length;
   const accent = tileAccent(project);
-  const tone = STATUS_TONE[project.status];
+  const stale = staleLabel(project.lastActivityAt, project.status);
 
   // Plain text, not rendered markdown: prose-wb sets a reading size and line
   // height that dwarf everything else once clamped into a card.
   const blurb = latestSummary ? toPlainText(latestSummary.body) : project.description;
 
   return (
-    <div
-      className="relative flex flex-col gap-2.5 rounded-card border border-hairline bg-surface p-4 transition-colors hover:border-accent/40"
-    >
+    <div className="relative flex flex-col gap-[11px] rounded-card border border-hairline bg-surface px-[17px] pb-3.5 pt-4 transition-colors duration-[130ms] hover:border-grid hover:bg-surface-2">
       <div className="flex items-start gap-2.5">
         <span
-          className={`grid size-8 shrink-0 place-items-center rounded-control text-body font-semibold ${ACCENT_BG[accent]} ${ACCENT_TEXT[accent]}`}
+          className={`mt-px grid size-[22px] flex-none place-items-center rounded-chip text-micro font-semibold ${ACCENT_BG[accent]} ${ACCENT_TEXT[accent]}`}
           aria-hidden
         >
           {tileGlyph(project)}
         </span>
-        <div className="min-w-0 flex-1">
-          <h3 className="truncate text-title font-semibold leading-tight">
-            <Link
-              href={`/projects/${project.slug}`}
-              className="text-ink after:absolute after:inset-0 after:content-[''] hover:text-accent"
-            >
+        <div className="flex min-w-0 flex-col gap-[3px]">
+          {/* The name wraps rather than truncates — a project is known by its
+              whole name, and two lines cost less than a clipped one. */}
+          <h3 className="text-title font-medium leading-[1.35] tracking-[-0.005em] text-pretty">
+            <Link href={`/projects/${project.slug}`} className="text-ink after:absolute after:inset-0 after:content-['']">
               {project.name}
             </Link>
           </h3>
-          <p className="mt-0.5 flex items-center gap-1.5 text-meta">
-            <span className={`font-medium ${tone.text}`}>{STATUS_LABEL[project.status]}</span>
-            {moving > 0 && <span className="text-muted">· {moving} in progress</span>}
-            {blocked > 0 && <span className="text-critical">· {blocked} blocked</span>}
-          </p>
+          <span className="inline-flex items-center gap-[7px]">
+            <ProjectStatusRing status={project.status} />
+            <span className="text-caption text-muted">{STATUS_LABEL[project.status]}</span>
+          </span>
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <form action={setProjectPinnedAction}>
-            <input type="hidden" name="projectId" value={project.id} />
-            <input type="hidden" name="slug" value={project.slug} />
-            <input type="hidden" name="pinned" value={project.pinned ? "0" : "1"} />
-            <button
-              type="submit"
-              aria-label={project.pinned ? "Unpin project" : "Pin project"}
-              title={project.pinned ? "Unpin" : "Pin to top of board"}
-              className={`relative z-10 text-body leading-none transition-colors ${
-                project.pinned ? "text-warning" : "text-muted/40 hover:text-muted"
-              }`}
-            >
-              ★
-            </button>
-          </form>
-        </div>
+        <form action={setProjectPinnedAction} className="ml-auto mt-px flex-none">
+          <input type="hidden" name="projectId" value={project.id} />
+          <input type="hidden" name="slug" value={project.slug} />
+          <input type="hidden" name="pinned" value={project.pinned ? "0" : "1"} />
+          <button
+            type="submit"
+            aria-label={project.pinned ? "Unpin project" : "Pin project"}
+            title={project.pinned ? "Unpin" : "Pin to top of board"}
+            className={`relative z-10 flex leading-none transition-colors ${
+              project.pinned ? "text-warning" : "text-grid hover:text-muted"
+            }`}
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-hidden>
+              <path d="M8 2.25l1.75 3.6 3.95.55-2.85 2.8.68 3.95L8 11.3l-3.53 1.85.68-3.95-2.85-2.8 3.95-.55z" />
+            </svg>
+          </button>
+        </form>
       </div>
 
-      <WarningStrip warnings={openWarnings} />
+      {blurb && <p className="line-clamp-2 text-detail leading-[1.55] text-pretty text-muted">{blurb}</p>}
 
-      {blurb && <p className="line-clamp-2 text-meta leading-relaxed text-ink-2">{blurb}</p>}
+      <WarningNote warnings={openWarnings} />
 
-      {(hasPipeline(pipeline) || links.length > 0) && (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <PipelineChip pipeline={pipeline} />
-          <JiraChips links={links} />
-          <DocChips links={links} />
-        </div>
-      )}
-
-      <div className="mt-auto flex items-center gap-3 border-t border-hairline pt-2.5 text-meta text-muted">
-        <span className="shrink-0">
-          <span className="font-semibold text-ink-2">{upForGrabs}</span> up for grabs
+      <div className="mt-auto flex items-center gap-2.5 border-t border-hairline pt-[11px]">
+        <span className="flex-none text-caption tabular-nums text-muted">
+          {done} done · {upForGrabs} up for grabs
         </span>
-        <span className="shrink-0">
-          <span className="font-semibold text-ink-2">{done}</span> done
-        </span>
+        {stale && <span className="flex-none text-caption text-serious">{stale}</span>}
         {activityCounts && (
-          <span className="min-w-0 flex-1 opacity-60">
-            <Sparkline counts={activityCounts} width={90} height={16} />
+          <span className="w-[72px] flex-none">
+            <Sparkline counts={activityCounts} width={72} height={16} hideWhenFlat />
           </span>
         )}
-        <AvatarStack authors={recentAuthors(detail)} />
+        <span className="ml-auto flex-none">
+          <AvatarStack authors={recentAuthors(detail)} size="xs" />
+        </span>
       </div>
     </div>
   );

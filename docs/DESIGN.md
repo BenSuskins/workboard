@@ -61,7 +61,8 @@ variable axis: `font-medium` is 510 and `font-semibold` is 590, retuned in
 | `text-title` | 15px | Card titles |
 | `text-heading` | 18px | Reserved for the few places 15px is not enough |
 | `text-page-title` | 24px | Page and task titles |
-| `text-display` | 28px | The home board's one hero line |
+| `text-stat` | 22px | Stat-strip values |
+| `text-display` | 28px | Post titles, the project-form title |
 
 A size token must never share its name with a colour token. Tailwind resolves
 `text-*` against both `--color-*` and `--text-*`, and the colour wins: while the
@@ -85,6 +86,9 @@ colour alone.
 
 - **`StatusRing`** — a 13px ring in the lane colour. Hollow while a task is only
   filed or queued, a 5px dot once work has started, a 7px filled centre for done.
+- **`ProjectStatusRing`** — the same ring at 11px for a project, on the board
+  card. Filled while it is moving or blocked, hollow while it is parked or
+  shelved, so a quiet project reads as quiet without a second colour.
 - **`PriorityBars`** — three ascending bars (4 / 7.5 / 11px). Lit bars take
   `critical` / `serious` / `muted`; unlit bars are `grid`.
 - **`LabelChip` and `TypeMark`** — a rounded square outlined in the label or
@@ -101,7 +105,8 @@ avatars overlap and need separating.
 `backlog` muted · `queued` accent · `moving` good · `blocked` critical ·
 `done` ink-2. They live in one record, `TASK_LANE_TONE` in
 `components/labels.ts`, carrying `text`, `dot` and `border` together so a ring
-can never pick a different hue from the dot beside it. These drive the status
+can never pick a different hue from the dot beside it. `STATUS_TONE`, the
+project-lifecycle equivalent, carries the same three for the same reason. These drive the status
 ring, the overview task rows, and the progress bar — nothing else.
 
 ## Layout patterns
@@ -109,7 +114,21 @@ ring, the overview task rows, and the progress bar — nothing else.
 **App shell** — a 240px sidebar on `bg-surface` with an inset right hairline;
 the content pane on `bg-page`. Project routes add a 48px top bar carrying the
 project → view breadcrumb, the view tabs as `rounded-chip` pills, Refresh, and
-one primary action. Every other route draws itself in `pageContainerCls`.
+one primary action. The workspace board wears the same bar, carrying where you
+are and how many projects there are. Both run full-bleed under it; every other
+route draws itself in `pageContainerCls`.
+
+**Workspace board** — one reading surface, full width, no right rail. A digest
+block (date micro-label, 24px headline whose state word takes the lane colour,
+one 640px lead paragraph), a stat strip bounded by two hairlines, a filter row
+of bare pills, then the grid at `minmax(296px, 1fr)`. 26px between blocks, 12px
+from the filter row to the grid.
+
+The grid **is** the project list, so the sidebar hides its project tree on `/`,
+and the grid is the only view — there is no cards/list toggle. Every count in
+the strip but `Projects` counts tasks, and the lead sentence names that unit so
+the two can never be read against each other. The sentence itself is derived
+from the same numbers (`lib/digest.ts`), never written by hand or by an agent.
 
 **Board** — columns separated by 18px of whitespace, with no container of their
 own: a bordered well holding bordered cards states the same boundary twice.
@@ -185,7 +204,13 @@ and any open-question callout.
 
 A warning or a question is a single row: an 8% tint of the semantic colour, a
 35% border of it, a 6px dot, the severity word, the message, and one quiet
-action. Never a boxed panel led by an emoji — `⛔ ⚠️ ℹ️` read as decoration to
+action.
+
+A workspace warning surfaces **on the card that owns it** — the status ring, the
+amber stale badge, the note row — and nowhere else. The board's red roll-up strip
+above the grid made every warned project shout at the whole page instead of at
+its own card. If a roll-up is wanted later it is a `Warnings` cell in the stat
+strip that filters the grid, never a strip above it. Never a boxed panel led by an emoji — `⛔ ⚠️ ℹ️` read as decoration to
 the eye and as "grimacing face" to a screen reader, and said nothing the word
 beside them did not.
 
@@ -206,7 +231,9 @@ foreground from `text-on-accent`.
 
 ## What this language deliberately does without
 
-- Stat strips as bordered grids. A progress bar and a legend say the same thing.
+- Stat strips as bordered grids. A progress bar and a legend say the same thing,
+  and where a row of counts genuinely earns its place it is bounded by two
+  hairlines, not boxed.
 - Lane description blurbs. A column called Blocked needs no caption.
 - `bg-surface-2` cards inside `bg-surface` containers — the double-nested grey.
 - Emoji severity icons.

@@ -1,12 +1,6 @@
 import type { ProjectStatus, TaskPriority } from "@workboard/core";
 import { STATUS_LABEL, STATUS_TONE } from "./labels";
 
-/** Dot-only status marker for dense contexts; label surfaces via tooltip. */
-export function StatusDot({ status }: { status: ProjectStatus }) {
-  const label = STATUS_LABEL[status];
-  return <span className={`size-2 shrink-0 rounded-full ${STATUS_TONE[status].dot}`} title={label} aria-label={label} />;
-}
-
 /** Colored dot + label, no chrome — used wherever a project's lifecycle status is shown. */
 export function StatusBadge({ status }: { status: ProjectStatus }) {
   const tone = STATUS_TONE[status];

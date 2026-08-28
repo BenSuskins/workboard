@@ -37,28 +37,59 @@ export function Segmented({ options, capitalize = true }: { options: FilterOptio
   );
 }
 
+/**
+ * The same options with no container at all: the board's filter row is one line
+ * of text on the page, so a segmented track around the pills would be a second
+ * boundary saying what the active fill already says.
+ */
+export function PillGroup({ options }: { options: FilterOption[] }) {
+  return (
+    <div className="flex items-center gap-0.5">
+      {options.map((option) => (
+        <Link
+          key={option.key}
+          href={option.href}
+          aria-current={option.active ? "true" : undefined}
+          className={`rounded-chip px-[11px] py-[5px] text-label font-medium capitalize transition-colors duration-[120ms] ${
+            option.active ? "bg-surface-2 text-ink" : "text-muted hover:text-ink"
+          }`}
+        >
+          {option.label}
+        </Link>
+      ))}
+    </div>
+  );
+}
+
 /** Native disclosure, so the menu works without JavaScript like the rest of the board. */
 export function Dropdown({
   label,
   value,
   active,
+  ghost = false,
   children,
 }: {
   label: string;
   value: string;
   active: boolean;
+  /** Borderless, value only — for a filter row that carries no chrome of its own. */
+  ghost?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <details className="group relative">
       <summary
-        className={`flex cursor-pointer list-none items-center gap-1.5 rounded-control border border-hairline px-2.5 py-1 text-meta transition-colors hover:border-muted [&::-webkit-details-marker]:hidden ${
-          active ? "text-ink" : "text-ink-2"
-        }`}
+        className={
+          ghost
+            ? "flex cursor-pointer list-none items-center gap-1.5 rounded-chip px-2 py-[5px] text-label text-muted transition-colors hover:bg-surface-2 hover:text-ink [&::-webkit-details-marker]:hidden"
+            : `flex cursor-pointer list-none items-center gap-1.5 rounded-control border border-hairline px-2.5 py-1 text-meta transition-colors hover:border-muted [&::-webkit-details-marker]:hidden ${
+                active ? "text-ink" : "text-ink-2"
+              }`
+        }
       >
-        <span className="text-muted">{label}</span>
-        <span className="font-medium">{value}</span>
-        <span aria-hidden className="text-muted transition-transform group-open:rotate-180">
+        {ghost ? <span className="sr-only">{label}</span> : <span className="text-muted">{label}</span>}
+        <span className={ghost ? "capitalize" : "font-medium"}>{value}</span>
+        <span aria-hidden className={`transition-transform group-open:rotate-180 ${ghost ? "text-grid" : "text-muted"}`}>
           ⌄
         </span>
       </summary>
