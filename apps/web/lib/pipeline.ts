@@ -1,4 +1,13 @@
-import type { CiStatus, Link, PrSnapshot, RepoScope, RepoScopeSnapshot, Snapshot } from "@workboard/core";
+import type {
+  CheckRun,
+  CiStatus,
+  Link,
+  PrSnapshot,
+  ProjectAccent,
+  RepoScope,
+  RepoScopeSnapshot,
+  Snapshot,
+} from "@workboard/core";
 
 export interface PrLite {
   number: number;
@@ -12,6 +21,14 @@ export interface PrLite {
   ciStatus?: CiStatus;
   author: string | null;
   updatedAt: string;
+  /* The row reads these when they are there; a snapshot synced before they were
+     kept, or a PR found through a repo link, simply has fewer of them. */
+  headRef?: string;
+  additions?: number;
+  deletions?: number;
+  reviewers?: string[];
+  changesRequestedBy?: string | null;
+  checks?: CheckRun[];
 }
 
 export interface Pipeline {
@@ -80,10 +97,12 @@ export function prBucket(pr: PrLite): PrBucket {
   return "review";
 }
 
-/** Just enough of a project to link to it from a PR row. */
+/** Just enough of a project to link to it from a PR row, tile and all. */
 export interface ProjectRef {
   slug: string;
   name: string;
+  accent?: ProjectAccent | null;
+  icon?: string | null;
 }
 
 export interface ProjectLinks {

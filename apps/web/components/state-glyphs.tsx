@@ -1,5 +1,15 @@
 import type { PostType, ProjectStatus, TaskLane, TaskPriority } from "@workboard/core";
-import { ACCENT_TEXT, labelAccent, STATUS_LABEL, STATUS_TONE, TASK_LANE_LABEL, TASK_LANE_TONE } from "./labels";
+import type { PrBucket } from "../lib/pipeline";
+import {
+  ACCENT_TEXT,
+  labelAccent,
+  PR_BUCKET_LABEL,
+  PR_BUCKET_TONE,
+  STATUS_LABEL,
+  STATUS_TONE,
+  TASK_LANE_LABEL,
+  TASK_LANE_TONE,
+} from "./labels";
 
 /**
  * One icon language for state, shared by the board, the task rail, and the
@@ -30,6 +40,24 @@ export function StatusRing({ lane }: { lane: TaskLane }) {
     >
       {inner && <span className={`rounded-pill ${inner}`} aria-hidden />}
       <span className="sr-only">{TASK_LANE_LABEL[lane]}</span>
+    </span>
+  );
+}
+
+/**
+ * The same ring for a pull request. A PR has its own five buckets rather than
+ * task lanes, but it is read on the same page furniture, so it keeps the ring
+ * rather than inventing a second glyph for "state".
+ */
+export function PrRing({ bucket }: { bucket: PrBucket }) {
+  const tone = PR_BUCKET_TONE[bucket];
+  return (
+    <span
+      title={PR_BUCKET_LABEL[bucket]}
+      className={`mt-0.5 grid size-[13px] flex-none place-items-center rounded-pill border-[1.5px] ${tone.border}`}
+    >
+      {tone.ring && <span className={`rounded-pill ${tone.ring}`} aria-hidden />}
+      <span className="sr-only">{PR_BUCKET_LABEL[bucket]}</span>
     </span>
   );
 }

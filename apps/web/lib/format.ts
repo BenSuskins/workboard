@@ -67,3 +67,15 @@ export function staleLabel(lastActivityAt: number, status: string): string | nul
   if (idle <= STALE_MS) return null;
   return `stale ${Math.floor(idle / 86_400_000)}d`;
 }
+
+/**
+ * How long a check ran — "4m 12s", "58s", or an em dash while it is still
+ * going. GitHub gives the two timestamps and no duration.
+ */
+export function checkDuration(check: { started_at?: string | null; completed_at?: string | null }): string {
+  if (!check.started_at || !check.completed_at) return "—";
+  const seconds = Math.round((Date.parse(check.completed_at) - Date.parse(check.started_at)) / 1000);
+  if (!Number.isFinite(seconds) || seconds < 0) return "—";
+  if (seconds < 60) return `${seconds}s`;
+  return `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, "0")}s`;
+}

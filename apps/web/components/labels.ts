@@ -1,6 +1,7 @@
 // Types only: this module is imported by client components, and pulling a
 // runtime value from @workboard/core drags the node-only store into the bundle.
 import type { Project, ProjectAccent, ProjectHealth, ProjectStatus, PostType, TaskLane } from "@workboard/core";
+import type { PrBucket } from "../lib/pipeline";
 
 /**
  * The words the board shows people. The domain speaks in enums — `active`,
@@ -183,3 +184,41 @@ export const ACCENT_OPTIONS = [
     dot: ACCENT_DOT[accent],
   })),
 ];
+
+/**
+ * The pull request queue, in the order you work it: what is ready to merge,
+ * then what is yours to fix, then what is waiting on somebody else. That is a
+ * different order from `prBucket`, which assigns a PR to a bucket first-match —
+ * a red build outranks review state there, and reads second here.
+ */
+export const PR_BUCKET_ORDER: readonly PrBucket[] = ["approved", "failing", "changes", "review", "draft"];
+
+export const PR_BUCKET_LABEL: Record<PrBucket, string> = {
+  approved: "Approved · merge ready",
+  failing: "Failing checks",
+  changes: "Changes requested",
+  review: "Ready for review",
+  draft: "Draft",
+};
+
+/** The rail says the bucket in one word; the header has room for the whole phrase. */
+export const PR_BUCKET_SHORT: Record<PrBucket, string> = {
+  approved: "Approved",
+  failing: "Failing checks",
+  changes: "Changes requested",
+  review: "Ready for review",
+  draft: "Draft",
+};
+
+/**
+ * `ring` is the dot inside the status ring, sized by how settled the PR is:
+ * solid once it is ready to merge, a dot while something is wrong, hollow while
+ * it is only waiting.
+ */
+export const PR_BUCKET_TONE: Record<PrBucket, { text: string; dot: string; border: string; ring: string }> = {
+  approved: { text: "text-good", dot: "bg-good", border: "border-good", ring: "size-[7px] bg-good" },
+  failing: { text: "text-critical", dot: "bg-critical", border: "border-critical", ring: "size-[5px] bg-critical" },
+  changes: { text: "text-serious", dot: "bg-serious", border: "border-serious", ring: "size-[5px] bg-serious" },
+  review: { text: "text-warning", dot: "bg-warning", border: "border-warning", ring: "" },
+  draft: { text: "text-muted", dot: "bg-muted", border: "border-muted", ring: "" },
+};

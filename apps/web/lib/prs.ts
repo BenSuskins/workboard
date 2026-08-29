@@ -18,11 +18,17 @@ export interface PullRequests {
   error?: string;
 }
 
+/** The tile the row draws needs the hue and the glyph, not only the name. */
+function projectRef(detail: ProjectDetail): ProjectRef {
+  const { slug, name, accent, icon } = detail.project;
+  return { slug, name, accent, icon };
+}
+
 /** The board's own PRs, whoever wrote them — what this page showed before a token could name you. */
 function trackedPrs(details: ProjectDetail[]): PrRow[] {
   const rows: PrRow[] = [];
   for (const detail of details) {
-    const project = { slug: detail.project.slug, name: detail.project.name };
+    const project = projectRef(detail);
     for (const pr of prPipeline(detail.links).prs) {
       if (pr.state === "open") rows.push({ pr, project });
     }
@@ -42,7 +48,7 @@ export async function loadPullRequests(details: ProjectDetail[]): Promise<PullRe
 
   const index = buildPrIndex(
     details.map((detail) => ({
-      project: { slug: detail.project.slug, name: detail.project.name },
+      project: projectRef(detail),
       links: detail.links,
     })),
   );
