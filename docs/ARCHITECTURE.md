@@ -51,6 +51,7 @@ flowchart TB
 | Web app | Dashboard, project pages, reports | `apps/web/app`, `apps/web/components` |
 | Server actions | Mutations from the UI | `apps/web/lib/actions.ts` |
 | Skills | Claude Code skills that drive the MCP tools | `skills/` |
+| Agent profiles | Subagent definitions — tool allowlist, model, role prompt — that the skills delegate to | `agents/` |
 
 ## MCP tool surface
 
@@ -98,6 +99,13 @@ sequenceDiagram
 - **App writes no AI content** — Workboard has no LLM key; all summaries,
   digests, and triage come from agents via MCP. Keeps model choice and cost with
   the agent, and the app deployable anywhere.
+- **Skills are procedures, agent profiles are containers** — a skill says *what
+  to do* and runs in the session that holds the context; a profile in `agents/`
+  bounds *what a delegate may touch* and is addressed by name. The queue's
+  planner cannot write files and its implementer cannot write to the board, so a
+  confused subagent can spoil a throwaway branch but not the record of work.
+  Both install into `~/.claude/`, matching the model that agents come to
+  Workboard rather than Workboard reaching into repos.
 - **Projects ≠ repos** — a monorepo hosts many projects, so a repo link never
   identifies a project. Links are individual PRs/issues or scoped repo slices
   (labels / path prefixes / branch prefix); `find_project` ranks candidates.
