@@ -12,7 +12,7 @@ live.
 **The AI content is written by agents, not by the app.** Workboard holds no LLM
 API key. Coding agents (Claude Code) connect through Workboard's MCP server to
 read project context, post progress updates, and write the summaries, digests,
-and triage reports the dashboard displays — guided by the skills in this repo.
+and triage reports the dashboard displays — guided by the skills and agent profiles in this repo.
 
 ```mermaid
 flowchart LR
@@ -85,7 +85,8 @@ workboard/
 ├── packages/core   # domain, markdown store, services, integration clients, sync engine
 ├── packages/mcp    # MCP server — streamable HTTP (:8787/mcp) + stdio
 ├── apps/web        # Next.js dashboard (server components + server actions)
-├── skills/         # Claude Code skills (status, digest, triage, accomplishments)
+├── skills/         # Claude Code skills (status, queue, digest, triage, accomplishments)
+├── agents/         # Claude Code agent profiles the skills delegate to
 ├── scripts/        # seed, google-auth, install-skills, mcp-smoke
 ├── docs/           # documentation
 ├── data/workboard/ # the board, one markdown file per entity (gitignored)
@@ -139,7 +140,7 @@ credentials. Copy `.env.example` to `.env` and fill in what you use.
 | `npm test` | Core unit tests (vitest) |
 | `npm run mcp:smoke` | Full agent flow against the real MCP server (stdio) |
 | `npm run google:auth` | One-time Google Docs OAuth flow |
-| `npm run skills:install` | Copy `skills/` → `~/.claude/skills/` |
+| `npm run claude:install` | Copy `skills/` → `~/.claude/skills/` and `agents/` → `~/.claude/agents/` (alias: `npm run skills:install`) |
 | `npm run migrate:files` | Rarely needed — the servers convert an old `data/workboard.db` themselves on first start. Use this for a database elsewhere, or to redo one with `--force` |
 
 ## Connecting a coding agent
@@ -151,10 +152,10 @@ claude mcp add --transport http workboard http://localhost:8787/mcp
 ```
 
 (Or stdio: `claude mcp add workboard -- npx --prefix /path/to/workboard workboard-mcp`.)
-Then install the skills so agents know *how* to use it:
+Then install the skills and agent profiles so agents know *how* to use it:
 
 ```bash
-npm run skills:install
+npm run claude:install
 ```
 
 | Skill | What it does |
@@ -164,6 +165,31 @@ npm run skills:install
 | `/workboard-digest` | Cross-project "where everything stands" briefing, saved to the Reports page |
 | `/workboard-triage` | Find stale projects, blockers, rotting PRs, overdue tasks; save a prioritized action list |
 | `/workboard-accomplishments` | "What shipped" recap of your work plus agent deliveries — for standups and reviews |
+
+Skills are procedures; **agent profiles** are the containers those procedures
+delegate to. A skill says what to do and runs in the session that has the
+context; a profile bounds what a delegate may touch and is addressed by name via
+the Task tool.
+
+| Agent profile | Role | Bounded to |
+|---------------|------|------------|
+| `workboard-planner` | Plans one queue task against the existing codebase, before any code is written | Read/search + read-only Workboard MCP. No file edits — it runs in the main checkout every worktree branches from |
+| `workboard-implementer` | Implements a planned task in its own git worktree, makes the repo's checks pass, commits and pushes | Full edit + shell. **No Workboard tools** — bookkeeping stays with the dispatcher, which knows the pipeline's real outcome |
+| `workboard-reviewer` | Reviews the diff against the task spec before the PR goes up — scope creep, YAGNI, branching complexity | Read/search + shell; may comment or raise warnings on the board. Never patches code |
+| `workboard-verifier` | Runs the repo's own checks and reports what actually passed, rather than trusting the implementer's claim | Read/search + shell. Fixes nothing |
+| `workboard-reporter` | Runs the digest / triage / accomplishments skills and saves the report | Workboard MCP only — **no filesystem access at all**, which is what makes it safe to run unattended on a schedule |
+| `workboard-scribe` | Runs the end-of-session status flow so bookkeeping stays out of a long session's context | Workboard MCP + read-only git. Must be handed what the session did — a subagent cannot see the conversation that dispatched it |
+
+Two caveats worth knowing. The `mcp__workboard__*` entries in a profile's tool
+list name the **alias you registered the MCP server under** — `workboard`, if
+you ran the `claude mcp add` line above. Register it as something else and those
+grants silently resolve to nothing; a profile that finds its Workboard tools
+missing will say so rather than improvise. And "read-only" for the planner and
+reviewer is enforced by withholding the edit tools plus the profile's own
+instructions — a profile holding a shell can technically still write, so treat
+it as a strong convention rather than a sandbox. Profiles deliberately ship
+without `permissionMode`; add `acceptEdits` to your own copy of the implementer
+if you want unattended overnight drains.
 
 Schedule digests however you run Claude — e.g. a cron entry like
 `0 8 * * 1-5 claude -p "/workboard-digest"`, or a Claude Code Routine.
@@ -191,6 +217,9 @@ its MCP server (server name: `workboard`). Workboard is the source of truth for
   raise it with the `raise_warning` MCP tool instead of silently moving on.
 - Do **not** create a new project for work that already maps to an existing one
   — search first with `find_project`.
+- For heavier work, delegate to the installed profiles: `workboard-planner` and
+  `workboard-implementer` for queue tasks, `workboard-reporter` for digests and
+  triage.
 ```
 
 Trim it to taste — the key parts are naming the `workboard` MCP server and
