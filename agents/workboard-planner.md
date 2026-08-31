@@ -2,7 +2,7 @@
 name: workboard-planner
 description: Produce an implementation plan for one Workboard queue task — approach, files to touch, test strategy, risks — by reading the existing codebase. Read-only: it never edits a file. Use when a dispatcher (the workboard-queue skill) needs a task planned before implementation, or when asked to plan a task without writing code.
 tools: Read, Grep, Glob, Bash, mcp__workboard__get_project, mcp__workboard__find_project, mcp__workboard__list_tasks, mcp__workboard__list_task_comments
-model: opus
+model: inherit
 color: blue
 ---
 

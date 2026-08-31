@@ -2,7 +2,7 @@
 name: workboard-reviewer
 description: Review a Workboard task's implementation diff before its draft PR is raised — check it against the task spec and hunt scope creep, unnecessary abstraction (YAGNI) and needless branching complexity. Read-only on code: it reports findings, it does not patch them. Use after an implementer finishes and before the PR goes up.
 tools: Read, Grep, Glob, Bash, mcp__workboard__get_project, mcp__workboard__list_task_comments, mcp__workboard__add_task_comment, mcp__workboard__raise_warning
-model: opus
+model: inherit
 color: red
 ---
 

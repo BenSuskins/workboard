@@ -106,8 +106,11 @@ between the implementer and a PR, so run both, in parallel:
   implementer's claim, is what "tests pass" means from here on.
 
 Blocking findings or a failed check → one more implementer pass carrying both
-reports. If that pass doesn't clear them, it's a pipeline failure: take the
-failure path below. Non-blocking review notes ride into the PR body.
+reports, then **re-run the verifier** (and the reviewer too, if its findings
+were the blocker). That second result is what decides pass or pipeline failure,
+and it is the table that goes in the PR body — never the failing first one. If
+it still doesn't clear, take the failure path below. Non-blocking review notes
+ride into the PR body either way.
 
 **4. Draft PR (you, from the worktree path).**
 
@@ -116,8 +119,9 @@ git -C <worktree-path> gh pr create --draft ...
 ```
 
 Title: the task title. Body: task id, what changed (from the implementer), the
-verifier's check table, any non-blocking reviewer notes under **Reviewer
-notes**, and `Part of <project> queue`. Base: the repo's default branch.
+verifier's check table from its **last** run, any non-blocking reviewer notes
+under **Reviewer notes**, and `Part of <project> queue`. Base: the repo's
+default branch.
 
 **5. Bookkeeping (workboard).**
 - `add_link` with the PR URL (kind inferred).

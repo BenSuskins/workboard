@@ -175,7 +175,7 @@ the Task tool.
 |---------------|------|------------|
 | `workboard-planner` | Plans one queue task against the existing codebase, before any code is written | Read/search + read-only Workboard MCP. No file edits — it runs in the main checkout every worktree branches from |
 | `workboard-implementer` | Implements a planned task in its own git worktree, makes the repo's checks pass, commits and pushes | Full edit + shell. **No Workboard tools** — bookkeeping stays with the dispatcher, which knows the pipeline's real outcome |
-| `workboard-reviewer` | Reviews the diff against the task spec before the PR goes up — scope creep, YAGNI, branching complexity | Read/search. Reports findings; never patches them |
+| `workboard-reviewer` | Reviews the diff against the task spec before the PR goes up — scope creep, YAGNI, branching complexity | Read/search + shell; may comment or raise warnings on the board. Never patches code |
 | `workboard-verifier` | Runs the repo's own checks and reports what actually passed, rather than trusting the implementer's claim | Read/search + shell. Fixes nothing |
 | `workboard-reporter` | Runs the digest / triage / accomplishments skills and saves the report | Workboard MCP only — **no filesystem access at all**, which is what makes it safe to run unattended on a schedule |
 | `workboard-scribe` | Runs the end-of-session status flow so bookkeeping stays out of a long session's context | Workboard MCP + read-only git. Must be handed what the session did — a subagent cannot see the conversation that dispatched it |

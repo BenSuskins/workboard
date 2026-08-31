@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import {
   AGENT_FIELDS,
   discoverAgents,
@@ -41,6 +40,26 @@ describe("frontmatter", () => {
 
   it("throws on an unterminated fence", () => {
     expect(() => parseFrontmatter("---\nname: a\n", "f.md")).toThrow(/unterminated frontmatter/);
+  });
+
+  it("does not mistake a longer rule for the closing fence", () => {
+    // Matching `\n---` as a prefix let a `----` line close the frontmatter early,
+    // silently yielding {} and a misleading "name is missing" downstream.
+    expect(() => parseFrontmatter("---\nname: a\n----\ndescription: b\n---\n\nbody\n", "f.md")).toThrow(
+      /malformed frontmatter line: ----/,
+    );
+  });
+
+  it("ignores a rule in the body", () => {
+    const doc = parseFrontmatter("---\nname: a\n---\n\nbody\n\n----\n\nmore\n");
+    expect(doc.fields).toEqual({ name: "a" });
+    expect(doc.body).toContain("----");
+  });
+
+  it("reads a file saved with CRLF", () => {
+    const doc = parseFrontmatter("---\r\nname: a\r\ndescription: b\r\n---\r\n\r\nbody\r\n");
+    expect(doc.fields).toEqual({ name: "a", description: "b" });
+    expect(doc.body).toBe("body");
   });
 
   it("throws on a line that is not key: value", () => {
@@ -127,19 +146,19 @@ describe("role boundaries", () => {
 });
 
 describe("skills and profiles agree", () => {
-  it("every workboard name a skill mentions resolves to a skill or a profile", () => {
+  it("every workboard name either file mentions resolves to a skill or a profile", () => {
     // Skills and profiles live in separate files, so only the runtime notices a
     // rename. This catches it at CI time, in both directions.
     const known = [...skills, ...agents].map((asset) => asset.name);
     const mentioned = new Set<string>();
-    for (const skill of skills) {
-      const text = readFileSync(skill.file, "utf8");
+    for (const asset of [...skills, ...agents]) {
+      const text = readFileSync(asset.file, "utf8");
       for (const match of text.matchAll(/`(workboard-[a-z0-9-]+)`/g)) mentioned.add(match[1]);
       for (const match of text.matchAll(/subagent_type:\s*([a-z0-9-]+)/g)) mentioned.add(match[1]);
     }
     expect(mentioned.size).toBeGreaterThan(0);
     for (const name of mentioned) {
-      expect(known, `${name} is named by a skill but no such skill or profile exists`).toContain(name);
+      expect(known, `${name} is named by a skill or profile, but no such skill or profile exists`).toContain(name);
     }
   });
 });

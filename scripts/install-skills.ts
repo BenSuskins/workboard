@@ -15,12 +15,23 @@ const args = process.argv.slice(2);
 const flag = (name: string) => args.includes(`--${name}`);
 const option = (name: string) => {
   const at = args.indexOf(`--${name}`);
-  return at === -1 ? undefined : args[at + 1];
+  if (at === -1) return undefined;
+  const value = args[at + 1];
+  // Without this, `--dest --agents-only` installs into a directory named
+  // "--agents-only", and a trailing `--dest` silently falls back to ~/.claude.
+  if (!value || value.startsWith("--")) fail(`--${name} needs a value`);
+  return value;
 };
+
+function fail(message: string): never {
+  console.error(message);
+  process.exit(1);
+}
 
 const dest = option("dest") ?? process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude");
 const wantSkills = !flag("agents-only");
 const wantAgents = !flag("skills-only");
+if (!wantSkills && !wantAgents) fail("--skills-only and --agents-only together install nothing");
 
 const root = repoRoot();
 const skills = wantSkills ? discoverSkills(root) : [];

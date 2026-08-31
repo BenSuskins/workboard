@@ -34,9 +34,12 @@ export interface Document {
 const FENCE = "---";
 
 /** Frontmatter as Claude Code reads it: `key: value` lines, values are plain strings. */
-export function parseFrontmatter(text: string, source = "<memory>"): Document {
+export function parseFrontmatter(raw: string, source = "<memory>"): Document {
+  // A file saved with CRLF is still a valid asset; without this it fails on the
+  // opening fence, which reads as "you have no frontmatter" rather than the truth.
+  const text = raw.replace(/\r\n/g, "\n");
   if (!text.startsWith(`${FENCE}\n`)) throw new Error(`${source}: missing opening frontmatter fence`);
-  const end = text.indexOf(`\n${FENCE}`, FENCE.length);
+  const end = closingFence(text);
   if (end === -1) throw new Error(`${source}: unterminated frontmatter`);
 
   const fields: Record<string, string> = {};
@@ -49,6 +52,15 @@ export function parseFrontmatter(text: string, source = "<memory>"): Document {
     fields[key] = unquote(line.slice(split + 1).trim());
   }
   return { fields, body: text.slice(end + 1 + FENCE.length).trim() };
+}
+
+/** The next line that is exactly `---`. Matching a prefix would let `----` truncate the frontmatter. */
+function closingFence(text: string): number {
+  for (let at = text.indexOf(`\n${FENCE}`, FENCE.length); at !== -1; at = text.indexOf(`\n${FENCE}`, at + 1)) {
+    const after = text.charAt(at + 1 + FENCE.length);
+    if (after === "" || after === "\n") return at;
+  }
+  return -1;
 }
 
 function unquote(value: string): string {

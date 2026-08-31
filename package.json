@@ -17,7 +17,7 @@
     "google:auth": "tsx scripts/google-auth.ts",
     "mcp:smoke": "tsx scripts/mcp-smoke.ts",
     "claude:install": "tsx scripts/install-skills.ts",
-    "skills:install": "npm run claude:install",
+    "skills:install": "npm run claude:install --",
     "migrate:files": "tsx scripts/migrate-to-files.ts"
   },
   "devDependencies": {
