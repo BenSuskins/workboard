@@ -51,14 +51,14 @@ export default async function PullRequestsPage({ searchParams }: { searchParams:
       <div className="flex min-h-0 flex-1 items-stretch">
         <div className="min-w-0 flex-1 overflow-y-auto px-5 pt-[22px] pb-9">
           {error && (
-            <div className="mb-[22px] max-w-[920px] rounded-card border border-critical/35 bg-critical/[0.08] px-4 py-3 text-meta text-ink-2">
+            <div className="mb-[22px] rounded-card border border-critical/35 bg-critical/[0.08] px-4 py-3 text-meta text-ink-2">
               GitHub would not say which PRs are yours, so this is what the board has synced instead.{" "}
               <span className="text-muted">{error}</span>
             </div>
           )}
 
           {rows.length === 0 ? (
-            <div className="max-w-[920px] rounded-card border border-dashed border-grid px-6 py-16 text-center text-body text-muted">
+            <div className="rounded-card border border-dashed border-grid px-6 py-16 text-center text-body text-muted">
               {mode === "mine" ? (
                 "No open pull requests. Nothing waiting on you here."
               ) : (
@@ -71,7 +71,7 @@ export default async function PullRequestsPage({ searchParams }: { searchParams:
             <>
               <PrQueue groups={groups} />
               {truncated && (
-                <p className="mt-6 max-w-[920px] text-meta text-muted">
+                <p className="mt-6 text-meta text-muted">
                   Showing the most recently updated. GitHub has more open under {login}.
                 </p>
               )}
