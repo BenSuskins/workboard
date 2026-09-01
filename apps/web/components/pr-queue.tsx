@@ -62,7 +62,7 @@ export function PrQueue({ groups }: { groups: PrGroup[] }) {
   }, []);
 
   return (
-    <div className="flex max-w-[920px] flex-col gap-8">
+    <div className="flex flex-col gap-8">
       {groups.map((group) => {
         const open = !collapsed.includes(group.key);
         const tone = PR_BUCKET_TONE[group.key];

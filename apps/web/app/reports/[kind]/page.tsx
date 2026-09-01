@@ -89,7 +89,6 @@ export default async function ReportsPage({
       <Mermaid />
       <PageTopBar name={meta.title} count={countFor(kind, database, reports)} />
       <ReportShell
-        wide={kind === "triage"}
         gap={GAP[kind]}
         rail={<RunRail runs={reports} currentId={selected?.id ?? -1} basePath={`/reports/${kind}`} />}
       >

@@ -12,20 +12,17 @@ import { runDateParts } from "@/lib/reports";
 export function ReportShell({
   children,
   rail,
-  wide = false,
   gap = "gap-[22px]",
 }: {
   children: React.ReactNode;
   rail: React.ReactNode;
-  /** Triage runs wider (880px) than the Digest and Accomplishments prose (820px). */
-  wide?: boolean;
   /** Each kind spaces its own content differently — prose reads looser than rows. */
   gap?: string;
 }) {
   return (
     <div className="flex min-h-0 flex-1 items-stretch">
       <div className="min-w-0 flex-1 overflow-y-auto px-8 pb-11 pt-7">
-        <div className={`mx-auto flex flex-col ${wide ? "max-w-[880px]" : "max-w-[820px]"} ${gap}`}>{children}</div>
+        <div className={`flex flex-col ${gap}`}>{children}</div>
       </div>
       <aside className="flex w-[212px] flex-none flex-col gap-2 overflow-y-auto px-4 pb-10 pt-7 shadow-[inset_1px_0_0_var(--wb-hairline)]">
         {rail}
