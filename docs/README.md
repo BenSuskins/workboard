@@ -244,7 +244,7 @@ docker compose up -d --build  # web on :3000, MCP on :8787
 docker compose run --rm web npm run seed   # optional: sample data
 ```
 
-One image, two services (`web` and `mcp`), sharing the markdown tree on the
+One image, with two services (`web` and `mcp`), sharing the markdown tree on the
 named `data` volume — that volume is the only state worth backing up. An
 existing volume holding a SQLite board converts itself on first start; both
 services can boot together, and only one of them will run the conversion. See
