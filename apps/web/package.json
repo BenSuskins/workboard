@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@workboard/core": "*",
-    "marked": "^15.0.0",
+    "marked": "^18.1.2",
     "mermaid": "^11.17.2",
     "next": "^15.3.0",
     "react": "^19.0.0",
