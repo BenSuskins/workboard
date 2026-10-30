@@ -5,7 +5,7 @@
  * start. Use it to convert a database that is not sitting next to the data
  * directory, or to redo a conversion with --force.
  *
- *   npx tsx scripts/migrate-to-files.ts [--db <path>] [--out <dir>] [--force]
+ *   bun node_modules/tsx/dist/cli.mjs scripts/migrate-to-files.ts [--db <path>] [--out <dir>] [--force]
  */
 import { existsSync, readdirSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";

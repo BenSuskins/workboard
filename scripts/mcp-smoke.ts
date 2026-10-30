@@ -1,7 +1,7 @@
 /**
  * End-to-end smoke test of the MCP server over stdio: spawns the real server
  * against a throwaway board and walks the full agent flow.
- * Run: npm run mcp:smoke
+ * Run: bun run mcp:smoke
  */
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -19,8 +19,12 @@ const cleanEnv = Object.fromEntries(
 ) as Record<string, string>;
 
 const transport = new StdioClientTransport({
-  command: "npx",
-  args: ["tsx", resolve(import.meta.dirname, "../packages/mcp/src/stdio.ts")],
+  command: "bun",
+  args: [
+    "node_modules/tsx/dist/cli.mjs",
+    resolve(import.meta.dirname, "../packages/mcp/src/stdio.ts"),
+  ],
+  cwd: resolve(import.meta.dirname, ".."),
   env: { ...cleanEnv, WORKBOARD_DATA_DIR: dataDir },
 });
 const client = new Client({ name: "smoke", version: "0.0.1" });

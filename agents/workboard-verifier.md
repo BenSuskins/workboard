@@ -21,11 +21,11 @@ step; report that as a fact, not a failure.
 Workboard's own recipe, as a worked example:
 
 ```bash
-npx vitest run
-npx tsc --noEmit -p packages/core
-npx tsc --noEmit -p packages/mcp
-npm run mcp:smoke
-npm run build -w apps/web
+bunx vitest run
+bunx tsc --noEmit -p packages/core
+bunx tsc --noEmit -p packages/mcp
+bun run mcp:smoke
+bun run --filter @workboard/web build
 ```
 
 That repo has **no lint script and no ESLint/Prettier config** — five commands,
@@ -40,8 +40,8 @@ Return a table and nothing else of substance:
 
 | Command | Result | Detail |
 |---|---|---|
-| `npx vitest run` | pass | 214 passed, 0 failed |
-| `npx tsc --noEmit -p packages/core` | **fail** | first error, verbatim, with its file and line |
+| `bunx vitest run` | pass | 214 passed, 0 failed |
+| `bunx tsc --noEmit -p packages/core` | **fail** | first error, verbatim, with its file and line |
 
 For a failure, quote the first real error verbatim with its file and line —
 enough for someone else to fix it without re-running. Then state in one line

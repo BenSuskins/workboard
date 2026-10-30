@@ -9,15 +9,15 @@
     "apps/*"
   ],
   "scripts": {
-    "dev": "concurrently -n web,mcp -c blue,magenta \"npm run dev -w apps/web\" \"npm run dev -w packages/mcp\"",
-    "build": "npm run build -w packages/core -w packages/mcp -w apps/web",
-    "start": "concurrently -n web,mcp -c blue,magenta \"npm run start -w apps/web\" \"npm run start -w packages/mcp\"",
+    "dev": "concurrently -n web,mcp -c blue,magenta \"bun run --filter @workboard/web dev\" \"bun run --filter @workboard/mcp dev\"",
+    "build": "bun run --filter @workboard/core build && bun run --filter @workboard/mcp build && bun run --filter @workboard/web build",
+    "start": "concurrently -n web,mcp -c blue,magenta \"bun run --filter @workboard/web start\" \"bun run --filter @workboard/mcp start\"",
     "test": "vitest run",
     "seed": "tsx scripts/seed.ts",
     "google:auth": "tsx scripts/google-auth.ts",
     "mcp:smoke": "tsx scripts/mcp-smoke.ts",
     "claude:install": "tsx scripts/install-skills.ts",
-    "skills:install": "npm run claude:install --",
+    "skills:install": "bun run claude:install --",
     "migrate:files": "tsx scripts/migrate-to-files.ts"
   },
   "devDependencies": {
@@ -26,5 +26,6 @@
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
-  }
+  },
+  "packageManager": "bun@1.4.2"
 }

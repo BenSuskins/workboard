@@ -36,7 +36,7 @@ function openLegacy(dbPath: string): { all: (table: string) => LegacyRow[]; clos
   } catch {
     throw new Error(
       `Found a legacy board at ${dbPath} but this Node build has no node:sqlite to read it. ` +
-        `Upgrade to Node 22.13+ or convert it elsewhere with 'npm run migrate:files'.`,
+        `Upgrade to Node 22.13+ or convert it elsewhere with 'bun run migrate:files'.`,
     );
   }
   const db = new DatabaseSync(dbPath, { readOnly: true });

@@ -18,7 +18,7 @@ user to connect it: `claude mcp add --transport http workboard http://localhost:
 
 Each pipeline stage runs as an installed agent profile — `workboard-planner`,
 `workboard-implementer`, `workboard-reviewer`, `workboard-verifier`
-(`npm run claude:install` in the Workboard repo installs them). The profile
+(`bun run claude:install` in the Workboard repo installs them). The profile
 carries that role's constraints and output shape; your prompt supplies the
 specifics. If a profile is missing, fall back to a general-purpose subagent with
 those constraints stated inline, and say once, in one line, that you are running

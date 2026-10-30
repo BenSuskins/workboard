@@ -72,7 +72,7 @@ flowchart LR
 
 ## Tech Stack
 
-- TypeScript, Node 22, npm workspaces
+- TypeScript, Node 22, Bun workspaces
 - Next.js (App Router — server components + server actions)
 - Markdown files with frontmatter — no database
 - Model Context Protocol server (streamable HTTP + stdio)
@@ -98,6 +98,7 @@ workboard/
 
 ### Prerequisites
 
+- Bun 1.4+
 - Node 22+
 - Docker (optional — for the container deployment)
 
@@ -106,9 +107,9 @@ workboard/
 ```bash
 git clone git@github.com:bensuskins/workboard.git
 cd workboard
-npm install
-npm run seed        # optional: sample data
-npm run dev         # web on :3000, MCP server on :8787
+bun install
+bun run seed        # optional: sample data
+bun run dev         # web on :3000, MCP server on :8787
 ```
 
 Verify: visit `http://localhost:3000` — you should see the Workboard dashboard.
@@ -126,7 +127,7 @@ credentials. Copy `.env.example` to `.env` and fill in what you use.
 |----------|----------|---------|-------------|
 | `GITHUB_TOKEN` | no | — | Live PR state, review status, CI checks on in-flight PRs; monorepo-scoped PR discovery. A **user** token (classic or fine-grained PAT) also names you, which is what `/prs` filters by — an app or installation token cannot |
 | `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` | no | — | Jira Cloud issue status and per-epic/project counts |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | no | — | Google Doc titles + last-edited times (run `npm run google:auth` once) |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | no | — | Google Doc titles + last-edited times (run `bun run google:auth` once) |
 | `WORKBOARD_MCP_TOKEN` | no | — | Require a bearer token on the HTTP MCP transport |
 | `WORKBOARD_DATA_DIR` | no | `<repo>/data/workboard` | Where the markdown board lives |
 
@@ -134,14 +135,14 @@ credentials. Copy `.env.example` to `.env` and fill in what you use.
 
 | Command | Purpose |
 |---------|---------|
-| `npm run dev` | Run web (:3000) and MCP (:8787) locally |
-| `npm run build` | Typecheck + build all workspaces |
-| `npm run seed` | Load sample data |
-| `npm test` | Core unit tests (vitest) |
-| `npm run mcp:smoke` | Full agent flow against the real MCP server (stdio) |
-| `npm run google:auth` | One-time Google Docs OAuth flow |
-| `npm run claude:install` | Copy `skills/` → `~/.claude/skills/` and `agents/` → `~/.claude/agents/` (alias: `npm run skills:install`) |
-| `npm run migrate:files` | Rarely needed — the servers convert an old `data/workboard.db` themselves on first start. Use this for a database elsewhere, or to redo one with `--force` |
+| `bun run dev` | Run web (:3000) and MCP (:8787) locally |
+| `bun run build` | Typecheck + build all workspaces |
+| `bun run seed` | Load sample data |
+| `bun run test` | Core unit tests (vitest) |
+| `bun run mcp:smoke` | Full agent flow against the real MCP server (stdio) |
+| `bun run google:auth` | One-time Google Docs OAuth flow |
+| `bun run claude:install` | Copy `skills/` → `~/.claude/skills/` and `agents/` → `~/.claude/agents/` (alias: `bun run skills:install`) |
+| `bun run migrate:files` | Rarely needed — the servers convert an old `data/workboard.db` themselves on first start. Use this for a database elsewhere, or to redo one with `--force` |
 
 ## Connecting a coding agent
 
@@ -151,11 +152,11 @@ From any repo where an agent works:
 claude mcp add --transport http workboard http://localhost:8787/mcp
 ```
 
-(Or stdio: `claude mcp add workboard -- npx --prefix /path/to/workboard workboard-mcp`.)
+(Or stdio: `claude mcp add workboard -- bun /path/to/workboard/packages/mcp/bin/workboard-mcp.js`.)
 Then install the skills and agent profiles so agents know *how* to use it:
 
 ```bash
-npm run claude:install
+bun run claude:install
 ```
 
 | Skill | What it does |
@@ -228,8 +229,8 @@ pointing at `/workboard-status` so updates happen automatically.
 ## Testing
 
 ```bash
-npm test            # core unit tests (vitest)
-npm run mcp:smoke   # full agent flow against the real MCP server (stdio)
+bun run test            # core unit tests (vitest)
+bun run mcp:smoke   # full agent flow against the real MCP server (stdio)
 ```
 
 Core services are covered by contract tests against a real temp-directory store
@@ -241,7 +242,7 @@ claim one task, to allocate ids, and to cold-boot a migration.
 ```bash
 cp .env.example .env          # fill in integration credentials (all optional)
 docker compose up -d --build  # web on :3000, MCP on :8787
-docker compose run --rm web npm run seed   # optional: sample data
+docker compose run --rm web bun run seed   # optional: sample data
 ```
 
 One image, with two services (`web` and `mcp`), sharing the markdown tree on the
