@@ -15,13 +15,13 @@
 
 **Port `3000` or `8787` already in use**
 
-Cause: a previous `npm run dev` (or another app) is still bound to the port.
+Cause: a previous `bun run dev` (or another app) is still bound to the port.
 Fix: `lsof -ti:3000 | xargs kill` (swap `8787` for the MCP port).
 
-**`npm run dev` starts but the dashboard is empty**
+**`bun run dev` starts but the dashboard is empty**
 
 Cause: no data yet — the database is created empty on first run.
-Fix: `npm run seed` to load sample projects.
+Fix: `bun run seed` to load sample projects.
 
 ## Integrations
 
@@ -43,7 +43,7 @@ then use the project's refresh button.
 
 Cause: the one-time OAuth flow hasn't been completed (it needs a browser on
 localhost).
-Fix: run `npm run google:auth` on the host once.
+Fix: run `bun run google:auth` on the host once.
 
 ## Agent / MCP
 
@@ -61,11 +61,11 @@ in a monorepo).
 Fix: link the individual PR/issue to the project, or give the repo link a scope
 (labels / path prefixes / branch prefix) so discovery can match it.
 
-**`npm run mcp:smoke` fails**
+**`bun run mcp:smoke` fails**
 
 Cause: a regression in the MCP server or core services surfaced by the full
 stdio agent flow.
-Fix: read the failing step's output; run `npm test` to isolate the core services
+Fix: read the failing step's output; run `bun run test` to isolate the core services
 from the transport.
 
 ## Docker
@@ -79,7 +79,7 @@ localhost, set `WORKBOARD_MCP_TOKEN` in `.env` to require a bearer token.
 **Google Docs auth doesn't work in the container**
 
 Cause: the OAuth flow needs a browser on localhost, which the container lacks.
-Fix: run `npm run google:auth` on the host, then copy the token into the volume:
+Fix: run `bun run google:auth` on the host, then copy the token into the volume:
 `docker compose cp data/google-token.json web:/data/google-token.json`.
 
 **Need to back up the board**

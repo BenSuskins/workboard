@@ -1,22 +1,25 @@
-# One image serves both compose services: the Next.js web app (`npm run start -w apps/web`)
-# and the MCP server (`npx tsx packages/mcp/src/http.ts`) — see docker-compose.yml.
+# One image serves both compose services. Bun installs workspace dependencies and
+# starts scripts; Node 22 remains the JavaScript runtime — see docker-compose.yml.
+FROM oven/bun:1.4.2-debian AS bun
 FROM node:22-bookworm-slim AS deps
+COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
 WORKDIR /app
 # No native modules anywhere in the tree: the old SQLite board is read through
 # Node's built-in node:sqlite, so no build toolchain is needed.
-COPY package.json package-lock.json ./
+COPY package.json bun.lock ./
 COPY apps/web/package.json apps/web/
 COPY packages/core/package.json packages/core/
 COPY packages/mcp/package.json packages/mcp/
-RUN npm ci
+RUN bun install --frozen-lockfile
 
 FROM deps AS build
 # source over the dependency tree (.dockerignore keeps local node_modules/.next/data out)
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build -w apps/web
+RUN bun run --filter @workboard/web build
 
 FROM node:22-bookworm-slim AS runtime
+COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
 WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
@@ -27,4 +30,4 @@ USER node
 VOLUME /data
 EXPOSE 3000 8787
 # default command runs the web app; compose overrides this for the mcp service
-CMD ["npm", "run", "start", "-w", "apps/web"]
+CMD ["bun", "run", "--filter", "@workboard/web", "start"]

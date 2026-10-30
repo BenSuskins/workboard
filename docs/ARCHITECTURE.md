@@ -4,7 +4,7 @@
 
 ## Overview
 
-Workboard is a TypeScript monorepo (npm workspaces) built around a tree of
+Workboard is a TypeScript monorepo (Bun workspaces) built around a tree of
 markdown files. A Next.js App Router app renders the dashboard with server
 components and server actions; a Model Context Protocol server exposes the same
 domain to coding agents over streamable HTTP and stdio. Both processes read and

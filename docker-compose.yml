@@ -30,7 +30,7 @@ services:
 
   mcp:
     <<: *workboard
-    command: ["npx", "tsx", "packages/mcp/src/http.ts"]
+    command: ["bun", "run", "packages/mcp/src/http.ts"]
     ports:
       - "8787:8787"
     healthcheck:
