@@ -13,13 +13,13 @@
     "build": "tsc --noEmit"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.0",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "@workboard/core": "*",
     "express": "^4.21.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
-    "tsx": "^4.19.0"
+    "tsx": "^4.23.15"
   }
 }
