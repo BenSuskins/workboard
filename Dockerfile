@@ -1,7 +1,7 @@
 # One image serves both compose services. Bun installs workspace dependencies and
 # starts scripts; Node 22 remains the JavaScript runtime — see docker-compose.yml.
 FROM oven/bun:1.4.2-debian AS bun
-FROM node:22-bookworm-slim AS deps
+FROM node:25-bookworm-slim AS deps
 COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
 WORKDIR /app
 # No native modules anywhere in the tree: the old SQLite board is read through
@@ -18,7 +18,7 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN bun run --filter @workboard/web build
 
-FROM node:22-bookworm-slim AS runtime
+FROM node:25-bookworm-slim AS runtime
 COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
 WORKDIR /app
 ENV NODE_ENV=production \
