@@ -1,6 +1,6 @@
 # One image serves both compose services. Bun installs workspace dependencies and
 # starts scripts; Node 22 remains the JavaScript runtime — see docker-compose.yml.
-FROM oven/bun:1.4.2-debian AS bun
+FROM oven/bun:1.4.4-debian AS bun
 FROM node:22-bookworm-slim AS deps
 COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
 WORKDIR /app
